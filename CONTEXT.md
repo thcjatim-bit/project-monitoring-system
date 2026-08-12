@@ -33,6 +33,12 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Petugas Gudang** — user yang mencatat barang masuk/keluar di satu atau lebih Warehouse.
 - **SN** — Serial Number material tertentu; dilacak sampai keluar gudang dan untuk project mana.
 - **Surat Jalan** — dokumen barang keluar, terbit setelah request mitra di-approve THC.
+- **Jenis material** — `biasa` (hanya jumlah), `ber_sn` (identitas per butir), `drum_kabel` (identitas + isi yang bisa berkurang). Menentukan tabel identitas mana yang dipakai. Lihat `docs/adr/0004-tiga-jenis-material-satu-buku.md`.
+- **Drum** — satu roll kabel fisik dengan `panjang_awal` dan `sisa`. Potongan yang keluar jadi **drum turunan** ber-ID `DRM-00042-1`, punya baris sendiri, tidak pernah digabung balik ke induk.
+- **Buku transaksi** — `material_transaksis`, append-only. Satu-satunya kebenaran stok; `UPDATE`/`DELETE` dicabut dari role aplikasi. Koreksi = baris pembatalan, bukan hapus. Lihat `docs/adr/0003-stok-material-buku-transaksi.md`.
+- **Saldo stok** — `material_stoks`, cache per (lokasi, material) yang ditulis **trigger**, bukan kode aplikasi. Boleh dibangun ulang dari buku kapan saja.
+- **Lokasi material** — tiga kemungkinan: `warehouse` (di gudang), `project` (sudah keluar, di lapangan, **belum terpasang**), `terpasang` (keluar dari stok, masuk realisasi project).
+- **Rekon material** — pencocokan THC ↔ mitra di akhir project atas material yang keluar gudang. Sisa dikembalikan ke gudang; selisih yang tidak kembali diakui hilang/rusak dengan penanggung jawab.
 
 ## Konvensi lintas domain
 
