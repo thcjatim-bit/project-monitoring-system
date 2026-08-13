@@ -17,6 +17,7 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 
 - **Project** — satu pekerjaan instalasi yang dimonitor. Dimiliki tepat satu Mitra.
 - **ID Project** — pengenal yang dibaca manusia, format `PRJ-YYMM-NNNN`. Diisi manual atau dibentuk otomatis saat dikosongkan; tidak pernah berubah setelah terbit.
+- **Status Project** — `aktif` / `selesai`, terpisah dari Step. Bukan penanda progres fase (itu tugas Step); ini penanda penutupan administratif, ditentukan dari Rekon Material. Lihat `docs/adr/0013-alur-pemakaian-material-dan-rekon.md`.
 - **PoP** — Point of Presence, lokasi simpul jaringan yang jadi acuan project.
 - **Step** — penanda fase project baku (11 step). Fleksibel (bisa dilompati/dimundurkan) dan hanya mencatat tanggal aktual selesai. Terpisah dari kurva S.
 - **Pekerjaan Jasa** — jenis pekerjaan yang ditagihkan mitra (mis. penarikan kabel per meter). Katalognya bersama; **harganya per mitra**.
@@ -47,8 +48,9 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Buku transaksi** — `material_transaksis`, append-only. Satu-satunya kebenaran stok; `UPDATE`/`DELETE` dicabut dari role aplikasi. Koreksi = baris pembatalan, bukan hapus. Lihat `docs/adr/0003-stok-material-buku-transaksi.md`.
 - **Saldo stok** — `material_stoks`, cache per (lokasi, material) yang ditulis **trigger**, bukan kode aplikasi. Boleh dibangun ulang dari buku kapan saja.
 - **Lokasi material** — empat kemungkinan: `warehouse` (di gudang), `transit` (dalam perjalanan antar gudang), `project` (sudah keluar, di lapangan, **belum terpasang**), `terpasang` (keluar dari stok, masuk realisasi project).
-- **Rekon material** — pencocokan THC ↔ mitra di akhir project atas material yang keluar gudang. Sisa dikembalikan ke gudang; selisih yang tidak kembali diakui hilang/rusak dengan penanggung jawab.
-- **Waste/Loss** — Selisih material (seperti potongan kabel) pada akhir proyek yang tidak dapat diretur dan diotorisasi/dinilai manual oleh THC sebagai pembuangan wajar atau kehilangan.
+- **Pemakaian Material** — pengeluaran material oleh Mitra dari gudangnya sendiri (titipan THC) untuk dipakai di satu Project. Terpisah dari Request Material (yang arahnya THC → mitra); di sini mitra mengeluarkan dari stok yang sudah dititip padanya. Siklus: `diajukan` (mitra) → `disetujui`/`ditolak` (THC). Stok baru berkurang dari gudang saat `disetujui` — pengajuan pending tidak menyentuh buku transaksi. Mitra boleh membatalkan selama masih `diajukan`. Lihat `docs/adr/0013-alur-pemakaian-material-dan-rekon.md`.
+- **Rekon material** — pencocokan THC ↔ mitra atas material yang keluar gudang untuk satu Project, dicatat di `project_rekons` bernomor `REK-YYMM-NNNN`. Satu project bisa punya beberapa rekon: rekon susulan **mengoreksi** rekon sebelumnya (`koreksi_dari_id`, pola sama dengan koreksi buku transaksi), bukan menggantikannya. Isi per baris material: keluar gudang, terpasang, sisa di project, dikembalikan, hilang/rusak. THC yang approve. Sisa dikembalikan ke **gudang mitra asal** (bukan ditarik ke gudang THC). Lihat `docs/adr/0013-alur-pemakaian-material-dan-rekon.md`.
+- **Waste/Loss** — Selisih material (seperti potongan kabel) yang tidak dapat diretur, dicatat sebagai baris Rekon Material dengan kategori tetap (`hilang`/`rusak`/`waste_wajar`), penanggung jawab default Mitra (bisa diubah THC per baris).
 
 ## Konvensi lintas domain
 
