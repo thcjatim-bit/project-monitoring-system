@@ -4,7 +4,7 @@ Date: 2026-08-12
 
 ## Status
 
-Accepted
+Accepted. Keputusan #6 (Migrasi HTTPS & Domain) **superseded by ADR-0017** — HTTPS kini via Domain + Let's Encrypt, bukan Cloudflare Tunnel. Poin #1–5, #7–8 tetap berlaku.
 
 ## Konteks
 
