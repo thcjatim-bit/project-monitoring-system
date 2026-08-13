@@ -55,6 +55,11 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Rekon material** — pencocokan THC ↔ mitra atas material yang keluar gudang untuk satu Project, dicatat di `project_rekons` bernomor `REK-YYMM-NNNN`. Satu project bisa punya beberapa rekon: rekon susulan **mengoreksi** rekon sebelumnya (`koreksi_dari_id`, pola sama dengan koreksi buku transaksi), bukan menggantikannya. Isi per baris material: keluar gudang, terpasang, sisa di project, dikembalikan, hilang/rusak. THC yang approve. Sisa dikembalikan ke **gudang mitra asal** (bukan ditarik ke gudang THC). Lihat `docs/adr/0013-alur-pemakaian-material-dan-rekon.md`.
 - **Waste/Loss** — Selisih material (seperti potongan kabel) yang tidak dapat diretur, dicatat sebagai baris Rekon Material dengan kategori tetap (`hilang`/`rusak`/`waste_wajar`), penanggung jawab default Mitra (bisa diubah THC per baris).
 
+## Integrasi baca
+
+- **API Key** — kredensial baca opaque untuk konsumen internal THC (bukan mitra), di-hash saat disimpan, dibuat/dicabut lewat panel THC. Punya `mitra_id` nullable: diisi → tunduk isolasi mitra seperti user mitra; `null` → setara user THC. Lihat `docs/adr/0016-rest-api-baca-dan-user-postgresql-read-only.md`.
+- **View read-only** — view SQL kurasi per domain (mis. `v_projects`, `v_stok`) yang jadi satu-satunya permukaan ter-`GRANT` ke role Postgres read-only untuk BI internal. Tabel mentah, terutama Buku transaksi dan Komentar Internal, tidak pernah ter-grant langsung.
+
 ## Konvensi lintas domain
 
 - **Nomor WhatsApp** — disimpan dalam format E.164 tanpa `+` (`628123456789`), ditampilkan sebagai tautan `wa.me` yang bisa diklik.
