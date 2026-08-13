@@ -12,6 +12,9 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Grup** — kumpulan hak akses (matriks centang menu) yang dipasang ke User. Preset peran bawaan disediakan, tapi matriksnya bebas.
 - **Izin Aksi (Permissions)** — izin granular spesifik per aksi (seperti CRUD dan persetujuan/approve). Izin beroperasi di level aplikasi dan mengkondisikan elemen antarmuka (menu disembunyikan jika tidak ada akses). Lihat `docs/adr/0006-model-hak-akses-matriks-aksi.md`.
 - **User THC vs User Mitra** — dibedakan dari isi `mitra_id` pada entitas User; `null` berarti internal THC.
+- **Onboarding Mitra** — satu form THC yang membuat entitas Mitra + user admin-mitra pertamanya sekaligus. Password awal (dan password hasil reset) dikirim **otomatis** lewat WA gateway sebagai teks polos ke nomor WA terdaftar milik mitra — bukan link token. Penambahan user mitra berikutnya untuk sekarang tetap lewat THC (self-service oleh mitra sendiri ditunda, bukan ditolak — bisa ditambahkan tanpa ubah model data).
+- **Reset password** — mitra bisa self-service (sistem generate password baru, kirim otomatis lewat WA seperti onboarding); THC juga bisa memicu reset paksa dari panel.
+- **Nonaktifkan user mitra** — manual oleh THC, tidak otomatis dari tanggal berakhir PKS. User nonaktif tidak bisa login; data historis (project, foto, linimasa) tetap ada dan tetap terlihat THC, sesuai pola "nonaktif bukan hapus". Project aktif milik mitra yang dinonaktifkan **tidak dicegah** — tetap bisa ditutup administratif oleh THC tanpa akses mitra.
 - **Penugasan Gudang** — satu user dapat ditugaskan ke lebih dari satu gudang via tabel pivot.
 ## Proyek
 
@@ -21,8 +24,8 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **PoP** — Point of Presence, lokasi simpul jaringan yang jadi acuan project.
 - **Step** — penanda fase project baku (11 step). Fleksibel (bisa dilompati/dimundurkan) dan hanya mencatat tanggal aktual selesai. Terpisah dari kurva S.
 - **Pekerjaan Jasa** — jenis pekerjaan yang ditagihkan mitra (mis. penarikan kabel per meter). Katalognya bersama; **harganya per mitra**.
-- **Harga Jasa Mitra** — harga satu Pekerjaan Jasa untuk satu Mitra sesuai PKS, berlaku sejak tanggal tertentu.
-- **PKS** — Perjanjian Kerja Sama antara THC dan Mitra; sumber harga jasa.
+- **Harga Jasa Mitra** — harga satu Pekerjaan Jasa untuk satu Mitra sesuai PKS (foreign key wajib ke satu PKS), berlaku sejak tanggal tertentu. Siklus: `diajukan` (Mitra) → `disetujui`/`ditolak` (THC); hanya baris `disetujui` yang boleh dipakai membuat RAB Jasa. Mitra memilih dari katalog Pekerjaan Jasa yang sudah ada (tabel bersama, tidak bisa mengusulkan jenis baru — itu di luar sistem, ke THC). Revisi harga = baris **baru** (`diajukan`, merujuk baris lama), bukan edit di tempat; baris lama tetap `disetujui` dan tetap dipakai RAB yang sudah beku sampai baris baru disetujui dan tanggal berlakunya tiba.
+- **PKS** — Perjanjian Kerja Sama antara THC dan Mitra; entitas sendiri (nomor, tanggal mulai/berakhir, file lampiran opsional). Sumber harga jasa. Tepat **satu PKS aktif** per mitra pada satu waktu; PKS baru mengisi tanggal mulai setelah PKS lama berakhir. Lihat `docs/adr/0015-onboarding-mitra-dan-harga-jasa.md`.
 - **RAB Jasa** — daftar Pekerjaan Jasa + qty pada satu Project, dengan **harga yang dibekukan** saat baris dibuat. Jadi bobot kurva S.
 - **Kurva S** — kurva progres berbobot rupiah jasa (bukan material).
 - **SPI** — Schedule Performance Index, rasio progres aktual terhadap baseline. (Ditampilkan `N/A` jika kumulatif baseline 0%).
