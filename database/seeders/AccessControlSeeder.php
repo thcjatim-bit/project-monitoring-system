@@ -20,9 +20,6 @@ class AccessControlSeeder extends Seeder
             'manage_grups' => 'Mengelola Grup',
             'manage_mitras' => 'Mengelola Mitra',
             'manage_master_data' => 'Mengelola Master Data',
-            'manage_warehouse' => 'Mengelola Gudang',
-            'record_material_movement' => 'Mencatat Pergerakan Material',
-            'approve_material_request' => 'Menyetujui Request Material',
         ])->mapWithKeys(fn (string $nama, string $kode) => [
             $kode => Izin::query()->firstOrCreate(['kode' => $kode], ['nama' => $nama]),
         ]);
@@ -31,7 +28,6 @@ class AccessControlSeeder extends Seeder
             'admin_thc' => ['nama' => 'Admin THC', 'izins' => $izins->keys()->all()],
             'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project']],
             'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project']],
-            'gudang' => ['nama' => 'Gudang', 'izins' => ['read_dashboard', 'manage_warehouse', 'record_material_movement']],
             'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project']],
             'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project']],
         ];

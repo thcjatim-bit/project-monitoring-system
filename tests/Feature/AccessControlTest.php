@@ -8,6 +8,7 @@ use App\Models\Mitra;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\TenantDatabaseContext;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,25 @@ class AccessControlTest extends TestCase
             ->assertRedirect('/dashboard');
 
         $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_database_seeder_creates_usable_thc_and_mitra_accounts(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $thc = User::query()->where('email', 'thc@example.com')->firstOrFail();
+        $mitra = User::query()->where('email', 'mitra@example.com')->firstOrFail();
+
+        $this->assertNull($thc->mitra_id);
+        $this->assertTrue($thc->hasIzin('read_dashboard'));
+        $this->assertNotNull($mitra->mitra_id);
+        $this->assertTrue($mitra->hasIzin('read_dashboard'));
+
+        $this->post('/masuk', ['email' => $thc->email, 'password' => 'password'])
+            ->assertRedirect('/dashboard');
+
+        $this->post('/masuk', ['email' => $mitra->email, 'password' => 'password'])
+            ->assertRedirect('/dashboard');
     }
 
     public function test_inactive_user_cannot_sign_in(): void
