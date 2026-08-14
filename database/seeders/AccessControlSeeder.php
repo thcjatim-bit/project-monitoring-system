@@ -19,6 +19,8 @@ class AccessControlSeeder extends Seeder
             'manage_users' => 'Mengelola User',
             'manage_grups' => 'Mengelola Grup',
             'manage_mitras' => 'Mengelola Mitra',
+            'manage_warehouses' => 'Mengelola Warehouse',
+            'operate_warehouse' => 'Mengoperasikan Warehouse',
             'manage_master_data' => 'Mengelola Master Data',
         ])->mapWithKeys(fn (string $nama, string $kode) => [
             $kode => Izin::query()->firstOrCreate(['kode' => $kode], ['nama' => $nama]),

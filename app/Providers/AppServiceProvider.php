@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Contracts\WahaClient;
+use App\Services\WahaHttpClient;
 use App\Support\TenantDatabaseContext;
 use Illuminate\Database\Events\ConnectionEstablished;
 use Illuminate\Support\Facades\Event;
@@ -15,6 +17,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(TenantDatabaseContext::class);
+        $this->app->bind(WahaClient::class, WahaHttpClient::class);
     }
 
     /**

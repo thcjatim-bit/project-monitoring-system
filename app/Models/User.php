@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -61,6 +62,16 @@ class User extends Authenticatable
     public function grup(): BelongsTo
     {
         return $this->belongsTo(Grup::class);
+    }
+
+    public function warehouses(): BelongsToMany
+    {
+        return $this->belongsToMany(Warehouse::class, 'user_warehouses')->withTimestamps();
+    }
+
+    public function canOperateWarehouse(Warehouse $warehouse, string $izin): bool
+    {
+        return $this->hasIzin($izin) && $this->warehouses()->whereKey($warehouse->id)->exists();
     }
 
     public function hasIzin(string $kode): bool
