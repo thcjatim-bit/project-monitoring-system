@@ -3,7 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
 class PostgresIntegrationTest extends TestCase
@@ -27,5 +28,74 @@ class PostgresIntegrationTest extends TestCase
             'id' => $user->id,
             'email' => $user->email,
         ]);
+    }
+
+    public function test_testing_runtime_uses_the_dedicated_database_and_restricted_application_role(): void
+    {
+        $identity = DB::selectOne('select current_database() as database, current_user as user');
+        $role = DB::selectOne(<<<'SQL'
+            select rolsuper, rolbypassrls, rolcreatedb, rolcreaterole,
+                   rolreplication, rolcanlogin
+            from pg_roles
+            where rolname = current_user
+        SQL);
+        $book_privileges = DB::selectOne(<<<'SQL'
+            select has_table_privilege(current_user, 'public.material_transaksis', 'INSERT') as can_insert,
+                   has_table_privilege(current_user, 'public.material_transaksis', 'UPDATE') as can_update,
+                   has_table_privilege(current_user, 'public.material_transaksis', 'DELETE') as can_delete,
+                   has_table_privilege(current_user, 'public.material_stoks', 'INSERT') as can_insert_stock,
+                   has_table_privilege(current_user, 'public.material_stoks', 'UPDATE') as can_update_stock
+        SQL);
+
+        $this->assertSame('project_monitoring_system_testing', $identity->database);
+        $this->assertSame('pms_app', $identity->user);
+        $this->assertFalse($role->rolsuper);
+        $this->assertFalse($role->rolbypassrls);
+        $this->assertFalse($role->rolcreatedb);
+        $this->assertFalse($role->rolcreaterole);
+        $this->assertFalse($role->rolreplication);
+        $this->assertTrue($role->rolcanlogin);
+        $this->assertTrue($book_privileges->can_insert);
+        $this->assertFalse($book_privileges->can_update);
+        $this->assertFalse($book_privileges->can_delete);
+        $this->assertFalse($book_privileges->can_insert_stock);
+        $this->assertFalse($book_privileges->can_update_stock);
+    }
+
+    public function test_relevant_tenant_tables_have_forced_rls_and_expected_policy(): void
+    {
+        $tables = DB::table('pg_class as c')
+            ->join('pg_namespace as n', 'n.oid', '=', 'c.relnamespace')
+            ->where('n.nspname', 'public')
+            ->whereIn('c.relname', ['projects', 'warehouses', 'material_stoks', 'material_transaksis'])
+            ->where('c.relkind', 'r')
+            ->select(['c.relname', 'c.relrowsecurity', 'c.relforcerowsecurity'])
+            ->orderBy('c.relname')
+            ->get()
+            ->keyBy('relname');
+
+        $this->assertSame(
+            ['material_stoks', 'material_transaksis', 'projects', 'warehouses'],
+            $tables->keys()->all()
+        );
+
+        foreach ($tables as $table) {
+            $this->assertTrue($table->relrowsecurity);
+            $this->assertTrue($table->relforcerowsecurity);
+        }
+
+        $policies = DB::table('pg_policies')
+            ->where('schemaname', 'public')
+            ->whereIn('tablename', $tables->keys())
+            ->pluck('policyname', 'tablename')
+            ->sortKeys()
+            ->all();
+
+        $this->assertSame([
+            'material_stoks' => 'warehouse_stock_tenant_isolation',
+            'material_transaksis' => 'material_transaction_tenant_isolation',
+            'projects' => 'tenant_isolation',
+            'warehouses' => 'tenant_isolation',
+        ], $policies);
     }
 }

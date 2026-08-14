@@ -9,8 +9,8 @@ use App\Models\Mitra;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\TenantDatabaseContext;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
 class UserMitraWarehouseManagementTest extends TestCase

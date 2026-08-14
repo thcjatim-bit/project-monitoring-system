@@ -10,8 +10,8 @@ use App\Models\User;
 use App\Support\TenantDatabaseContext;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Database\QueryException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
 class AccessControlTest extends TestCase

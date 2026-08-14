@@ -3,15 +3,13 @@
 namespace App\Support;
 
 use App\Models\User;
-use Illuminate\Database\ConnectionInterface;
+use Illuminate\Support\Facades\DB;
 
 class TenantDatabaseContext
 {
     private ?int $mitraId = null;
 
     private bool $isThc = false;
-
-    public function __construct(private ConnectionInterface $connection) {}
 
     public function forUser(?User $user): void
     {
@@ -29,12 +27,14 @@ class TenantDatabaseContext
         $this->mitraId = $mitraId;
         $this->isThc = $isThc;
 
-        if ($this->connection->getDriverName() !== 'pgsql') {
+        $connection = DB::connection();
+
+        if ($connection->getDriverName() !== 'pgsql') {
             return;
         }
 
-        $this->connection->select("select set_config('app.mitra_id', ?, false)", [$mitraId === null ? '' : (string) $mitraId]);
-        $this->connection->select("select set_config('app.is_thc', ?, false)", [$isThc ? 'on' : 'off']);
+        $connection->select("select set_config('app.mitra_id', ?, false)", [$mitraId === null ? '' : (string) $mitraId]);
+        $connection->select("select set_config('app.is_thc', ?, false)", [$isThc ? 'on' : 'off']);
     }
 
     public function mitraId(): ?int

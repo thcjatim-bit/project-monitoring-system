@@ -11,7 +11,7 @@ use App\Models\Pop;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
 class MasterDataManagementTest extends TestCase
@@ -63,7 +63,7 @@ class MasterDataManagementTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/materials', [
             'kode' => 'MAT-001', 'nama' => 'Kabel', 'unit_id' => $unit->id, 'jenis' => 'biasa',
-        ])->assertRedirect();
+        ])->assertRedirect()->assertSessionDoesntHaveErrors();
 
         $material = Material::query()->firstOrFail();
         $this->assertTrue($material->unit()->exists());

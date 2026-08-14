@@ -8,7 +8,9 @@ use App\Models\Material;
 use App\Models\Mitra;
 use App\Models\User;
 use App\Models\Warehouse;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Support\TenantDatabaseContext;
+use Closure;
+use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
 class MaterialInventoryTest extends TestCase
@@ -18,7 +20,7 @@ class MaterialInventoryTest extends TestCase
     public function test_warehouse_officer_can_receive_and_issue_material_through_audited_transactions(): void
     {
         $mitra = Mitra::factory()->create();
-        $warehouse = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith('operate_warehouse', $mitra);
         $warehouse->users()->attach($user);
@@ -52,7 +54,7 @@ class MaterialInventoryTest extends TestCase
     public function test_issue_is_rejected_when_it_would_make_stock_negative(): void
     {
         $mitra = Mitra::factory()->create();
-        $warehouse = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
         $material = Material::factory()->create();
         $user = $this->userWith('operate_warehouse', $mitra);
         $warehouse->users()->attach($user);
@@ -75,5 +77,16 @@ class MaterialInventoryTest extends TestCase
         $group->izins()->attach(Izin::factory()->create(['kode' => $permission]));
 
         return User::factory()->create(['mitra_id' => $mitra->id, 'grup_id' => $group->id]);
+    }
+
+    private function asThc(Closure $callback): mixed
+    {
+        app(TenantDatabaseContext::class)->set(null, true);
+
+        try {
+            return $callback();
+        } finally {
+            app(TenantDatabaseContext::class)->set(null, false);
+        }
     }
 }
