@@ -10,7 +10,12 @@
     <ul>
         @foreach ($records as $record)
             <li>
-                {{ $record->kode }} — {{ $record->nama }}
+                <form method="POST" action="{{ route('admin.master.update', [$entity, $record->id]) }}">
+                    @csrf @method('PATCH')
+                    <input name="kode" value="{{ $record->kode }}" required>
+                    <input name="nama" value="{{ $record->nama }}" required>
+                    <button>Simpan perubahan</button>
+                </form>
                 @if ($record->aktif)
                     <form method="POST" action="{{ route('admin.master.deactivate', [$entity, $record->id]) }}" style="display:inline">
                         @csrf @method('PATCH') <button>Nonaktifkan</button>

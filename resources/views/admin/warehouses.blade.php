@@ -3,6 +3,7 @@
     @if (session('status')) <p>{{ session('status') }}</p> @endif
     <form method="POST" action="{{ route('admin.warehouses.create') }}">
         @csrf <input name="kode" placeholder="Kode" required><input name="nama" placeholder="Nama" required>
+        <select name="mitra_id"><option value="">THC</option>@foreach($mitras as $mitra)<option value="{{ $mitra->id }}">{{ $mitra->nama }}</option>@endforeach</select>
         <button>Simpan Warehouse</button>
     </form>
     @foreach($warehouses as $warehouse)
@@ -10,6 +11,7 @@
             <form method="POST" action="{{ route('admin.warehouses.update', $warehouse) }}">
                 @csrf @method('PATCH')
                 <input name="kode" value="{{ $warehouse->kode }}" required><input name="nama" value="{{ $warehouse->nama }}" required>
+                <select name="mitra_id"><option value="">THC</option>@foreach($mitras as $mitra)<option value="{{ $mitra->id }}" @selected($warehouse->mitra_id === $mitra->id)>{{ $mitra->nama }}</option>@endforeach</select>
                 <button>Simpan perubahan</button>
             </form>
             @if($warehouse->aktif)

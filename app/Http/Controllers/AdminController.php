@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Contracts\WahaClient;
 use App\Models\Grup;
 use App\Models\Material;
+use App\Models\Mitra;
+use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WhatsappSessionStatus;
@@ -70,12 +72,19 @@ class AdminController extends Controller
 
     public function warehouses(): View
     {
-        return view('admin.warehouses', ['warehouses' => Warehouse::with('users')->latest()->get(), 'users' => User::where('aktif', true)->orderBy('name')->get()]);
+        return view('admin.warehouses', [
+            'warehouses' => Warehouse::with('users', 'mitra')->latest()->get(),
+            'users' => User::where('aktif', true)->orderBy('name')->get(),
+            'mitras' => Mitra::where('aktif', true)->orderBy('nama')->get(),
+        ]);
     }
 
     public function materials(): View
     {
-        return view('admin.materials', ['materials' => Material::latest()->get()]);
+        return view('admin.materials', [
+            'materials' => Material::with('unit')->latest()->get(),
+            'units' => Unit::query()->where('aktif', true)->orderBy('nama')->get(),
+        ]);
     }
 
     public function createMaterial(Request $request): RedirectResponse
@@ -83,7 +92,7 @@ class AdminController extends Controller
         $data = $request->validate([
             'kode' => ['required', 'string', 'max:255', 'unique:materials,kode'],
             'nama' => ['required', 'string', 'max:255'],
-            'unit' => ['required', 'string', 'max:50'],
+            'unit_id' => ['required', Rule::exists('units', 'id')->where('aktif', true)],
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
         ]);
         Material::create($data);
@@ -96,7 +105,7 @@ class AdminController extends Controller
         $data = $request->validate([
             'kode' => ['required', 'string', 'max:255', Rule::unique('materials', 'kode')->ignore($material->id)],
             'nama' => ['required', 'string', 'max:255'],
-            'unit' => ['required', 'string', 'max:50'],
+            'unit_id' => ['required', Rule::exists('units', 'id')->where('aktif', true)],
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
         ]);
         $material->update($data);
@@ -144,6 +153,7 @@ class AdminController extends Controller
 
     public function assignWarehouse(Request $request, Warehouse $warehouse): RedirectResponse
     {
+        abort_unless($warehouse->aktif, 422, 'Warehouse nonaktif tidak dapat dipilih.');
         $data = $request->validate(['user_id' => ['required', Rule::exists('users', 'id')->where('aktif', true)]]);
         $warehouse->users()->syncWithoutDetaching([$data['user_id']]);
 
