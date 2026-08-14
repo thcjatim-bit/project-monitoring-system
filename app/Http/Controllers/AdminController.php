@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\WahaClient;
 use App\Models\Grup;
+use App\Models\Material;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WhatsappSessionStatus;
@@ -70,6 +71,75 @@ class AdminController extends Controller
     public function warehouses(): View
     {
         return view('admin.warehouses', ['warehouses' => Warehouse::with('users')->latest()->get(), 'users' => User::where('aktif', true)->orderBy('name')->get()]);
+    }
+
+    public function materials(): View
+    {
+        return view('admin.materials', ['materials' => Material::latest()->get()]);
+    }
+
+    public function createMaterial(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'kode' => ['required', 'string', 'max:255', 'unique:materials,kode'],
+            'nama' => ['required', 'string', 'max:255'],
+            'unit' => ['required', 'string', 'max:50'],
+            'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
+        ]);
+        Material::create($data);
+
+        return back()->with('status', 'Material dibuat.');
+    }
+
+    public function updateMaterial(Request $request, Material $material): RedirectResponse
+    {
+        $data = $request->validate([
+            'kode' => ['required', 'string', 'max:255', Rule::unique('materials', 'kode')->ignore($material->id)],
+            'nama' => ['required', 'string', 'max:255'],
+            'unit' => ['required', 'string', 'max:50'],
+            'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
+        ]);
+        $material->update($data);
+
+        return back()->with('status', 'Material diperbarui.');
+    }
+
+    public function deactivateMaterial(Material $material): RedirectResponse
+    {
+        $material->update(['aktif' => false]);
+
+        return back()->with('status', 'Material dinonaktifkan.');
+    }
+
+    public function createWarehouse(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'kode' => ['required', 'string', 'max:255', 'unique:warehouses,kode'],
+            'nama' => ['required', 'string', 'max:255'],
+            'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where('aktif', true)],
+        ]);
+        Warehouse::create([...$data, 'aktif' => true]);
+
+        return back()->with('status', 'Warehouse dibuat.');
+    }
+
+    public function updateWarehouse(Request $request, Warehouse $warehouse): RedirectResponse
+    {
+        $data = $request->validate([
+            'kode' => ['required', 'string', 'max:255', Rule::unique('warehouses', 'kode')->ignore($warehouse->id)],
+            'nama' => ['required', 'string', 'max:255'],
+            'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where('aktif', true)],
+        ]);
+        $warehouse->update($data);
+
+        return back()->with('status', 'Warehouse diperbarui.');
+    }
+
+    public function deactivateWarehouse(Warehouse $warehouse): RedirectResponse
+    {
+        $warehouse->update(['aktif' => false]);
+
+        return back()->with('status', 'Warehouse dinonaktifkan.');
     }
 
     public function assignWarehouse(Request $request, Warehouse $warehouse): RedirectResponse
