@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Project Monitoring System scheduler every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=pms-schedule.service
+
+[Install]
+WantedBy=timers.target
