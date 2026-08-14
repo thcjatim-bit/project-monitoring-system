@@ -1,0 +1,44 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Grup;
+use App\Models\Izin;
+use Illuminate\Database\Seeder;
+
+class AccessControlSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $izins = collect([
+            'read_dashboard' => 'Melihat Dashboard',
+            'read_project' => 'Melihat Project',
+            'create_project' => 'Menambah Project',
+            'update_project' => 'Mengubah Project',
+            'delete_project' => 'Menghapus Project',
+            'manage_users' => 'Mengelola User',
+            'manage_grups' => 'Mengelola Grup',
+            'manage_mitras' => 'Mengelola Mitra',
+            'manage_master_data' => 'Mengelola Master Data',
+            'manage_warehouse' => 'Mengelola Gudang',
+            'record_material_movement' => 'Mencatat Pergerakan Material',
+            'approve_material_request' => 'Menyetujui Request Material',
+        ])->mapWithKeys(fn (string $nama, string $kode) => [
+            $kode => Izin::query()->firstOrCreate(['kode' => $kode], ['nama' => $nama]),
+        ]);
+
+        $matriks = [
+            'admin_thc' => ['nama' => 'Admin THC', 'izins' => $izins->keys()->all()],
+            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project']],
+            'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project']],
+            'gudang' => ['nama' => 'Gudang', 'izins' => ['read_dashboard', 'manage_warehouse', 'record_material_movement']],
+            'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project']],
+            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project']],
+        ];
+
+        foreach ($matriks as $preset => $definition) {
+            $grup = Grup::query()->firstOrCreate(['preset' => $preset], ['nama' => $definition['nama']]);
+            $grup->izins()->sync($izins->only($definition['izins'])->pluck('id'));
+        }
+    }
+}

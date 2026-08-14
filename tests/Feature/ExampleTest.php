@@ -6,13 +6,11 @@ use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    public function test_the_application_status_page_is_available(): void
+    public function test_root_redirects_to_dashboard(): void
     {
         $response = $this->get('/');
 
         $response
-            ->assertOk()
-            ->assertSee('Project Monitoring System')
-            ->assertSee('Fondasi aplikasi siap.');
+            ->assertRedirect('/dashboard');
     }
 }

@@ -34,7 +34,9 @@ Gunakan `APP_ENV=production` dan `APP_DEBUG=false` pada `.env` produksi. PHP-FPM
 
 ## Menjalankan pengujian
 
-Pengujian selalu memakai PostgreSQL, bukan SQLite, agar slice berikutnya dapat membuktikan RLS, trigger, dan grant database. Buat database `project_monitoring_system_testing` dan berikan aksesnya kepada role yang dipakai untuk pengujian; kemudian sesuaikan variabel `DB_*` pada `phpunit.xml` bila perlu.
+Pengujian selalu memakai PostgreSQL, bukan SQLite, agar slice berikutnya dapat membuktikan RLS, trigger, dan grant database. Buat database `project_monitoring_system_testing` dan berikan akses kepada role aplikasi non-superuser tanpa `BYPASSRLS` (mis. `pms_app`). Konfigurasi koneksi (`DB_HOST`, `DB_PORT`, `DB_USERNAME`, dan `DB_PASSWORD`) berasal dari environment atau `.env.testing`; `phpunit.xml` mengunci hanya nama database testing agar test tidak dapat memakai database produksi.
+
+Pada deployment, jalankan migration dengan environment role `pms_migrator`, lalu jalankan aplikasi dengan role `pms_app`; role aplikasi tidak boleh superuser atau memiliki `BYPASSRLS`.
 
 ```bash
 php artisan test

@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -22,6 +23,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'no_wa',
+        'mitra_id',
+        'grup_id',
+        'aktif',
     ];
 
     /**
@@ -44,6 +49,24 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'aktif' => 'boolean',
         ];
+    }
+
+    public function mitra(): BelongsTo
+    {
+        return $this->belongsTo(Mitra::class);
+    }
+
+    public function grup(): BelongsTo
+    {
+        return $this->belongsTo(Grup::class);
+    }
+
+    public function hasIzin(string $kode): bool
+    {
+        return $this->grup()
+            ->whereHas('izins', fn ($query) => $query->where('kode', $kode))
+            ->exists();
     }
 }
