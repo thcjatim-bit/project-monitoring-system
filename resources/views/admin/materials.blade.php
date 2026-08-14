@@ -16,7 +16,10 @@
                     @csrf @method('PATCH')
                     <input name="kode" value="{{ $material->kode }}" required>
                     <input name="nama" value="{{ $material->nama }}" required>
-                    <select name="unit_id" required>@foreach($units as $unit)<option value="{{ $unit->id }}" @selected($material->unit_id === $unit->id)>{{ $unit->nama }}</option>@endforeach</select>
+                    <select name="unit_id" required>
+                        @if(!$material->unit->aktif)<option value="{{ $material->unit->id }}" selected>{{ $material->unit->nama }} (nonaktif)</option>@endif
+                        @foreach($units as $unit)<option value="{{ $unit->id }}" @selected($material->unit_id === $unit->id)>{{ $unit->nama }}</option>@endforeach
+                    </select>
                     <select name="jenis"><option value="biasa" @selected($material->jenis === 'biasa')>Biasa</option><option value="ber_sn" @selected($material->jenis === 'ber_sn')>Ber-SN</option><option value="drum_kabel" @selected($material->jenis === 'drum_kabel')>Drum kabel</option></select>
                     <button>Simpan perubahan</button>
                 </form>

@@ -105,7 +105,9 @@ class AdminController extends Controller
         $data = $request->validate([
             'kode' => ['required', 'string', 'max:255', Rule::unique('materials', 'kode')->ignore($material->id)],
             'nama' => ['required', 'string', 'max:255'],
-            'unit_id' => ['required', Rule::exists('units', 'id')->where('aktif', true)],
+            'unit_id' => ['required', Rule::exists('units', 'id')->where(
+                fn ($query) => $query->where('aktif', true)->orWhere('id', $material->unit_id)
+            )],
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
         ]);
         $material->update($data);

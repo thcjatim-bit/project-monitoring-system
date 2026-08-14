@@ -17,10 +17,12 @@
             @if($warehouse->aktif)
                 <form method="POST" action="{{ route('admin.warehouses.deactivate', $warehouse) }}">@csrf @method('PATCH')<button>Nonaktifkan</button></form>
             @else (nonaktif) @endif
-            <form method="POST" action="{{ route('admin.warehouses.assign', $warehouse) }}">@csrf
-                <select name="user_id">@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select>
-                <button>Tugaskan</button>
-            </form>
+            @if($warehouse->aktif)
+                <form method="POST" action="{{ route('admin.warehouses.assign', $warehouse) }}">@csrf
+                    <select name="user_id">@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select>
+                    <button>Tugaskan</button>
+                </form>
+            @endif
             <ul>@foreach($warehouse->users as $user)<li>{{ $user->name }} <form method="POST" action="{{ route('admin.warehouses.unassign', [$warehouse, $user]) }}" style="display:inline">@csrf @method('DELETE')<button>Hapus</button></form></li>@endforeach</ul>
         </section>
     @endforeach

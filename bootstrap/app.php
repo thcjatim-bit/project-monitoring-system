@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureThcUser;
 use App\Http\Middleware\EnsureUserHasIzin;
 use App\Http\Middleware\EnsureWarehouseAssignment;
 use App\Http\Middleware\SetTenantDatabaseContext;
@@ -17,7 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->appendToGroup('web', SetTenantDatabaseContext::class);
         $middleware->prependToPriorityList(SubstituteBindings::class, SetTenantDatabaseContext::class);
-        $middleware->alias(['izin' => EnsureUserHasIzin::class, 'warehouse' => EnsureWarehouseAssignment::class]);
+        $middleware->alias(['izin' => EnsureUserHasIzin::class, 'thc' => EnsureThcUser::class, 'warehouse' => EnsureWarehouseAssignment::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

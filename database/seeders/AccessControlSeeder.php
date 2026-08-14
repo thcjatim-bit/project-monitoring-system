@@ -20,6 +20,7 @@ class AccessControlSeeder extends Seeder
             'manage_grups' => 'Mengelola Grup',
             'manage_mitras' => 'Mengelola Mitra',
             'manage_warehouses' => 'Mengelola Warehouse',
+            'manage_materials' => 'Mengelola Material',
             'operate_warehouse' => 'Mengoperasikan Warehouse',
             'manage_master_data' => 'Mengelola Master Data',
         ])->mapWithKeys(fn (string $nama, string $kode) => [

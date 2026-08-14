@@ -11,6 +11,7 @@ use App\Models\Pop;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
+use Database\Seeders\AccessControlSeeder;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
@@ -101,10 +102,62 @@ class MasterDataManagementTest extends TestCase
         $this->actingAs($user)->get('/admin/master/units')->assertForbidden();
     }
 
-    private function groupWith(string $permission): Grup
+    public function test_seeded_thc_admin_can_open_every_master_data_page(): void
+    {
+        $this->seed(AccessControlSeeder::class);
+        $admin = User::factory()->create([
+            'grup_id' => Grup::query()->where('preset', 'admin_thc')->value('id'),
+            'mitra_id' => null,
+        ]);
+
+        foreach (['/admin/master/units', '/admin/master/pops', '/admin/master/pekerjaan-jasa', '/admin/materials', '/admin/warehouses'] as $url) {
+            $this->actingAs($admin)->get($url)->assertOk();
+        }
+    }
+
+    public function test_mitra_cannot_manage_shared_master_data_even_with_permission(): void
+    {
+        $mitraUser = User::factory()->create([
+            'grup_id' => $this->groupWith('read_dashboard', 'manage_master_data', 'manage_materials', 'manage_warehouses')->id,
+            'mitra_id' => Mitra::factory()->create()->id,
+        ]);
+
+        foreach (['/admin/master/units', '/admin/materials', '/admin/warehouses'] as $url) {
+            $this->actingAs($mitraUser)->get($url)->assertForbidden();
+        }
+
+        $this->actingAs($mitraUser)->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee(route('admin.warehouses'), false)
+            ->assertDontSee(route('admin.materials'), false);
+    }
+
+    public function test_material_can_keep_its_historical_inactive_unit_when_updated(): void
+    {
+        $admin = User::factory()->create(['grup_id' => $this->groupWith('manage_materials')->id]);
+        $unit = Unit::query()->create(['kode' => 'M', 'nama' => 'Meter', 'aktif' => false]);
+        $material = Material::factory()->create(['unit_id' => $unit->id, 'nama' => 'Nama lama']);
+
+        $this->actingAs($admin)->patch("/admin/materials/{$material->id}", [
+            'kode' => $material->kode,
+            'nama' => 'Nama baru',
+            'unit_id' => $unit->id,
+            'jenis' => $material->jenis,
+        ])->assertRedirect()->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('materials', [
+            'id' => $material->id,
+            'nama' => 'Nama baru',
+            'unit_id' => $unit->id,
+        ]);
+    }
+
+    private function groupWith(string ...$permissions): Grup
     {
         $group = Grup::factory()->create();
-        $group->izins()->attach(Izin::factory()->create(['kode' => $permission]));
+        foreach ($permissions as $permission) {
+            $group->izins()->attach(Izin::factory()->create(['kode' => $permission]));
+        }
 
         return $group;
     }
