@@ -6,9 +6,23 @@ use App\Models\Project;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 class ProjectController extends Controller
 {
+    public function index(): View
+    {
+        return view('projects.index', [
+            'projects' => Project::query()->latest()->get(),
+            'user' => request()->user(),
+        ]);
+    }
+
+    public function create(): View
+    {
+        return view('projects.create', ['user' => request()->user()]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $project = Project::create($request->validate([
@@ -20,8 +34,9 @@ class ProjectController extends Controller
         return redirect()->route('projects.index')->with('status', "Project {$project->id_project} dibuat.");
     }
 
-    public function update(Request $request, Project $project): RedirectResponse
+    public function update(Request $request, int $projectId): RedirectResponse
     {
+        $project = Project::query()->findOrFail($projectId);
         $project->update($request->validate([
             'nama' => ['required', 'string', 'max:255'],
         ]));
@@ -29,8 +44,9 @@ class ProjectController extends Controller
         return redirect()->route('projects.index')->with('status', "Project {$project->id_project} diperbarui.");
     }
 
-    public function destroy(Project $project): RedirectResponse
+    public function destroy(int $projectId): RedirectResponse
     {
+        $project = Project::query()->findOrFail($projectId);
         $project->delete();
 
         return redirect()->route('projects.index')->with('status', 'Project dihapus.');

@@ -73,6 +73,18 @@ class AccessControlTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_dashboard_hides_project_menu_without_read_project_izin_aksi(): void
+    {
+        $grup = Grup::factory()->create();
+        $grup->izins()->attach(Izin::factory()->create(['kode' => 'read_dashboard']));
+        $user = User::factory()->create(['grup_id' => $grup->id]);
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('href="'.route('projects.index').'"', false);
+    }
+
     public function test_user_with_create_project_izin_aksi_can_create_project_for_mitra(): void
     {
         $mitra = Mitra::factory()->create();
@@ -85,6 +97,73 @@ class AccessControlTest extends TestCase
             ->assertRedirect('/projects');
 
         $this->assertDatabaseHas('projects', ['id_project' => 'PRJ-2608-0010', 'mitra_id' => $mitra->id]);
+    }
+
+    public function test_project_action_controls_follow_izin_aksi(): void
+    {
+        $readProject = Izin::factory()->create(['kode' => 'read_project']);
+        $readOnlyGrup = Grup::factory()->create();
+        $readOnlyGrup->izins()->attach($readProject);
+        $readOnlyUser = User::factory()->create(['grup_id' => $readOnlyGrup->id]);
+
+        $this->actingAs($readOnlyUser)
+            ->get('/projects')
+            ->assertOk()
+            ->assertDontSee('Tambah Project');
+
+        $createGrup = Grup::factory()->create();
+        $createGrup->izins()->attach([
+            $readProject->id,
+            Izin::factory()->create(['kode' => 'create_project'])->id,
+        ]);
+        $createUser = User::factory()->create(['grup_id' => $createGrup->id]);
+
+        $this->actingAs($createUser)
+            ->get('/projects')
+            ->assertOk()
+            ->assertSee('Tambah Project');
+    }
+
+    public function test_project_list_and_actions_are_limited_by_izin_aksi(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $grup = Grup::factory()->create();
+        $grup->izins()->attach(Izin::factory()->create(['kode' => 'read_project']));
+        $user = User::factory()->create(['mitra_id' => $mitra->id, 'grup_id' => $grup->id]);
+        $project = $this->asThc(fn () => Project::create([
+            'id_project' => 'PRJ-2608-0013',
+            'nama' => 'Project terbatas',
+            'mitra_id' => $mitra->id,
+        ]));
+
+        $this->actingAs($user)
+            ->get('/projects')
+            ->assertOk()
+            ->assertSee('Project terbatas')
+            ->assertDontSee('Simpan perubahan')
+            ->assertDontSee('Hapus');
+
+        $this->actingAs($user)
+            ->patch("/projects/{$project->id}", ['nama' => 'Tidak boleh'])
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->delete("/projects/{$project->id}")
+            ->assertForbidden();
+    }
+
+    public function test_unauthorized_project_route_returns_403_even_for_another_mitras_project(): void
+    {
+        [$mitraA, $mitraB, $userA] = $this->tenantFixtures();
+        $projectB = $this->asThc(fn () => Project::create([
+            'id_project' => 'PRJ-2608-0014',
+            'nama' => 'Project Mitra B',
+            'mitra_id' => $mitraB->id,
+        ]));
+
+        $this->actingAs($userA)
+            ->patch("/projects/{$projectB->id}", ['nama' => 'Tidak boleh'])
+            ->assertForbidden();
     }
 
     public function test_direct_dashboard_access_without_required_izin_aksi_is_forbidden(): void
@@ -120,7 +199,25 @@ class AccessControlTest extends TestCase
 
         $this->actingAs($userA)->get('/projects')->assertOk();
 
+        $visibleProjectIds = DB::table('projects')->pluck('id_project')->all();
+
+        $this->assertSame(['PRJ-2608-0001'], $visibleProjectIds);
         $this->assertSame([$mitraA->id], DB::table('projects')->pluck('mitra_id')->all());
+    }
+
+    public function test_raw_query_without_tenant_context_is_denied_by_default(): void
+    {
+        $mitra = Mitra::factory()->create();
+
+        $this->asThc(fn () => Project::create([
+            'id_project' => 'PRJ-2608-0011',
+            'nama' => 'Project tanpa konteks',
+            'mitra_id' => $mitra->id,
+        ]));
+
+        app(TenantDatabaseContext::class)->set(null, false);
+
+        $this->assertSame([], DB::table('projects')->get()->all());
     }
 
     public function test_mitra_raw_query_cannot_insert_a_project_for_another_mitra(): void
@@ -188,6 +285,33 @@ class AccessControlTest extends TestCase
 
         $this->assertSame([$mitraA->id], Project::query()->pluck('mitra_id')->unique()->all());
         $this->assertSame($mitraA->id, $project->mitra_id);
+    }
+
+    public function test_mitra_with_izin_aksi_can_update_and_delete_its_own_project(): void
+    {
+        [$mitraA, $mitraB, $userA] = $this->tenantFixtures();
+        $userA->grup->izins()->attach([
+            Izin::factory()->create(['kode' => 'update_project'])->id,
+            Izin::factory()->create(['kode' => 'delete_project'])->id,
+        ]);
+
+        $project = $this->asThc(fn () => Project::create([
+            'id_project' => 'PRJ-2608-0012',
+            'nama' => 'Project Mitra A',
+            'mitra_id' => $mitraA->id,
+        ]));
+
+        $this->actingAs($userA)
+            ->patch("/projects/{$project->id}", ['nama' => 'Project diperbarui'])
+            ->assertRedirect('/projects');
+
+        $this->assertDatabaseHas('projects', ['id' => $project->id, 'nama' => 'Project diperbarui']);
+
+        $this->actingAs($userA)
+            ->delete("/projects/{$project->id}")
+            ->assertRedirect('/projects');
+
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
     }
 
     /** @return array{Mitra, Mitra, User} */
