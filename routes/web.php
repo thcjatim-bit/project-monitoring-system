@@ -16,6 +16,19 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/masuk', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
+// PROTOTYPE Gelombang 2: no auth/session because the mock data is read-only and in-memory.
+// Only expose the throwaway UI outside production.
+if (! app()->environment('production')) {
+    Route::get('/prototype/gelombang-2', fn () => view('prototypes.gelombang-2'))
+        ->withoutMiddleware([
+            \App\Http\Middleware\SetTenantDatabaseContext::class,
+            \Illuminate\Session\Middleware\StartSession::class,
+            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+        ])
+        ->name('prototype.gelombang-2');
+}
+
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', fn () => view('dashboard', ['user' => request()->user()]))->middleware('izin:read_dashboard')->name('dashboard');
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
