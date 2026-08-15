@@ -88,7 +88,6 @@ class MaterialInventoryService
                 'lokasi_id' => $warehouse->id,
             ]);
 
-            $parent->decrement('sisa', $qty);
             $this->record($actor, $warehouse, $parent->material_id, '-'.$qty, $reason, null, $parent->id, 'drum_split');
             $this->record($actor, $warehouse, $parent->material_id, $qty, $reason, null, $child->id, 'drum_split');
 
@@ -146,7 +145,7 @@ class MaterialInventoryService
             'lokasi_id' => $warehouse->id,
         ]);
 
-        return $this->record($actor, $warehouse, $material->id, $qty, $reason, null, $drum->id);
+        return $this->record($actor, $warehouse, $material->id, $qty, $reason, null, $drum->id, 'drum_receive');
     }
 
     private function issueSerialNumber(
@@ -199,9 +198,7 @@ class MaterialInventoryService
             throw ValidationException::withMessages(['qty' => 'Sisa meter drum tidak mencukupi.']);
         }
 
-        $drum->decrement('sisa', $qty);
-
-        return $this->record($actor, $warehouse, $material->id, '-'.$qty, $reason, null, $drum->id);
+        return $this->record($actor, $warehouse, $material->id, '-'.$qty, $reason, null, $drum->id, 'drum_issue');
     }
 
     private function issueOrdinary(User $actor, Warehouse $warehouse, int $materialId, string $qty, string $reason): MaterialTransaksi

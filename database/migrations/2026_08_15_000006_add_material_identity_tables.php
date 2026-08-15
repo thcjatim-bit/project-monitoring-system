@@ -123,6 +123,10 @@ return new class extends Migration
                     RAISE EXCEPTION 'Material drum kabel wajib memiliki identitas drum';
                 END IF;
 
+                IF material_type = 'drum_kabel' AND NEW.jenis_transaksi NOT IN ('drum_receive', 'drum_issue', 'drum_split') THEN
+                    RAISE EXCEPTION 'Transaksi drum kabel memiliki jenis transaksi yang tidak valid';
+                END IF;
+
                 IF NEW.material_sn_id IS NOT NULL AND NOT EXISTS (
                     SELECT 1 FROM material_sns WHERE id = NEW.material_sn_id AND material_id = NEW.material_id
                 ) THEN
@@ -147,6 +151,37 @@ return new class extends Migration
             CREATE TRIGGER material_transaction_identity
                 BEFORE INSERT ON material_transaksis
                 FOR EACH ROW EXECUTE FUNCTION validate_material_transaction_identity();
+
+            CREATE OR REPLACE FUNCTION apply_drum_transaction() RETURNS trigger AS $fn$
+            BEGIN
+                IF NEW.drum_id IS NOT NULL AND NEW.jenis_transaksi IN ('drum_issue', 'drum_split') AND NEW.qty_delta < 0 THEN
+                    UPDATE drums
+                    SET sisa = sisa + NEW.qty_delta, updated_at = NOW()
+                    WHERE id = NEW.drum_id;
+                    IF NOT FOUND THEN
+                        RAISE EXCEPTION 'Drum tidak ditemukan';
+                    END IF;
+                END IF;
+                RETURN NEW;
+            END;
+            $fn$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+            CREATE TRIGGER material_transaction_drum_balance
+                AFTER INSERT ON material_transaksis
+                FOR EACH ROW EXECUTE FUNCTION apply_drum_transaction();
+
+            CREATE OR REPLACE FUNCTION prevent_direct_drum_balance_mutation() RETURNS trigger AS $fn$
+            BEGIN
+                IF NEW.sisa IS DISTINCT FROM OLD.sisa AND pg_trigger_depth() = 0 THEN
+                    RAISE EXCEPTION 'Sisa drum hanya boleh berubah melalui Buku transaksi';
+                END IF;
+                RETURN NEW;
+            END;
+            $fn$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER drum_balance_append_only
+                BEFORE UPDATE OF sisa ON drums
+                FOR EACH ROW EXECUTE FUNCTION prevent_direct_drum_balance_mutation();
 
             ALTER TABLE material_sns ENABLE ROW LEVEL SECURITY;
             ALTER TABLE material_sns FORCE ROW LEVEL SECURITY;
@@ -183,7 +218,11 @@ return new class extends Migration
         if (DB::getDriverName() === 'pgsql') {
             DB::unprepared(<<<'SQL'
                 DROP TRIGGER IF EXISTS material_transaction_identity ON material_transaksis;
+                DROP TRIGGER IF EXISTS material_transaction_drum_balance ON material_transaksis;
+                DROP TRIGGER IF EXISTS drum_balance_append_only ON drums;
                 DROP FUNCTION IF EXISTS validate_material_transaction_identity();
+                DROP FUNCTION IF EXISTS apply_drum_transaction();
+                DROP FUNCTION IF EXISTS prevent_direct_drum_balance_mutation();
                 DROP POLICY IF EXISTS material_sn_tenant_isolation ON material_sns;
                 DROP POLICY IF EXISTS drum_tenant_isolation ON drums;
             SQL);
