@@ -59,11 +59,13 @@ class ProjectPlanningTest extends TestCase
 
         $this->asThc(fn () => $price->update(['harga' => '200000.00']));
 
-        $this->assertDatabaseHas('project_rab_jasas', [
-            'id' => $rab->id,
-            'harga_satuan' => '125000.00',
-            'total_nilai' => '1250000.00',
-        ]);
+        $this->asThc(function () use ($rab): void {
+            $this->assertDatabaseHas('project_rab_jasas', [
+                'id' => $rab->id,
+                'harga_satuan' => '125000.00',
+                'total_nilai' => '1250000.00',
+            ]);
+        });
     }
 
     public function test_changing_toc_preserves_original_and_creates_revised_baseline(): void
@@ -193,7 +195,10 @@ class ProjectPlanningTest extends TestCase
     {
         $group = Grup::factory()->create();
         $group->izins()->attach(collect($permissions)->map(
-            fn (string $permission) => Izin::factory()->create(['kode' => $permission])->id,
+            fn (string $permission) => Izin::query()->firstOrCreate(
+                ['kode' => $permission],
+                ['nama' => $permission],
+            )->id,
         )->all());
 
         return User::factory()->create(['mitra_id' => $mitraId, 'grup_id' => $group->id]);
