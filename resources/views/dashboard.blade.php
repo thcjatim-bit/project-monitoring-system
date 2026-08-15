@@ -87,6 +87,59 @@
             @endif
         </nav>
 
+        <section id="activity-feed-panel" class="command-center__panel" aria-labelledby="activity-feed-title" aria-busy="false">
+            <div class="command-center__panel-header">
+                <div>
+                    <h2 id="activity-feed-title">Aktivitas lintas operasional</h2>
+                    <p>Ringkasan navigasi dari timestamp dan status domain yang sudah tersimpan, bukan audit log perubahan field.</p>
+                </div>
+                <span class="command-center__item-status">{{ $activityFeed->count() }} aktivitas</span>
+            </div>
+
+            <div id="activity-feed-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                Memuat aktivitas lintas operasional…
+            </div>
+
+            @if ($activityFeedError)
+                <div class="command-center__state command-center__state--error" data-dashboard-state="error" role="alert">
+                    {{ $activityFeedError }}
+                </div>
+            @elseif ($activityFeed->isEmpty())
+                <div class="command-center__state command-center__state--empty" data-dashboard-state="empty">
+                    Belum ada aktivitas lintas operasional yang dapat ditampilkan.
+                </div>
+            @else
+                <ul class="command-center__list" data-dashboard-state="ready">
+                    @foreach ($activityFeed as $activity)
+                        <li class="command-center__item command-center__item--start" data-activity-source="{{ $activity['source'] }}" data-activity-entity="{{ $activity['entity'] }}">
+                            <div>
+                                <a href="{{ $activity['url'] }}">{{ $activity['title'] }}</a>
+                                <p>{{ $activity['source'] }} · {{ $activity['entity'] }} · {{ $activity['description'] }}</p>
+                                <p>Aktivitas {{ $activity['occurred_at']->format('d M Y H:i') }}</p>
+                            </div>
+                            <span class="command-center__item-status">{{ $activity['status'] }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+
+            <script>
+                (() => {
+                    const panel = document.getElementById('activity-feed-panel');
+                    const loading = document.getElementById('activity-feed-loading');
+
+                    panel?.querySelectorAll('a').forEach((link) => {
+                        link.addEventListener('click', () => {
+                            if (link.target !== '_blank') {
+                                loading.hidden = false;
+                                panel.setAttribute('aria-busy', 'true');
+                            }
+                        });
+                    });
+                })();
+            </script>
+        </section>
+
         @if ($user->hasIzin('manage_users'))
             <section id="active-user-panel" class="command-center__panel" aria-labelledby="active-user-title" aria-busy="false">
                 <div class="command-center__panel-header">

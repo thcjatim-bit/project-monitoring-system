@@ -21,6 +21,15 @@ class CommandCenterController extends Controller
         $transitError = null;
         $criticalStocks = collect();
         $criticalStockError = null;
+        $activityFeed = collect();
+        $activityFeedError = null;
+
+        try {
+            $activityFeed = $commandCenterQuery->activityFeed($request->user());
+        } catch (Throwable $exception) {
+            report($exception);
+            $activityFeedError = 'Aktivitas lintas operasional belum dapat dimuat. Coba lagi atau buka modul sumbernya.';
+        }
 
         if ($request->user()->hasIzin('manage_users')) {
             try {
@@ -79,6 +88,8 @@ class CommandCenterController extends Controller
             'transitError' => $transitError,
             'criticalStocks' => $criticalStocks,
             'criticalStockError' => $criticalStockError,
+            'activityFeed' => $activityFeed,
+            'activityFeedError' => $activityFeedError,
         ]);
     }
 }
