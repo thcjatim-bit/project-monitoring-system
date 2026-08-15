@@ -32,6 +32,16 @@
                 @else
                     {{ $material->kode }} — {{ $material->nama }} @unless($material->aktif)(nonaktif)@endunless
                 @endif
+                <div id="material-{{ $material->id }}-stock">
+                    <strong>Saldo Warehouse</strong>
+                    <ul>
+                        @forelse($material->stocks->where('lokasi_tipe', 'warehouse')->where('qty', '>', 0) as $stock)
+                            <li>{{ $stock->warehouse?->nama ?? 'Warehouse tidak diketahui' }}: {{ number_format((float) $stock->qty, 3, '.', '') }} {{ $material->unit->nama }}</li>
+                        @empty
+                            <li>Tidak ada saldo Warehouse.</li>
+                        @endforelse
+                    </ul>
+                </div>
             </li>
         @endforeach
     </ul>

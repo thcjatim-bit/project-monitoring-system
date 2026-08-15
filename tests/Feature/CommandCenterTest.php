@@ -199,6 +199,13 @@ class CommandCenterTest extends TestCase
             ->assertSee('100.000')
             ->assertSee('Warehouse THC')
             ->assertSee('href="'.route('admin.materials').'#material-'.$ordinary->id.'"', false);
+
+        $this->actingAs($actor)
+            ->get('/admin/materials')
+            ->assertOk()
+            ->assertSee('Saldo Warehouse')
+            ->assertSee('Warehouse THC')
+            ->assertSee('5.000');
     }
 
     public function test_command_center_hides_inventory_panels_without_their_source_permissions(): void
