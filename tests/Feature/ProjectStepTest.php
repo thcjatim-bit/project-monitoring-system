@@ -9,7 +9,6 @@ use App\Models\Project;
 use App\Models\ProjectStep;
 use App\Models\User;
 use App\Support\TenantDatabaseContext;
-use Illuminate\Support\Facades\DB;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 

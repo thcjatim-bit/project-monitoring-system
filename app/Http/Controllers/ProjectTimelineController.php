@@ -8,10 +8,11 @@ use App\Queries\ProjectControlRoomQuery;
 use App\Services\ProjectCommentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class ProjectTimelineController extends Controller
 {
-    public function index(Request $request, Project $project, ProjectControlRoomQuery $query): \Illuminate\View\View
+    public function index(Request $request, Project $project, ProjectControlRoomQuery $query): View
     {
         return view('projects.show', $query->for($project, $request->query('as_of'), $request->user()));
     }

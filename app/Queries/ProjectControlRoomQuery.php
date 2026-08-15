@@ -26,7 +26,7 @@ class ProjectControlRoomQuery
         $material = $this->materialQuery->calculate($project);
         $timeline = $viewer?->hasIzin('read_project_timeline')
             ? $this->timelineQuery->for($project, $viewer)
-            : new Collection();
+            : new Collection;
 
         return [
             'project' => $project->loadMissing('mitra'),
@@ -43,7 +43,7 @@ class ProjectControlRoomQuery
             'photos' => ProjectPhoto::query()->with(['step', 'uploader'])->where('project_id', $project->id)->latest()->get(),
             'mentionableUsers' => $viewer?->hasIzin('mention_project_user')
                 ? $this->timelineQuery->mentionableUsers($project)
-                : new Collection(),
+                : new Collection,
         ];
     }
 }
