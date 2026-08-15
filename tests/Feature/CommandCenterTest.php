@@ -86,6 +86,17 @@ class CommandCenterTest extends TestCase
             ->assertDontSee('href="'.route('admin.warehouses').'"', false);
     }
 
+    public function test_command_center_hides_request_material_panel_without_read_permission(): void
+    {
+        $thc = $this->userWithPermissions(null, 'read_dashboard');
+
+        $this->actingAs($thc)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Request Material yang membutuhkan keputusan')
+            ->assertDontSee('Request Material menunggu keputusan');
+    }
+
     public function test_command_center_uses_read_only_queue_and_detail_links(): void
     {
         [$submitted] = $this->createSubmittedRequest();
