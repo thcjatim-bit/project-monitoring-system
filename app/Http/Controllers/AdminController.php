@@ -26,6 +26,11 @@ class AdminController extends Controller
         return view('admin.users', ['users' => User::with(['mitra', 'grup'])->latest()->get(), 'grups' => Grup::orderBy('nama')->get()]);
     }
 
+    public function mitras(): View
+    {
+        return view('admin.mitras', ['mitras' => Mitra::with('adminMitraPertama')->latest()->get()]);
+    }
+
     public function createUser(Request $request): RedirectResponse
     {
         $data = $request->validate([

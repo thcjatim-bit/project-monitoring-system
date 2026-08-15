@@ -24,7 +24,9 @@
         .command-center__panel-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
         .command-center__panel h2 { margin: 0 0 5px; font-size: 1.25rem; }
         .command-center__panel-header p { color: #526071; margin: 0; }
+        .command-center__metrics { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
         .command-center__metric { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; display: block; min-width: 190px; padding: 14px 16px; text-decoration: none; }
+        .command-center__metric--compact { min-width: 132px; }
         .command-center__metric strong { color: #0c4a6e; display: block; font-size: 1.8rem; line-height: 1; }
         .command-center__metric span { color: #164e63; display: block; font-size: 0.9rem; margin-top: 7px; }
         .command-center__list { display: grid; gap: 10px; list-style: none; margin: 20px 0 0; padding: 0; }
@@ -42,6 +44,7 @@
             .command-center { padding: 24px 14px 36px; }
             .command-center__header, .command-center__panel-header, .command-center__item { align-items: stretch; flex-direction: column; }
             .command-center__logout, .command-center__logout button, .command-center__metric { width: 100%; }
+            .command-center__metrics { justify-content: stretch; width: 100%; }
             .command-center__item-status { align-self: flex-start; }
         }
     </style>
@@ -67,6 +70,9 @@
             @if ($user->hasIzin('manage_users'))
                 <a href="{{ route('admin.users') }}">User</a>
             @endif
+            @if ($user->hasIzin('manage_mitras'))
+                <a href="{{ route('admin.mitras') }}">Mitra</a>
+            @endif
             @if ($user->mitra_id === null && $user->hasIzin('manage_warehouses'))
                 <a href="{{ route('admin.warehouses') }}">Warehouse</a>
             @endif
@@ -80,6 +86,127 @@
                 <a href="{{ route('admin.master.index', 'pekerjaan-jasa') }}">Pekerjaan Jasa</a>
             @endif
         </nav>
+
+        @if ($user->hasIzin('manage_users'))
+            <section id="active-user-panel" class="command-center__panel" aria-labelledby="active-user-title" aria-busy="false">
+                <div class="command-center__panel-header">
+                    <div>
+                        <h2 id="active-user-title">User aktif</h2>
+                        <p>Kapasitas aktual User aktif, dibedakan antara User THC dan User Mitra.</p>
+                    </div>
+                    <div class="command-center__metrics">
+                        <a class="command-center__metric command-center__metric--compact" href="{{ route('admin.users') }}">
+                            <strong>{{ $activeUserCounts['total'] }}</strong>
+                            <span>Total User aktif</span>
+                        </a>
+                        <a class="command-center__metric command-center__metric--compact" href="{{ route('admin.users') }}">
+                            <strong>{{ $activeUserCounts['thc'] }}</strong>
+                            <span>User THC aktif</span>
+                        </a>
+                        <a class="command-center__metric command-center__metric--compact" href="{{ route('admin.users') }}">
+                            <strong>{{ $activeUserCounts['mitra'] }}</strong>
+                            <span>User Mitra aktif</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="active-user-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                    Memuat kapasitas User aktif…
+                </div>
+
+                @if ($activeUserError)
+                    <div class="command-center__state command-center__state--error" data-dashboard-state="error" role="alert">
+                        {{ $activeUserError }}
+                        <a href="{{ route('admin.users') }}">Buka modul User</a> untuk mencoba lagi.
+                    </div>
+                @elseif ($activeUserCounts['total'] === 0)
+                    <div class="command-center__state command-center__state--empty" data-dashboard-state="empty">
+                        Belum ada User aktif yang tercatat.
+                    </div>
+                @endif
+
+                <script>
+                    (() => {
+                        const panel = document.getElementById('active-user-panel');
+                        const loading = document.getElementById('active-user-loading');
+
+                        panel?.querySelectorAll('a').forEach((link) => {
+                            link.addEventListener('click', () => {
+                                if (link.target !== '_blank') {
+                                    loading.hidden = false;
+                                    panel.setAttribute('aria-busy', 'true');
+                                }
+                            });
+                        });
+                    })();
+                </script>
+            </section>
+        @endif
+
+        @if ($user->hasIzin('manage_mitras'))
+            <section id="recent-mitra-onboarding-panel" class="command-center__panel" aria-labelledby="recent-mitra-onboarding-title" aria-busy="false">
+                <div class="command-center__panel-header">
+                    <div>
+                        <h2 id="recent-mitra-onboarding-title">Onboarding Mitra terbaru</h2>
+                        <p>Mitra yang dibuat dalam 30 hari kalender terakhir beserta konteks admin-mitra pertamanya.</p>
+                    </div>
+                    <a class="command-center__metric" href="{{ route('admin.mitras') }}">
+                        <strong>{{ $recentMitraOnboardings->count() }}</strong>
+                        <span>Onboarding Mitra terbaru</span>
+                    </a>
+                </div>
+
+                <div id="recent-mitra-onboarding-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                    Memuat Onboarding Mitra terbaru…
+                </div>
+
+                @if ($recentMitraOnboardingError)
+                    <div class="command-center__state command-center__state--error" data-dashboard-state="error" role="alert">
+                        {{ $recentMitraOnboardingError }}
+                        <a href="{{ route('admin.mitras') }}">Buka modul Mitra</a> untuk mencoba lagi.
+                    </div>
+                @elseif ($recentMitraOnboardings->isEmpty())
+                    <div class="command-center__state command-center__state--empty" data-dashboard-state="empty">
+                        Belum ada Mitra yang dibuat dalam 30 hari kalender terakhir.
+                    </div>
+                @else
+                    <ul class="command-center__list" data-dashboard-state="ready">
+                        @foreach ($recentMitraOnboardings as $mitra)
+                            <li id="recent-mitra-{{ $mitra->id }}" class="command-center__item command-center__item--start">
+                                <div>
+                                    <a href="{{ route('admin.mitras') }}#mitra-{{ $mitra->id }}">{{ $mitra->nama }}</a>
+                                    <p>{{ $mitra->kode }} · Dibuat {{ $mitra->created_at->format('d M Y H:i') }}</p>
+                                    <p>Admin-mitra pertama:
+                                        @if ($mitra->adminMitraPertama)
+                                            {{ $mitra->adminMitraPertama->name }} · {{ $mitra->adminMitraPertama->email }}
+                                        @else
+                                            Belum tersedia
+                                        @endif
+                                    </p>
+                                </div>
+                                <span class="command-center__item-status">30 hari terakhir</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                <script>
+                    (() => {
+                        const panel = document.getElementById('recent-mitra-onboarding-panel');
+                        const loading = document.getElementById('recent-mitra-onboarding-loading');
+
+                        panel?.querySelectorAll('a').forEach((link) => {
+                            link.addEventListener('click', () => {
+                                if (link.target !== '_blank') {
+                                    loading.hidden = false;
+                                    panel.setAttribute('aria-busy', 'true');
+                                }
+                            });
+                        });
+                    })();
+                </script>
+            </section>
+        @endif
 
         @if ($user->hasIzin('read_material_request'))
             <section id="material-request-panel" class="command-center__panel" aria-labelledby="material-request-queue-title" aria-busy="false">
