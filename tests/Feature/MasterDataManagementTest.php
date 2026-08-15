@@ -133,11 +133,7 @@ class MasterDataManagementTest extends TestCase
             'nama' => 'Meter',
         ])->assertForbidden();
 
-        $this->actingAs($mitraUser)->get('/dashboard')
-            ->assertOk()
-            ->assertSee(route('admin.master.index', 'units'), false)
-            ->assertSee(route('admin.materials'), false)
-            ->assertDontSee(route('admin.warehouses'), false);
+        $this->actingAs($mitraUser)->get('/dashboard')->assertForbidden();
     }
 
     public function test_material_can_keep_its_historical_inactive_unit_when_updated(): void
