@@ -6,6 +6,7 @@ use Database\Factories\MitraFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Mitra extends Model
 {
@@ -22,6 +23,11 @@ class Mitra extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function adminMitraPertama(): HasOne
+    {
+        return $this->hasOne(User::class)->ofMany(['created_at' => 'min', 'id' => 'min']);
     }
 
     public function warehouses(): HasMany

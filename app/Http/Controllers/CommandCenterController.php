@@ -11,12 +11,34 @@ class CommandCenterController extends Controller
 {
     public function index(Request $request, CommandCenterQuery $commandCenterQuery): View
     {
+        $activeUserCounts = ['total' => 0, 'thc' => 0, 'mitra' => 0];
+        $activeUserError = null;
+        $recentMitraOnboardings = collect();
+        $recentMitraOnboardingError = null;
         $pendingMaterialRequests = collect();
         $materialRequestError = null;
         $delayedTransits = collect();
         $transitError = null;
         $criticalStocks = collect();
         $criticalStockError = null;
+
+        if ($request->user()->hasIzin('manage_users')) {
+            try {
+                $activeUserCounts = $commandCenterQuery->activeUserCounts();
+            } catch (Throwable $exception) {
+                report($exception);
+                $activeUserError = 'Ringkasan User aktif belum dapat dimuat. Coba lagi atau buka modul sumbernya.';
+            }
+        }
+
+        if ($request->user()->hasIzin('manage_mitras')) {
+            try {
+                $recentMitraOnboardings = $commandCenterQuery->recentMitraOnboardings();
+            } catch (Throwable $exception) {
+                report($exception);
+                $recentMitraOnboardingError = 'Onboarding Mitra terbaru belum dapat dimuat. Coba lagi atau buka modul sumbernya.';
+            }
+        }
 
         if ($request->user()->hasIzin('read_material_request')) {
             try {
@@ -47,6 +69,10 @@ class CommandCenterController extends Controller
 
         return view('dashboard', [
             'user' => $request->user(),
+            'activeUserCounts' => $activeUserCounts,
+            'activeUserError' => $activeUserError,
+            'recentMitraOnboardings' => $recentMitraOnboardings,
+            'recentMitraOnboardingError' => $recentMitraOnboardingError,
             'pendingMaterialRequests' => $pendingMaterialRequests,
             'materialRequestError' => $materialRequestError,
             'delayedTransits' => $delayedTransits,

@@ -51,6 +51,129 @@ class CommandCenterTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_command_center_shows_actual_active_user_capacity_by_tenant_type(): void
+    {
+        $actor = $this->userWithPermissions(null, 'read_dashboard', 'manage_users');
+        $this->userWithPermissions(null);
+        $this->userWithPermissions(Mitra::factory()->create()->id);
+        $this->userWithPermissions(Mitra::factory()->create()->id);
+        User::factory()->create(['aktif' => false, 'mitra_id' => null]);
+        User::factory()->create(['aktif' => false, 'mitra_id' => Mitra::factory()->create()->id]);
+
+        $this->actingAs($actor)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('User aktif')
+            ->assertSee('User THC aktif')
+            ->assertSee('User Mitra aktif')
+            ->assertSee('<strong>4</strong>', false)
+            ->assertSee('<strong>2</strong>', false)
+            ->assertSee('href="'.route('admin.users').'"', false);
+    }
+
+    public function test_command_center_shows_mitra_created_within_the_exact_30_day_boundary_and_first_admin_context(): void
+    {
+        $now = CarbonImmutable::parse('2026-08-20 12:00:00');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $outside = Mitra::factory()->create([
+                'nama' => 'Mitra Di Luar Rentang',
+                'created_at' => $now->subDays(30)->subSecond(),
+            ]);
+            $boundary = Mitra::factory()->create([
+                'nama' => 'Mitra Tepat Batas',
+                'created_at' => $now->subDays(30),
+            ]);
+            $recent = Mitra::factory()->create([
+                'nama' => 'Mitra Terbaru',
+                'created_at' => $now->subDays(2),
+            ]);
+            User::factory()->create([
+                'name' => 'Admin Mitra Terbaru',
+                'email' => 'admin.terbaru@example.com',
+                'mitra_id' => $recent->id,
+                'created_at' => $now->subDays(2)->addMinute(),
+            ]);
+            User::factory()->create([
+                'name' => 'Admin Kedua',
+                'email' => 'admin.kedua@example.com',
+                'mitra_id' => $recent->id,
+                'created_at' => $now->subDay(),
+            ]);
+            $actor = $this->userWithPermissions(null, 'read_dashboard', 'manage_mitras');
+
+            $this->actingAs($actor)
+                ->get('/dashboard')
+                ->assertOk()
+                ->assertSee('Onboarding Mitra terbaru')
+                ->assertSee('Mitra Tepat Batas')
+                ->assertSee('Mitra Terbaru')
+                ->assertSee('Admin Mitra Terbaru')
+                ->assertSee('admin.terbaru@example.com')
+                ->assertSee($recent->created_at->format('d M Y H:i'))
+                ->assertSee('href="'.route('admin.mitras').'#mitra-'.$boundary->id.'"', false)
+                ->assertDontSee($outside->nama);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_command_center_panels_follow_user_and_mitra_management_permissions(): void
+    {
+        $userManager = $this->userWithPermissions(null, 'read_dashboard', 'manage_users');
+
+        $this->actingAs($userManager)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('User aktif')
+            ->assertDontSee('Onboarding Mitra terbaru');
+
+        $mitraManager = $this->userWithPermissions(null, 'read_dashboard', 'manage_mitras');
+
+        $this->actingAs($mitraManager)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('User aktif')
+            ->assertSee('Onboarding Mitra terbaru');
+
+        $viewer = $this->userWithPermissions(null, 'read_dashboard');
+
+        $this->actingAs($viewer)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('User aktif')
+            ->assertDontSee('Onboarding Mitra terbaru');
+    }
+
+    public function test_mitra_cannot_access_command_center_or_user_and_mitra_sources_by_direct_url(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'read_dashboard', 'manage_users', 'manage_mitras');
+
+        $this->actingAs($user)->get('/dashboard')->assertForbidden();
+        $this->actingAs($user)->get('/admin/users')->assertForbidden();
+        $this->actingAs($user)->get('/admin/mitras')->assertForbidden();
+    }
+
+    public function test_command_center_uses_read_only_links_for_active_users_and_recent_mitras(): void
+    {
+        $mitra = Mitra::factory()->create(['nama' => 'Mitra Link']);
+        $firstAdmin = User::factory()->create(['mitra_id' => $mitra->id, 'name' => 'Admin Link']);
+        $actor = $this->userWithPermissions(null, 'read_dashboard', 'manage_users', 'manage_mitras');
+
+        $this->actingAs($actor)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('href="'.route('admin.users').'"', false)
+            ->assertSee('href="'.route('admin.mitras').'#mitra-'.$mitra->id.'"', false)
+            ->assertDontSee('action="'.route('admin.users.create').'"', false)
+            ->assertDontSee('action="'.route('admin.mitras.create').'"', false)
+            ->assertSee('Admin Link');
+
+        $this->assertDatabaseHas('users', ['id' => $firstAdmin->id, 'aktif' => true]);
+    }
+
     public function test_command_center_shows_only_submitted_requests_requiring_thc_decision(): void
     {
         $mitra = Mitra::factory()->create();

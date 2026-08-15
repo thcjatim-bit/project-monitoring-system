@@ -7,12 +7,43 @@ use App\Models\Material;
 use App\Models\MaterialRequest;
 use App\Models\MaterialSn;
 use App\Models\MaterialStok;
+use App\Models\Mitra;
 use App\Models\SuratJalan;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 
 class CommandCenterQuery
 {
+    /** @return array{total: int, thc: int, mitra: int} */
+    public function activeUserCounts(): array
+    {
+        $counts = User::query()
+            ->where('aktif', true)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN mitra_id IS NULL THEN 1 ELSE 0 END), 0) as thc_count')
+            ->selectRaw('COALESCE(SUM(CASE WHEN mitra_id IS NOT NULL THEN 1 ELSE 0 END), 0) as mitra_count')
+            ->first();
+
+        return [
+            'total' => (int) ($counts?->total ?? 0),
+            'thc' => (int) ($counts?->thc_count ?? 0),
+            'mitra' => (int) ($counts?->mitra_count ?? 0),
+        ];
+    }
+
+    /** @return Collection<int, Mitra> */
+    public function recentMitraOnboardings(?CarbonImmutable $now = null): Collection
+    {
+        $cutoff = ($now ?? CarbonImmutable::now())->subDays(30);
+
+        return Mitra::query()
+            ->where('created_at', '>=', $cutoff)
+            ->with('adminMitraPertama')
+            ->latest('created_at')
+            ->get();
+    }
+
     /** @return Collection<int, MaterialRequest> */
     public function pendingMaterialRequests(): Collection
     {
