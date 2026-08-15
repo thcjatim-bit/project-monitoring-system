@@ -63,7 +63,7 @@ class CommandCenterQuery
     /** @return EloquentCollection<int, SuratJalan> */
     public function delayedTransits(?CarbonImmutable $now = null): EloquentCollection
     {
-        $cutoff = ($now ?? CarbonImmutable::now())->subDays(3);
+        $cutoff = ($now ?? CarbonImmutable::now())->startOfDay()->subDays(3);
 
         return SuratJalan::query()
             ->where('status', 'terbit')
@@ -203,7 +203,7 @@ class CommandCenterQuery
                 ->get(['warehouse_asal_id', 'warehouse_tujuan_id', 'issued_at'])
             : collect();
         $transitCounts = collect();
-        $cutoff = ($now ?? CarbonImmutable::now())->subDays(3);
+        $cutoff = ($now ?? CarbonImmutable::now())->startOfDay()->subDays(3);
 
         foreach ($transits as $transit) {
             foreach (array_unique([(int) $transit->warehouse_asal_id, (int) $transit->warehouse_tujuan_id]) as $warehouseId) {

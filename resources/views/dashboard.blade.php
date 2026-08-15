@@ -533,9 +533,9 @@
                                     @endunless
                                 </div>
                                 @if ($canDeriveWarehouseStatus)
-                                    <span class="command-center__item-status {{ $warehouse->readiness_status === 'Siap' ? 'command-center__item-status--success' : 'command-center__item-status--danger' }}">
+                                    <a class="command-center__item-status {{ $warehouse->readiness_status === 'Siap' ? 'command-center__item-status--success' : 'command-center__item-status--danger' }}" href="{{ route('admin.warehouses') }}#warehouse-{{ $warehouse->id }}">
                                         {{ $warehouse->readiness_status }}
-                                    </span>
+                                    </a>
                                 @endif
                             </li>
                         @endforeach
