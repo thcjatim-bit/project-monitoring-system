@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthenticatedSessionController;
+use App\Http\Controllers\CommandCenterController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
@@ -48,7 +49,9 @@ if (! app()->environment('production')) {
 }
 
 Route::middleware('auth')->group(function (): void {
-    Route::get('/dashboard', fn () => view('dashboard', ['user' => request()->user()]))->middleware('izin:read_dashboard')->name('dashboard');
+    Route::get('/dashboard', [CommandCenterController::class, 'index'])
+        ->middleware(['thc', 'izin:read_dashboard'])
+        ->name('dashboard');
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
@@ -102,6 +105,7 @@ Route::middleware('auth')->group(function (): void {
     });
     Route::middleware('izin:read_material_request')->group(function (): void {
         Route::get('/material-requests', [MaterialRequestController::class, 'index'])->name('material-requests.index');
+        Route::get('/material-requests/{materialRequest}', [MaterialRequestController::class, 'show'])->name('material-requests.show');
     });
     Route::post('/material-requests', [MaterialRequestController::class, 'store'])
         ->middleware('izin:create_material_request')

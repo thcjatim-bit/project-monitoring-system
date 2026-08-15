@@ -22,6 +22,13 @@ class MaterialRequestController extends Controller
         ]);
     }
 
+    public function show(MaterialRequest $materialRequest): View
+    {
+        return view('material-requests.show', [
+            'materialRequest' => $materialRequest->load(['items.material.unit', 'mitra', 'project', 'requester', 'decider']),
+        ]);
+    }
+
     public function store(Request $request, MaterialRequestService $service): RedirectResponse
     {
         abort_unless($request->user()->mitra_id !== null, 403);
