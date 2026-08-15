@@ -102,4 +102,52 @@ class PostgresIntegrationTest extends TestCase
             'warehouses' => 'tenant_isolation',
         ], $policies);
     }
+
+    public function test_surat_jalan_and_transit_tables_preserve_rls_and_stock_cache_privileges(): void
+    {
+        $tables = DB::table('pg_class as c')
+            ->join('pg_namespace as n', 'n.oid', '=', 'c.relnamespace')
+            ->where('n.nspname', 'public')
+            ->whereIn('c.relname', ['material_stoks', 'material_transaksis', 'surat_jalans', 'surat_jalan_items', 'material_sns', 'drums'])
+            ->where('c.relkind', 'r')
+            ->select(['c.relname', 'c.relrowsecurity', 'c.relforcerowsecurity'])
+            ->orderBy('c.relname')
+            ->get()
+            ->keyBy('relname');
+
+        $this->assertSame(
+            ['drums', 'material_sns', 'material_stoks', 'material_transaksis', 'surat_jalan_items', 'surat_jalans'],
+            $tables->keys()->all()
+        );
+        foreach ($tables as $table) {
+            $this->assertTrue($table->relrowsecurity);
+            $this->assertTrue($table->relforcerowsecurity);
+        }
+
+        $policies = DB::table('pg_policies')
+            ->where('schemaname', 'public')
+            ->whereIn('tablename', $tables->keys())
+            ->pluck('policyname', 'tablename')
+            ->sortKeys()
+            ->all();
+
+        $this->assertSame([
+            'drums' => 'drum_tenant_isolation',
+            'material_sns' => 'material_sn_tenant_isolation',
+            'material_stoks' => 'warehouse_stock_tenant_isolation',
+            'material_transaksis' => 'material_transaction_tenant_isolation',
+            'surat_jalan_items' => 'surat_jalan_item_tenant_isolation',
+            'surat_jalans' => 'surat_jalan_tenant_isolation',
+        ], $policies);
+
+        $privileges = DB::selectOne(<<<'SQL'
+            select has_table_privilege(current_user, 'public.material_stoks', 'SELECT') as can_read_stock,
+                   has_table_privilege(current_user, 'public.material_stoks', 'UPDATE') as can_update_stock,
+                   has_table_privilege(current_user, 'public.surat_jalans', 'INSERT') as can_insert_surat_jalan
+        SQL);
+
+        $this->assertTrue($privileges->can_read_stock);
+        $this->assertFalse($privileges->can_update_stock);
+        $this->assertTrue($privileges->can_insert_surat_jalan);
+    }
 }
