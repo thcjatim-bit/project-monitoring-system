@@ -10,7 +10,14 @@ class Project extends Model
 {
     use HasMitraScope;
 
-    protected $fillable = ['id_project', 'nama', 'mitra_id'];
+    protected $fillable = ['id_project', 'nama', 'mitra_id', 'status', 'toc'];
+
+    protected function casts(): array
+    {
+        return [
+            'toc' => 'date',
+        ];
+    }
 
     public function mitra(): BelongsTo
     {

@@ -1,3 +1,4 @@
+<x-layouts.app>
 <main>
     <h1>Tambah Project</h1>
 
@@ -11,3 +12,4 @@
         <button type="submit">Simpan</button>
     </form>
 </main>
+</x-layouts.app>

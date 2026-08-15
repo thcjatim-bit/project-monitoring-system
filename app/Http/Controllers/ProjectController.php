@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Queries\ProjectControlRoomQuery;
 use App\Models\Project;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,11 @@ class ProjectController extends Controller
     public function create(): View
     {
         return view('projects.create', ['user' => request()->user()]);
+    }
+
+    public function show(Project $project, ProjectControlRoomQuery $query): View
+    {
+        return view('projects.show', $query->for($project));
     }
 
     public function store(Request $request): RedirectResponse
