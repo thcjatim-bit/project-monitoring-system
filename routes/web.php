@@ -55,5 +55,6 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('izin:operate_warehouse')->group(function (): void {
         Route::post('/warehouse/stock/receive', [MaterialInventoryController::class, 'receive'])->name('warehouse.stock.receive');
         Route::post('/warehouse/stock/issue', [MaterialInventoryController::class, 'issue'])->name('warehouse.stock.issue');
+        Route::post('/warehouse/stock/drum-split', [MaterialInventoryController::class, 'splitDrum'])->name('warehouse.stock.drum-split');
     });
 });

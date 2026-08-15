@@ -95,7 +95,7 @@ class MaterialInventoryTest extends TestCase
         $this->assertDatabaseCount('material_transaksis', 0);
     }
 
-    public function test_stock_operations_accept_only_material_biasa(): void
+    public function test_identity_material_operations_require_the_matching_identity_field(): void
     {
         $mitra = Mitra::factory()->create();
         $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
@@ -104,6 +104,7 @@ class MaterialInventoryTest extends TestCase
 
         foreach (['ber_sn', 'drum_kabel'] as $jenis) {
             $material = Material::factory()->create(['jenis' => $jenis]);
+            $field = $jenis === 'ber_sn' ? 'serial_number' : 'drum_id';
 
             $this->actingAs($user)
                 ->post('/warehouse/stock/receive', [
@@ -112,7 +113,7 @@ class MaterialInventoryTest extends TestCase
                     'qty' => '10',
                     'reason' => 'Belum didukung',
                 ])
-                ->assertSessionHasErrors('material_id');
+                ->assertSessionHasErrors($field);
 
             $this->actingAs($user)
                 ->post('/warehouse/stock/issue', [
@@ -121,10 +122,121 @@ class MaterialInventoryTest extends TestCase
                     'qty' => '1',
                     'reason' => 'Belum didukung',
                 ])
-                ->assertSessionHasErrors('material_id');
+                ->assertSessionHasErrors($field);
         }
 
         $this->assertDatabaseCount('material_transaksis', 0);
+    }
+
+    public function test_drum_split_creates_a_traceable_child_and_conserves_remaining_meters(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create(['jenis' => 'drum_kabel']);
+        $user = $this->userWith('operate_warehouse', $mitra);
+        $warehouse->users()->attach($user);
+
+        $this->actingAs($user)
+            ->post('/warehouse/stock/receive', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'drum_id' => 'DRM-00042',
+                'qty' => '2000',
+                'reason' => 'Penerimaan drum',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($user)
+            ->post('/warehouse/stock/drum-split', [
+                'warehouse_id' => $warehouse->id,
+                'drum_id' => 'DRM-00042',
+                'qty' => '300',
+                'reason' => 'Potong kabel',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('drums', [
+            'drum_id' => 'DRM-00042',
+            'panjang_awal' => '2000.000',
+            'sisa' => '1700.000',
+        ]);
+        $this->assertDatabaseHas('drums', [
+            'drum_id' => 'DRM-00042-1',
+            'panjang_awal' => '300.000',
+            'sisa' => '300.000',
+        ]);
+        $this->assertDatabaseHas('material_transaksis', ['drum_id' => DB::table('drums')->where('drum_id', 'DRM-00042')->value('id'), 'qty_delta' => '-300.000']);
+        $this->assertDatabaseHas('material_transaksis', ['drum_id' => DB::table('drums')->where('drum_id', 'DRM-00042-1')->value('id'), 'qty_delta' => '300.000']);
+        $this->assertDatabaseHas('material_stoks', ['warehouse_id' => $warehouse->id, 'material_id' => $material->id, 'qty' => '2000.000']);
+    }
+
+    public function test_drum_split_is_rejected_when_the_parent_has_insufficient_remaining_meters(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create(['jenis' => 'drum_kabel']);
+        $user = $this->userWith('operate_warehouse', $mitra);
+        $warehouse->users()->attach($user);
+
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'drum_id' => 'DRM-00043',
+            'qty' => '100',
+            'reason' => 'Penerimaan drum',
+        ]);
+
+        $this->actingAs($user)
+            ->post('/warehouse/stock/drum-split', [
+                'warehouse_id' => $warehouse->id,
+                'drum_id' => 'DRM-00043',
+                'qty' => '101',
+                'reason' => 'Terlalu panjang',
+            ])
+            ->assertSessionHasErrors('qty');
+
+        $this->assertDatabaseCount('drums', 1);
+        $this->assertDatabaseCount('material_transaksis', 1);
+    }
+
+    public function test_warehouse_officer_can_receive_and_issue_serialised_material_by_serial_number(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create(['jenis' => 'ber_sn']);
+        $user = $this->userWith('operate_warehouse', $mitra);
+        $warehouse->users()->attach($user);
+
+        $this->actingAs($user)
+            ->post('/warehouse/stock/receive', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'serial_number' => 'SN-001',
+                'qty' => '1',
+                'reason' => 'Penerimaan SN',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($user)
+            ->post('/warehouse/stock/issue', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'serial_number' => 'SN-001',
+                'qty' => '1',
+                'reason' => 'Pengeluaran SN',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('material_sns', [
+            'material_id' => $material->id,
+            'serial_number' => 'SN-001',
+            'status' => 'keluar',
+        ]);
+        $this->assertDatabaseHas('material_transaksis', [
+            'material_id' => $material->id,
+            'material_sn_id' => DB::table('material_sns')->where('serial_number', 'SN-001')->value('id'),
+            'qty_delta' => '-1.000',
+        ]);
     }
 
     public function test_database_trigger_rejects_a_transaction_that_would_make_stock_negative(): void
@@ -141,6 +253,26 @@ class MaterialInventoryTest extends TestCase
             'material_id' => $material->id,
             'qty_delta' => '-1',
             'reason' => 'Tidak boleh',
+            'actor_id' => $actor->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    public function test_database_trigger_rejects_a_serialised_transaction_without_its_serial_number(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create(['jenis' => 'ber_sn']);
+        $actor = $this->userWith('operate_warehouse', $mitra);
+
+        $this->expectException(QueryException::class);
+
+        $this->asThc(fn () => DB::table('material_transaksis')->insert([
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty_delta' => '1',
+            'reason' => 'Tidak boleh tanpa SN',
             'actor_id' => $actor->id,
             'created_at' => now(),
             'updated_at' => now(),

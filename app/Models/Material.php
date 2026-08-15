@@ -34,4 +34,14 @@ class Material extends Model
     {
         return $this->hasMany(MaterialTransaksi::class);
     }
+
+    public function serialNumbers(): HasMany
+    {
+        return $this->hasMany(MaterialSn::class);
+    }
+
+    public function drums(): HasMany
+    {
+        return $this->hasMany(Drum::class);
+    }
 }

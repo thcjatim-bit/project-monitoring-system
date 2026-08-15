@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Material;
 use App\Models\Warehouse;
 use App\Services\MaterialInventoryService;
 use Illuminate\Database\Query\Builder;
@@ -9,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
+use Illuminate\Validation\ValidationException;
 
 class MaterialInventoryController extends Controller
 {
@@ -17,11 +19,16 @@ class MaterialInventoryController extends Controller
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('aktif', true)],
             'material_id' => ['required', 'integer', $this->activeMaterialRule()],
-            'qty' => ['required', 'numeric', 'gt:0'], 'reason' => ['required', 'string', 'max:255'],
+            'qty' => ['required', 'numeric', 'gt:0'],
+            'serial_number' => ['nullable', 'string', 'max:255'],
+            'drum_id' => ['nullable', 'string', 'max:255'],
+            'reason' => ['required', 'string', 'max:255'],
         ]);
         $warehouse = Warehouse::findOrFail($data['warehouse_id']);
         abort_unless($request->user()->canOperateWarehouse($warehouse, 'operate_warehouse'), 403);
-        $inventory->receive($request->user(), $warehouse, (int) $data['material_id'], (string) $data['qty'], $data['reason']);
+        $material = Material::findOrFail($data['material_id']);
+        $this->validateIdentityFields($material->jenis, $data);
+        $inventory->receive($request->user(), $warehouse, (int) $data['material_id'], (string) $data['qty'], $data['reason'], $data['serial_number'] ?? null, $data['drum_id'] ?? null);
 
         return back()->with('status', 'Penerimaan material dicatat.');
     }
@@ -31,24 +38,63 @@ class MaterialInventoryController extends Controller
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('aktif', true)],
             'material_id' => ['required', 'integer', $this->activeMaterialRule()],
-            'qty' => ['required', 'numeric', 'gt:0'], 'reason' => ['required', 'string', 'max:255'],
+            'qty' => ['required', 'numeric', 'gt:0'],
+            'serial_number' => ['nullable', 'string', 'max:255'],
+            'drum_id' => ['nullable', 'string', 'max:255'],
+            'reason' => ['required', 'string', 'max:255'],
         ]);
         $warehouse = Warehouse::findOrFail($data['warehouse_id']);
         abort_unless($request->user()->canOperateWarehouse($warehouse, 'operate_warehouse'), 403);
-        $inventory->issue($request->user(), $warehouse, (int) $data['material_id'], (string) $data['qty'], $data['reason']);
+        $material = Material::findOrFail($data['material_id']);
+        $this->validateIdentityFields($material->jenis, $data);
+        $inventory->issue($request->user(), $warehouse, (int) $data['material_id'], (string) $data['qty'], $data['reason'], $data['serial_number'] ?? null, $data['drum_id'] ?? null);
 
         return back()->with('status', 'Pengeluaran material dicatat.');
+    }
+
+    public function splitDrum(Request $request, MaterialInventoryService $inventory): RedirectResponse
+    {
+        $data = $request->validate([
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('aktif', true)],
+            'drum_id' => ['required', 'string', 'max:255'],
+            'qty' => ['required', 'numeric', 'gt:0'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+        $warehouse = Warehouse::findOrFail($data['warehouse_id']);
+        abort_unless($request->user()->canOperateWarehouse($warehouse, 'operate_warehouse'), 403);
+        $inventory->splitDrum($request->user(), $warehouse, $data['drum_id'], (string) $data['qty'], $data['reason']);
+
+        return back()->with('status', 'Potongan drum dicatat.');
     }
 
     private function activeMaterialRule(): Exists
     {
         return Rule::exists('materials', 'id')->where(function (Builder $query): void {
-            $query->where('aktif', true)->where('jenis', 'biasa')->whereExists(function (Builder $units): void {
+            $query->where('aktif', true)->whereExists(function (Builder $units): void {
                 $units->selectRaw('1')
                     ->from('units')
                     ->whereColumn('units.id', 'materials.unit_id')
                     ->where('units.aktif', true);
             });
         });
+    }
+
+    private function validateIdentityFields(string $jenis, array $data): void
+    {
+        if ($jenis === 'biasa' && (($data['serial_number'] ?? null) !== null || ($data['drum_id'] ?? null) !== null)) {
+            throw ValidationException::withMessages(['material_id' => 'Material biasa tidak menggunakan identitas SN atau drum.']);
+        }
+        if ($jenis === 'ber_sn' && empty($data['serial_number'])) {
+            throw ValidationException::withMessages(['serial_number' => 'Serial Number wajib diisi untuk material ber-SN.']);
+        }
+        if ($jenis === 'drum_kabel' && empty($data['drum_id'])) {
+            throw ValidationException::withMessages(['drum_id' => 'Drum ID wajib diisi untuk material drum kabel.']);
+        }
+        if ($jenis === 'ber_sn' && ($data['drum_id'] ?? null) !== null) {
+            throw ValidationException::withMessages(['drum_id' => 'Material ber-SN tidak menggunakan Drum ID.']);
+        }
+        if ($jenis === 'drum_kabel' && ($data['serial_number'] ?? null) !== null) {
+            throw ValidationException::withMessages(['serial_number' => 'Material drum kabel tidak menggunakan Serial Number.']);
+        }
     }
 }
