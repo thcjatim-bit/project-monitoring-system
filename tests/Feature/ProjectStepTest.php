@@ -23,8 +23,10 @@ class ProjectStepTest extends TestCase
         $project = $this->projectFor($mitra);
         $user = $this->userWithPermissions($mitra->id, 'read_project', 'update_project_step');
 
-        $this->assertSame(11, ProjectStep::query()->where('project_id', $project->id)->count());
-        $this->assertSame('design', ProjectStep::query()->where('project_id', $project->id)->where('status', 'active')->value('step'));
+        $this->asThc(function () use ($project): void {
+            $this->assertSame(11, ProjectStep::query()->where('project_id', $project->id)->count());
+            $this->assertSame('design', ProjectStep::query()->where('project_id', $project->id)->where('status', 'active')->value('step'));
+        });
 
         $this->actingAs($user)
             ->patch(route('projects.step.update', $project), ['step' => 'deployment', 'status' => 'active'])
