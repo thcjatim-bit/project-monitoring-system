@@ -14,7 +14,7 @@ class WahaClientTest extends TestCase
         Http::fake(['http://waha.test/*' => Http::response(['ok' => true], 201)]);
         config(['waha.url' => 'http://waha.test', 'waha.api_key' => 'secret']);
         app(WahaHttpClient::class)->sendText('628123456789', 'Halo');
-        Http::assertSent(fn (Request $request) => $request->url() === 'http://waha.test/api/sendText' && $request['chatId'] === '628123456789@c.us' && $request->hasHeader('Authorization', 'Bearer secret'));
+        Http::assertSent(fn (Request $request) => $request->url() === 'http://waha.test/api/sendText' && $request['chatId'] === '628123456789@c.us' && $request->hasHeader('X-Api-Key', 'secret'));
     }
 
     public function test_non_success_response_throws(): void

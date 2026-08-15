@@ -13,7 +13,7 @@ class WahaHttpClient implements WahaClient
     private function client(): PendingRequest
     {
         return Http::baseUrl(rtrim((string) config('waha.url'), '/'))
-            ->withToken((string) config('waha.api_key'))
+            ->withHeaders(['X-Api-Key' => (string) config('waha.api_key')])
             ->timeout((int) config('waha.timeout', 10));
     }
 
