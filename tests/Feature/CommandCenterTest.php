@@ -369,6 +369,7 @@ class CommandCenterTest extends TestCase
                 $inventory->receive($actor, $ready, $ordinary->id, '20', 'Stok readiness');
                 $inventory->receive($actor, $ready, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-1');
                 $inventory->receive($actor, $ready, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-1B');
+                $inventory->receive($actor, $ready, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-1C');
                 $inventory->receive($actor, $ready, $drum->id, '101', 'Stok readiness', null, 'DRM-READINESS-1');
                 $inventory->receive($actor, $attention, $ordinary->id, '5', 'Stok readiness');
                 $inventory->receive($actor, $attention, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-2');
