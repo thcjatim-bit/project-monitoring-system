@@ -78,13 +78,8 @@
             @endif
         </nav>
 
-        @if (! $user->hasIzin('read_material_request'))
-            <section class="command-center__panel" aria-labelledby="material-request-access-title">
-                <h2 id="material-request-access-title">Request Material</h2>
-                <p class="command-center__state command-center__state--empty">Panel antrean tersembunyi karena User THC ini belum memiliki Izin Aksi <code>read_material_request</code>.</p>
-            </section>
-        @else
-            <section class="command-center__panel" aria-labelledby="material-request-queue-title" aria-busy="{{ $materialRequestError ? 'true' : 'false' }}">
+        @if ($user->hasIzin('read_material_request'))
+            <section id="material-request-panel" class="command-center__panel" aria-labelledby="material-request-queue-title" aria-busy="false">
                 <div class="command-center__panel-header">
                     <div>
                         <h2 id="material-request-queue-title">Request Material yang membutuhkan keputusan</h2>
@@ -96,7 +91,7 @@
                     </a>
                 </div>
 
-                <div class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                <div id="command-center-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
                     Memuat antrean Request Material…
                 </div>
 
@@ -125,6 +120,22 @@
                         @endforeach
                     </ul>
                 @endif
+
+                <script>
+                    (() => {
+                        const panel = document.getElementById('material-request-panel');
+                        const loading = document.getElementById('command-center-loading');
+
+                        panel?.querySelectorAll('a').forEach((link) => {
+                            link.addEventListener('click', () => {
+                                if (link.target !== '_blank') {
+                                    loading.hidden = false;
+                                    panel.setAttribute('aria-busy', 'true');
+                                }
+                            });
+                        });
+                    })();
+                </script>
             </section>
         @endif
     </main>
