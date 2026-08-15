@@ -7,6 +7,7 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectPlanningController;
 use App\Http\Controllers\SuratJalanController;
 use App\Http\Middleware\SetTenantDatabaseContext;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -60,6 +61,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->middleware('izin:read_project')->name('projects.show');
+    Route::middleware(['thc', 'izin:manage_project_plan'])->group(function (): void {
+        Route::post('/projects/{project}/rab-jasa', [ProjectPlanningController::class, 'storeRabJasa'])->name('projects.rab-jasa.store');
+        Route::put('/projects/{project}/plan', [ProjectPlanningController::class, 'updatePlan'])->name('projects.plan.update');
+        Route::post('/projects/{project}/variation-orders', [ProjectPlanningController::class, 'storeVariationOrder'])->name('projects.variation-orders.store');
+        Route::patch('/projects/{project}/variation-orders/{variationOrder}/approve', [ProjectPlanningController::class, 'approveVariationOrder'])->name('projects.variation-orders.approve');
+    });
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->middleware('izin:update_project')->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->middleware('izin:delete_project')->name('projects.destroy');
     Route::post('/keluar', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

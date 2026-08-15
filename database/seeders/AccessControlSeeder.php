@@ -16,6 +16,7 @@ class AccessControlSeeder extends Seeder
             'create_project' => 'Menambah Project',
             'update_project' => 'Mengubah Project',
             'delete_project' => 'Menghapus Project',
+            'manage_project_plan' => 'Mengelola Rencana Project',
             'manage_users' => 'Mengelola User',
             'manage_grups' => 'Mengelola Grup',
             'manage_mitras' => 'Mengelola Mitra',
@@ -33,7 +34,7 @@ class AccessControlSeeder extends Seeder
 
         $matriks = [
             'admin_thc' => ['nama' => 'Admin THC', 'izins' => $izins->keys()->all()],
-            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'read_master_data', 'read_material_request']],
+            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'manage_project_plan', 'read_master_data', 'read_material_request']],
             'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_master_data', 'read_material_request']],
             'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project', 'read_master_data']],
             'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_master_data', 'read_material_request', 'create_material_request']],

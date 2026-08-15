@@ -34,4 +34,14 @@ class Mitra extends Model
     {
         return $this->hasMany(Warehouse::class);
     }
+
+    public function pks(): HasMany
+    {
+        return $this->hasMany(Pks::class);
+    }
+
+    public function hargaJasas(): HasMany
+    {
+        return $this->hasMany(MitraHargaJasa::class);
+    }
 }

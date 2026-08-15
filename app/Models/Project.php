@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasMitraScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
 {
@@ -22,5 +23,20 @@ class Project extends Model
     public function mitra(): BelongsTo
     {
         return $this->belongsTo(Mitra::class);
+    }
+
+    public function rabJasas(): HasMany
+    {
+        return $this->hasMany(ProjectRabJasa::class);
+    }
+
+    public function baselines(): HasMany
+    {
+        return $this->hasMany(ProjectBaseline::class);
+    }
+
+    public function variationOrders(): HasMany
+    {
+        return $this->hasMany(ProjectVariationOrder::class);
     }
 }
