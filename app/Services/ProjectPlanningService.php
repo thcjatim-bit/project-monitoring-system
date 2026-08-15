@@ -140,7 +140,7 @@ class ProjectPlanningService
                         throw ValidationException::withMessages(['items' => 'Baris RAB Jasa tidak ditemukan pada Project ini.']);
                     }
                     $price = $rab->hargaJasaMitra;
-                    if ($delta < 0 && $this->currentQuantity($rab) + $delta < -0.0005) {
+                    if ($delta < 0 && $this->currentRabQuantity($rab) + $delta < -0.0005) {
                         throw ValidationException::withMessages(['items' => 'Pengurangan Variation Order melebihi qty RAB Jasa yang tersedia.']);
                     }
                 } elseif ($delta > 0 && ! empty($item['harga_jasa_id'])) {
@@ -211,7 +211,7 @@ class ProjectPlanningService
         });
     }
 
-    private function currentQuantity(ProjectRabJasa $rab): float
+    public function currentRabQuantity(ProjectRabJasa $rab): float
     {
         return (float) $rab->qty + (float) ProjectVariationOrderItem::query()
             ->where('rab_jasa_id', $rab->id)

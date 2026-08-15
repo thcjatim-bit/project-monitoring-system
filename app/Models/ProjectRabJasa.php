@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasMitraScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProjectRabJasa extends Model
 {
@@ -49,5 +50,10 @@ class ProjectRabJasa extends Model
     public function variationOrder(): BelongsTo
     {
         return $this->belongsTo(ProjectVariationOrder::class, 'variation_order_id');
+    }
+
+    public function progresses(): HasMany
+    {
+        return $this->hasMany(ProjectProgress::class, 'project_rab_jasa_id');
     }
 }

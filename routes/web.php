@@ -8,6 +8,7 @@ use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectPlanningController;
+use App\Http\Controllers\ProjectProgressController;
 use App\Http\Controllers\SuratJalanController;
 use App\Http\Middleware\SetTenantDatabaseContext;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -66,6 +67,11 @@ Route::middleware('auth')->group(function (): void {
         Route::put('/projects/{project}/plan', [ProjectPlanningController::class, 'updatePlan'])->name('projects.plan.update');
         Route::post('/projects/{project}/variation-orders', [ProjectPlanningController::class, 'storeVariationOrder'])->name('projects.variation-orders.store');
         Route::patch('/projects/{project}/variation-orders/{variationOrder}/approve', [ProjectPlanningController::class, 'approveVariationOrder'])->name('projects.variation-orders.approve');
+    });
+    Route::post('/projects/{project}/progress', [ProjectProgressController::class, 'store'])->middleware('izin:report_project_progress')->name('projects.progress.store');
+    Route::middleware(['thc', 'izin:verify_project_progress'])->group(function (): void {
+        Route::patch('/projects/{project}/progress/{progress}/verify', [ProjectProgressController::class, 'verify'])->name('projects.progress.verify');
+        Route::patch('/projects/{project}/progress/{progress}/reject', [ProjectProgressController::class, 'reject'])->name('projects.progress.reject');
     });
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->middleware('izin:update_project')->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->middleware('izin:delete_project')->name('projects.destroy');

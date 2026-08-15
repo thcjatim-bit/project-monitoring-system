@@ -39,4 +39,14 @@ class Project extends Model
     {
         return $this->hasMany(ProjectVariationOrder::class);
     }
+
+    public function progresses(): HasMany
+    {
+        return $this->hasMany(ProjectProgress::class);
+    }
+
+    public function timelines(): HasMany
+    {
+        return $this->hasMany(ProjectTimeline::class);
+    }
 }
