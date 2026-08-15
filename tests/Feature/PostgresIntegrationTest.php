@@ -67,7 +67,7 @@ class PostgresIntegrationTest extends TestCase
         $tables = DB::table('pg_class as c')
             ->join('pg_namespace as n', 'n.oid', '=', 'c.relnamespace')
             ->where('n.nspname', 'public')
-            ->whereIn('c.relname', ['drums', 'material_sns', 'material_stoks', 'material_transaksis', 'projects', 'warehouses'])
+            ->whereIn('c.relname', ['drums', 'material_request_items', 'material_requests', 'material_sns', 'material_stoks', 'material_transaksis', 'projects', 'warehouses'])
             ->where('c.relkind', 'r')
             ->select(['c.relname', 'c.relrowsecurity', 'c.relforcerowsecurity'])
             ->orderBy('c.relname')
@@ -75,7 +75,7 @@ class PostgresIntegrationTest extends TestCase
             ->keyBy('relname');
 
         $this->assertSame(
-            ['drums', 'material_sns', 'material_stoks', 'material_transaksis', 'projects', 'warehouses'],
+            ['drums', 'material_request_items', 'material_requests', 'material_sns', 'material_stoks', 'material_transaksis', 'projects', 'warehouses'],
             $tables->keys()->all()
         );
 
@@ -93,6 +93,8 @@ class PostgresIntegrationTest extends TestCase
 
         $this->assertSame([
             'drums' => 'drum_tenant_isolation',
+            'material_request_items' => 'material_request_item_tenant_isolation',
+            'material_requests' => 'material_request_tenant_isolation',
             'material_sns' => 'material_sn_tenant_isolation',
             'material_stoks' => 'warehouse_stock_tenant_isolation',
             'material_transaksis' => 'material_transaction_tenant_isolation',

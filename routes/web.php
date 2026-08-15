@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthenticatedSessionController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
+use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
 use Illuminate\Support\Facades\Route;
 
@@ -56,5 +57,15 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/warehouse/stock/receive', [MaterialInventoryController::class, 'receive'])->name('warehouse.stock.receive');
         Route::post('/warehouse/stock/issue', [MaterialInventoryController::class, 'issue'])->name('warehouse.stock.issue');
         Route::post('/warehouse/stock/drum-split', [MaterialInventoryController::class, 'splitDrum'])->name('warehouse.stock.drum-split');
+    });
+    Route::middleware('izin:read_material_request')->group(function (): void {
+        Route::get('/material-requests', [MaterialRequestController::class, 'index'])->name('material-requests.index');
+    });
+    Route::post('/material-requests', [MaterialRequestController::class, 'store'])
+        ->middleware('izin:create_material_request')
+        ->name('material-requests.store');
+    Route::middleware(['thc', 'izin:approve_material_request'])->group(function (): void {
+        Route::patch('/material-requests/{materialRequest}/approve', [MaterialRequestController::class, 'approve'])->name('material-requests.approve');
+        Route::patch('/material-requests/{materialRequest}/reject', [MaterialRequestController::class, 'reject'])->name('material-requests.reject');
     });
 });

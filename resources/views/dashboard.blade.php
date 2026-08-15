@@ -11,6 +11,9 @@
         @if ($user->mitra_id === null && $user->hasIzin('manage_warehouses'))
             <a href="{{ route('admin.warehouses') }}">Warehouse</a>
         @endif
+        @if ($user->hasIzin('read_material_request'))
+            <a href="{{ route('material-requests.index') }}">Request Material</a>
+        @endif
         @if ($user->hasIzin('read_master_data'))
             <a href="{{ route('admin.materials') }}">Material</a>
             <a href="{{ route('admin.master.index', 'units') }}">Unit</a>

@@ -24,16 +24,19 @@ class AccessControlSeeder extends Seeder
             'operate_warehouse' => 'Mengoperasikan Warehouse',
             'manage_master_data' => 'Mengelola Master Data',
             'read_master_data' => 'Melihat Master Data',
+            'read_material_request' => 'Melihat Request Material',
+            'create_material_request' => 'Mengajukan Request Material',
+            'approve_material_request' => 'Memutuskan Request Material',
         ])->mapWithKeys(fn (string $nama, string $kode) => [
             $kode => Izin::query()->firstOrCreate(['kode' => $kode], ['nama' => $nama]),
         ]);
 
         $matriks = [
             'admin_thc' => ['nama' => 'Admin THC', 'izins' => $izins->keys()->all()],
-            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'read_master_data']],
-            'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_master_data']],
+            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'read_master_data', 'read_material_request']],
+            'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_master_data', 'read_material_request']],
             'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project', 'read_master_data']],
-            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_master_data']],
+            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_master_data', 'read_material_request', 'create_material_request']],
         ];
 
         foreach ($matriks as $preset => $definition) {
