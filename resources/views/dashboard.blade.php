@@ -365,7 +365,7 @@
                                             {{ $item->material->nama }} ({{ $item->qty }} {{ $item->material->unit->nama }})@if (!$loop->last), @endif
                                         @endforeach
                                     </p>
-                                    <p>Terbit {{ $suratJalan->issued_at->format('d M Y H:i') }} · Umur Transit {{ $suratJalan->issued_at->diffInCalendarDays(now()) }} hari · Lebih dari 3 hari</p>
+                                    <p>Terbit {{ $suratJalan->issued_at->format('d M Y H:i') }} · Umur Transit {{ $suratJalan->issued_at->startOfDay()->diffInDays(now()->startOfDay()) }} hari · Lebih dari 3 hari</p>
                                 </div>
                                 <span class="command-center__item-status command-center__item-status--danger">{{ $suratJalan->items->count() }} item</span>
                             </li>
