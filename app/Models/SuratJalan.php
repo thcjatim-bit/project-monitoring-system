@@ -17,6 +17,7 @@ class SuratJalan extends Model
         'warehouse_asal_id',
         'warehouse_tujuan_id',
         'mitra_id',
+        'material_request_id',
         'retur_dari_id',
         'issued_by',
         'issued_at',
@@ -55,6 +56,11 @@ class SuratJalan extends Model
     public function mitra(): BelongsTo
     {
         return $this->belongsTo(Mitra::class);
+    }
+
+    public function materialRequest(): BelongsTo
+    {
+        return $this->belongsTo(MaterialRequest::class);
     }
 
     public function returnedFrom(): BelongsTo

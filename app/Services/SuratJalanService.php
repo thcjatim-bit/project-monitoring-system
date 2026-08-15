@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Drum;
 use App\Models\Material;
+use App\Models\MaterialRequest;
 use App\Models\MaterialSn;
 use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
@@ -54,6 +55,8 @@ class SuratJalanService
                     'received_at' => now(),
                 ]);
             }
+
+            $this->updateMaterialRequestStatus($suratJalan);
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
@@ -244,12 +247,17 @@ class SuratJalanService
 
         $tanggal = CarbonImmutable::parse($data['tanggal']);
         $mitraId = $origin->mitra_id ?? $destination->mitra_id;
+        $materialRequest = $this->lockMaterialRequest($data['material_request_id'] ?? null, $mitraId);
+        if ($materialRequest !== null) {
+            $this->ensureRequestQuantitiesAvailable($materialRequest, $data['items']);
+        }
         $suratJalan = SuratJalan::query()->create([
             'nomor' => $this->nextNumber($tanggal),
             'tanggal' => $tanggal->toDateString(),
             'warehouse_asal_id' => $origin->id,
             'warehouse_tujuan_id' => $destination->id,
             'mitra_id' => $mitraId,
+            'material_request_id' => $materialRequest?->id,
             'retur_dari_id' => $returnedFromId,
             'issued_by' => $actor->id,
             'issued_at' => now(),
@@ -267,6 +275,79 @@ class SuratJalanService
         }
 
         return $suratJalan->load(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
+    }
+
+    private function lockMaterialRequest(?int $requestId, ?int $mitraId): ?MaterialRequest
+    {
+        if ($requestId === null) {
+            return null;
+        }
+
+        $request = MaterialRequest::query()->with('items')->lockForUpdate()->findOrFail($requestId);
+        if (! in_array($request->status, ['disetujui', 'terpenuhi_sebagian'], true)) {
+            throw ValidationException::withMessages(['status' => 'Hanya Request Material yang sudah disetujui dapat dipenuhi.']);
+        }
+        if ($request->mitra_id !== $mitraId) {
+            throw ValidationException::withMessages(['status' => 'Request Material tidak cocok dengan Warehouse tujuan.']);
+        }
+
+        return $request;
+    }
+
+    /** @param array<int,array{material_id:int,qty:string|int|float}> $items */
+    private function ensureRequestQuantitiesAvailable(MaterialRequest $request, array $items): void
+    {
+        $requested = $request->items
+            ->groupBy('material_id')
+            ->map(fn ($materialItems): float => (float) $materialItems->sum('qty'));
+        $sent = SuratJalanItem::query()
+            ->whereHas('suratJalan', fn ($query) => $query->where('material_request_id', $request->id))
+            ->join('surat_jalans', 'surat_jalans.id', '=', 'surat_jalan_items.surat_jalan_id')
+            ->where('surat_jalans.mitra_id', $request->mitra_id)
+            ->where('surat_jalans.status', '!=', 'dibatalkan')
+            ->select('surat_jalan_items.material_id', DB::raw("SUM(CASE WHEN surat_jalans.status = 'terbit' THEN surat_jalan_items.qty ELSE surat_jalan_items.qty_diterima END) as qty_sent"))
+            ->groupBy('material_id')
+            ->pluck('qty_sent', 'material_id')
+            ->map(fn ($qty): float => (float) $qty);
+        $fulfillment = collect($items)->groupBy('material_id')->map(fn ($materialItems): float => (float) collect($materialItems)->sum('qty'));
+
+        foreach ($fulfillment as $materialId => $qty) {
+            $remaining = ($requested->get((int) $materialId, 0.0) - $sent->get((int) $materialId, 0.0));
+            if ($requested->get((int) $materialId) === null || $qty > $remaining + 0.0005) {
+                throw ValidationException::withMessages(['items' => 'Qty Surat Jalan melebihi sisa Request Material.']);
+            }
+        }
+    }
+
+    private function updateMaterialRequestStatus(SuratJalan $suratJalan): void
+    {
+        if ($suratJalan->material_request_id === null) {
+            return;
+        }
+
+        $request = MaterialRequest::query()->with('items')->lockForUpdate()->findOrFail($suratJalan->material_request_id);
+        $received = SuratJalanItem::query()
+            ->whereHas('suratJalan', fn ($query) => $query->where('material_request_id', $request->id))
+            ->select('material_id', DB::raw('SUM(qty_diterima) as qty_received'))
+            ->groupBy('material_id')
+            ->pluck('qty_received', 'material_id')
+            ->map(fn ($qty): float => (float) $qty);
+        $requested = $request->items
+            ->groupBy('material_id')
+            ->map(fn ($materialItems): float => (float) $materialItems->sum('qty'));
+        $hasReceipt = false;
+        $isComplete = true;
+
+        foreach ($requested as $materialId => $qty) {
+            $receivedQty = $received->get((int) $materialId, 0.0);
+            $hasReceipt = $hasReceipt || $receivedQty > 0.0005;
+            $isComplete = $isComplete && $receivedQty + 0.0005 >= $qty;
+        }
+
+        $status = $isComplete ? 'selesai' : ($hasReceipt ? 'terpenuhi_sebagian' : 'disetujui');
+        if ($request->status !== $status) {
+            $request->update(['status' => $status]);
+        }
     }
 
     /** @param array<int,array{surat_jalan_item_id:int,qty:string|int|float}> $receivedItems @return array<int,string> */

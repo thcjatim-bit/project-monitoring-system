@@ -51,4 +51,9 @@ class MaterialRequest extends Model
     {
         return $this->hasMany(MaterialRequestItem::class);
     }
+
+    public function suratJalans(): HasMany
+    {
+        return $this->hasMany(SuratJalan::class);
+    }
 }

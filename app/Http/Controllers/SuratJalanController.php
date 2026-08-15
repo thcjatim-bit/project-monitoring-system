@@ -21,6 +21,7 @@ class SuratJalanController extends Controller
         $data = $request->validate([
             'warehouse_asal_id' => ['required', 'integer', $this->activeWarehouseRule()],
             'warehouse_tujuan_id' => ['required', 'integer', $this->activeWarehouseRule()],
+            'material_request_id' => ['nullable', 'integer', Rule::exists('material_requests', 'id')],
             'tanggal' => ['required', 'date'],
             'pengirim' => ['required', 'string', 'max:255'],
             'sopir' => ['nullable', 'string', 'max:255'],
