@@ -123,6 +123,137 @@ class CommandCenterQuery
     }
 
     /**
+     * Build the read-only Warehouse readiness facts that the actor is allowed to see.
+     *
+     * @return EloquentCollection<int, Warehouse>
+     */
+    public function warehouseReadiness(User $actor, ?CarbonImmutable $now = null): EloquentCollection
+    {
+        $canManageWarehouses = $actor->hasIzin('manage_warehouses');
+        $canReadMasterData = $actor->hasIzin('read_master_data');
+        $canOperateWarehouse = $actor->hasIzin('operate_warehouse');
+
+        if (! $canManageWarehouses && ! $canReadMasterData && ! $canOperateWarehouse) {
+            return new EloquentCollection;
+        }
+
+        $warehouses = Warehouse::query()
+            ->where('aktif', true)
+            ->with('mitra')
+            ->when($canManageWarehouses, fn ($query) => $query->withCount([
+                'users as active_petugas_count' => fn ($users) => $users->where('users.aktif', true),
+            ]))
+            ->orderBy('nama')
+            ->orderBy('id')
+            ->get();
+
+        if ($warehouses->isEmpty()) {
+            return $warehouses;
+        }
+
+        $warehouseIds = $warehouses->modelKeys();
+        $materials = $canReadMasterData
+            ? Material::query()
+                ->whereNotNull('ambang_minimum')
+                ->where('ambang_minimum', '>', 0)
+                ->get(['id', 'jenis', 'ambang_minimum'])
+            : new EloquentCollection;
+
+        $ordinaryBalances = $canReadMasterData
+            ? MaterialStok::query()
+                ->whereIn('warehouse_id', $warehouseIds)
+                ->where('lokasi_tipe', 'warehouse')
+                ->get(['warehouse_id', 'material_id', 'qty'])
+                ->groupBy('warehouse_id')
+                ->map(fn (EloquentCollection|Collection $stocks): Collection => $stocks
+                    ->groupBy('material_id')
+                    ->map(fn (EloquentCollection|Collection $rows): float => (float) $rows->sum('qty')))
+            : collect();
+        $serialBalances = $canReadMasterData
+            ? MaterialSn::query()
+                ->whereIn('lokasi_id', $warehouseIds)
+                ->where('lokasi_tipe', 'warehouse')
+                ->where('status', 'tersedia')
+                ->get(['lokasi_id', 'material_id'])
+                ->groupBy('lokasi_id')
+                ->map(fn (EloquentCollection|Collection $serials): Collection => $serials
+                    ->countBy('material_id')
+                    ->map(fn (int $count): float => (float) $count))
+            : collect();
+        $drumBalances = $canReadMasterData
+            ? Drum::query()
+                ->whereIn('lokasi_id', $warehouseIds)
+                ->where('lokasi_tipe', 'warehouse')
+                ->where('sisa', '>', 0)
+                ->get(['lokasi_id', 'material_id', 'sisa'])
+                ->groupBy('lokasi_id')
+                ->map(fn (EloquentCollection|Collection $drums): Collection => $drums
+                    ->groupBy('material_id')
+                    ->map(fn (EloquentCollection|Collection $rows): float => (float) $rows->sum('sisa')))
+            : collect();
+
+        $transits = $canOperateWarehouse
+            ? SuratJalan::query()
+                ->where('status', 'terbit')
+                ->where(function ($query) use ($warehouseIds): void {
+                    $query
+                        ->whereIn('warehouse_asal_id', $warehouseIds)
+                        ->orWhereIn('warehouse_tujuan_id', $warehouseIds);
+                })
+                ->get(['warehouse_asal_id', 'warehouse_tujuan_id', 'issued_at'])
+            : collect();
+        $transitCounts = collect();
+        $cutoff = ($now ?? CarbonImmutable::now())->subDays(3);
+
+        foreach ($transits as $transit) {
+            foreach (array_unique([(int) $transit->warehouse_asal_id, (int) $transit->warehouse_tujuan_id]) as $warehouseId) {
+                $counts = $transitCounts->get($warehouseId, ['active' => 0, 'delayed' => 0]);
+                $counts['active']++;
+                if ($transit->issued_at?->lt($cutoff)) {
+                    $counts['delayed']++;
+                }
+                $transitCounts->put($warehouseId, $counts);
+            }
+        }
+
+        foreach ($warehouses as $warehouse) {
+            if ($canReadMasterData) {
+                $ordinary = $ordinaryBalances->get($warehouse->id, collect());
+                $serial = $serialBalances->get($warehouse->id, collect());
+                $drum = $drumBalances->get($warehouse->id, collect());
+                $criticalCount = $materials->filter(function (Material $material) use ($ordinary, $serial, $drum): bool {
+                    $balance = match ($material->jenis) {
+                        'ber_sn' => (float) $serial->get($material->id, 0),
+                        'drum_kabel' => (float) $drum->get($material->id, 0),
+                        default => (float) $ordinary->get($material->id, 0),
+                    };
+
+                    return $balance <= (float) $material->ambang_minimum;
+                })->count();
+                $warehouse->setAttribute('critical_material_count', $criticalCount);
+            }
+
+            if ($canOperateWarehouse) {
+                $warehouse->setAttribute('active_transit_count', $transitCounts->get($warehouse->id, ['active' => 0, 'delayed' => 0])['active']);
+                $warehouse->setAttribute('delayed_transit_count', $transitCounts->get($warehouse->id, ['active' => 0, 'delayed' => 0])['delayed']);
+            }
+
+            if ($canManageWarehouses && $canReadMasterData && $canOperateWarehouse) {
+                $warehouse->setAttribute(
+                    'readiness_status',
+                    $warehouse->active_petugas_count >= 1
+                        && $warehouse->critical_material_count === 0
+                        && $warehouse->delayed_transit_count === 0
+                        ? 'Siap'
+                        : 'Perlu perhatian',
+                );
+            }
+        }
+
+        return $warehouses;
+    }
+
+    /**
      * Build a read-only navigation feed from timestamps already persisted by each domain.
      *
      * @return Collection<int, array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string}>

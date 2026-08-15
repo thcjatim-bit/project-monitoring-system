@@ -335,6 +335,124 @@ class CommandCenterTest extends TestCase
             ->assertSee('5.000');
     }
 
+    public function test_command_center_shows_readiness_for_active_thc_and_mitra_warehouses(): void
+    {
+        $now = CarbonImmutable::parse('2026-08-20 12:00:00');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $mitra = Mitra::factory()->create(['nama' => 'Mitra Warehouse']);
+            $otherMitra = Mitra::factory()->create(['nama' => 'Mitra Warehouse Lain']);
+            [$ready, $attention, $transitHub, $other, $inactive] = $this->asThc(fn (): array => [
+                Warehouse::factory()->create(['nama' => 'Warehouse Siap THC']),
+                Warehouse::factory()->create(['nama' => 'Warehouse Perlu Perhatian', 'mitra_id' => $mitra->id]),
+                Warehouse::factory()->create(['nama' => 'Warehouse Transit Hub']),
+                Warehouse::factory()->create(['nama' => 'Warehouse Mitra Lain', 'mitra_id' => $otherMitra->id]),
+                Warehouse::factory()->create(['nama' => 'Warehouse Nonaktif', 'aktif' => false]),
+            ]);
+            $ordinary = Material::factory()->create(['nama' => 'Material Biasa Readiness', 'ambang_minimum' => '10']);
+            $serialised = Material::factory()->create(['nama' => 'Material SN Readiness', 'jenis' => 'ber_sn', 'ambang_minimum' => '2']);
+            $drum = Material::factory()->create(['nama' => 'Material Drum Readiness', 'jenis' => 'drum_kabel', 'ambang_minimum' => '100']);
+            $actor = $this->userWithPermissions(
+                null,
+                'read_dashboard',
+                'manage_warehouses',
+                'read_master_data',
+                'operate_warehouse',
+            );
+            $inactiveOfficer = User::factory()->create(['aktif' => false]);
+            $ready->users()->attach($actor);
+            $attention->users()->attach($inactiveOfficer);
+
+            $this->asThc(function () use ($actor, $ready, $attention, $ordinary, $serialised, $drum): void {
+                $inventory = app(MaterialInventoryService::class);
+                $inventory->receive($actor, $ready, $ordinary->id, '20', 'Stok readiness');
+                $inventory->receive($actor, $ready, $serialised->id, '2', 'Stok readiness', 'SN-READINESS-1');
+                $inventory->receive($actor, $ready, $drum->id, '101', 'Stok readiness', null, 'DRM-READINESS-1');
+                $inventory->receive($actor, $attention, $ordinary->id, '5', 'Stok readiness');
+                $inventory->receive($actor, $attention, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-2');
+                $inventory->receive($actor, $attention, $drum->id, '50', 'Stok readiness', null, 'DRM-READINESS-2');
+            });
+            $this->createIssuedTransfer($attention, $transitHub, $ordinary, $now->subDay()->format('Y-m-d H:i:s'), 'SJ-READINESS-ACTIVE');
+            $this->createIssuedTransfer($attention, $transitHub, $ordinary, $now->subDays(4)->format('Y-m-d H:i:s'), 'SJ-READINESS-DELAYED');
+
+            $response = $this->actingAs($actor)
+                ->get('/dashboard')
+                ->assertOk()
+                ->assertSee('Kesiapan Warehouse')
+                ->assertSee('Warehouse Siap THC')
+                ->assertSee('Kepemilikan: THC')
+                ->assertSee('Warehouse Perlu Perhatian')
+                ->assertSee('Kepemilikan: Mitra Warehouse')
+                ->assertSee('Warehouse Mitra Lain')
+                ->assertSee('Petugas Gudang aktif: 1')
+                ->assertSee('Petugas Gudang aktif: 0')
+                ->assertSee('Material kritis: 0')
+                ->assertSee('Material kritis: 3')
+                ->assertSee('Transit aktif: 2 · Terlambat: 1')
+                ->assertSee('Siap')
+                ->assertSee('Perlu perhatian')
+                ->assertSee('href="'.route('admin.warehouses').'#warehouse-'.$ready->id.'"', false)
+                ->assertSee('href="'.route('admin.materials').'"', false)
+                ->assertSee('href="'.route('warehouse.transit').'"', false);
+
+            $this->assertPanelDoesNotContain($response->getContent(), 'warehouse-readiness-panel', $inactive->nama);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_command_center_gates_warehouse_readiness_facts_and_source_links_by_permission(): void
+    {
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['nama' => 'Warehouse Permission']));
+
+        $warehouseManager = $this->userWithPermissions(null, 'read_dashboard', 'manage_warehouses');
+        $this->actingAs($warehouseManager)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Kesiapan Warehouse')
+            ->assertSee('Petugas Gudang aktif: 0')
+            ->assertDontSee('Material kritis:')
+            ->assertDontSee('Transit aktif:')
+            ->assertSee('href="'.route('admin.warehouses').'#warehouse-'.$warehouse->id.'"', false)
+            ->assertSee('Status kesiapan memerlukan izin sumber Warehouse, stok, dan Transit.');
+
+        $stockReader = $this->userWithPermissions(null, 'read_dashboard', 'read_master_data');
+        $this->actingAs($stockReader)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Kesiapan Warehouse')
+            ->assertSee('Material kritis: 0')
+            ->assertDontSee('Petugas Gudang aktif:')
+            ->assertDontSee('Transit aktif:')
+            ->assertDontSee('href="'.route('admin.warehouses').'"', false);
+
+        $transitReader = $this->userWithPermissions(null, 'read_dashboard', 'operate_warehouse');
+        $this->actingAs($transitReader)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Kesiapan Warehouse')
+            ->assertSee('Transit aktif: 0 · Terlambat: 0')
+            ->assertDontSee('Petugas Gudang aktif:')
+            ->assertDontSee('Material kritis:')
+            ->assertDontSee('href="'.route('admin.warehouses').'"', false);
+
+        $viewer = $this->userWithPermissions(null, 'read_dashboard');
+        $this->actingAs($viewer)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Kesiapan Warehouse');
+    }
+
+    public function test_mitra_cannot_access_warehouse_readiness_or_warehouse_source_by_direct_url(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'read_dashboard', 'manage_warehouses', 'read_master_data', 'operate_warehouse');
+
+        $this->actingAs($user)->get('/dashboard')->assertForbidden();
+        $this->actingAs($user)->get('/admin/warehouses')->assertForbidden();
+    }
+
     public function test_command_center_hides_inventory_panels_without_their_source_permissions(): void
     {
         $thc = $this->userWithPermissions(null, 'read_dashboard');
