@@ -10,6 +10,8 @@ class ProjectProgress extends Model
 {
     use HasMitraScope;
 
+    protected $table = 'project_progresses';
+
     protected $fillable = [
         'mitra_id',
         'project_id',
