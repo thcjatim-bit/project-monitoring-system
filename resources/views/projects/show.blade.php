@@ -43,7 +43,18 @@
             .control-room__legend .plan { color: #9daab2; }
             .control-room__legend .actual { color: #087f8c; }
             .control-room__legend .pending { color: #d79c38; }
-            .control-room__steps { grid-column: 1 / -1; }
+            .control-room__steps, .control-room__materials { grid-column: 1 / -1; }
+            .control-room__material-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 15px 0; }
+            .control-room__material-summary strong { color: #15324b; display: block; font-size: 1.2rem; }
+            .control-room__material-summary span { color: #687684; display: block; font-size: .74rem; margin-top: 3px; }
+            .control-room__material-list { border-top: 1px solid #e8edef; display: grid; gap: 9px; list-style: none; margin: 15px 0 0; padding: 12px 0 0; }
+            .control-room__material-row { align-items: center; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; }
+            .control-room__material-row small { color: #687684; }
+            .control-room__material-links { display: flex; flex-wrap: wrap; gap: 8px; }
+            .control-room__material-links a { color: #087f8c; font-size: .76rem; font-weight: 700; }
+            .control-room__material-form { align-items: end; border-top: 1px solid #e8edef; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 16px; }
+            .control-room__material-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
+            .control-room__material-form select, .control-room__material-form input { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
             .control-room__step-list { display: grid; gap: 9px; grid-template-columns: repeat(11, minmax(90px, 1fr)); list-style: none; margin: 18px 0 0; overflow-x: auto; padding: 0; }
             .control-room__step { border-top: 3px solid #dce4e8; min-width: 90px; padding-top: 9px; }
             .control-room__step--active { border-color: #087f8c; }
@@ -85,8 +96,8 @@
             </article>
             <article class="control-room__kpi">
                 <span class="control-room__kpi-label">Kesiapan material</span>
-                <strong class="control-room__kpi-value">Terpisah</strong>
-                <span class="control-room__kpi-note">Tidak dicampur ke bobot Kurva S</span>
+                <strong class="control-room__kpi-value">{{ number_format($material['readiness_percent'], 2, '.', '') }}%</strong>
+                <span class="control-room__kpi-note">Diterima / kebutuhan RAB Material</span>
             </article>
         </section>
 
@@ -125,6 +136,60 @@
                 </div>
                 @if ($curve['overdue'])
                     <p role="alert">Project melewati TOC; sumbu waktu diperpanjang sampai {{ $curve['x_axis_end'] }}@if ($curve['baseline_flat_after_toc']) dan baseline mendatar di 100%@endif.</p>
+                @endif
+            </article>
+            <article class="control-room__panel control-room__materials" id="project-materials">
+                <h2>Kesiapan Material</h2>
+                <p>Material yang masih Transit tidak dihitung sebagai material siap pakai.</p>
+                @if ($material['state'] === 'empty')
+                    <div class="control-room__state">Kebutuhan RAB Material belum disusun.</div>
+                @else
+                    <div class="control-room__material-summary">
+                        <div><strong>{{ number_format($material['readiness_percent'], 2, '.', '') }}%</strong><span>Kesiapan</span></div>
+                        <div><strong>{{ number_format($material['delivered'], 3, '.', '') }}</strong><span>Qty diterima</span></div>
+                        <div><strong>{{ number_format($material['required'], 3, '.', '') }}</strong><span>Qty kebutuhan</span></div>
+                        <div><strong>{{ number_format($material['transit'], 3, '.', '') }}</strong><span>Qty Transit, tidak dihitung</span></div>
+                    </div>
+                    @if ($material['state'] === 'no_delivery')
+                        <div class="control-room__state">Belum ada material terkirim untuk Project ini.</div>
+                    @endif
+                    <ul class="control-room__material-list">
+                        @foreach ($material['items'] as $item)
+                            <li class="control-room__material-row">
+                                <span>
+                                    <strong>{{ $item['material']->nama }}</strong>
+                                    <small>{{ number_format($item['delivered'], 3, '.', '') }} / {{ number_format($item['required'], 3, '.', '') }} {{ $item['material']->unit?->nama }}</small>
+                                </span>
+                                <span class="control-room__material-links">
+                                    @foreach ($item['request_ids'] as $requestId)
+                                        <a href="{{ route('material-requests.show', $requestId) }}">Request Material</a>
+                                    @endforeach
+                                    @foreach ($item['surat_jalan_ids'] as $suratJalanId)
+                                        <a href="{{ route('warehouse.transfers.print', $suratJalanId) }}">Surat Jalan</a>
+                                    @endforeach
+                                    @if ($item['transit'] > 0)
+                                        <a href="{{ route('warehouse.transit') }}">Transit</a>
+                                    @endif
+                                </span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+                @if (auth()->user()->hasIzin('manage_project_material'))
+                    <form class="control-room__material-form" method="POST" action="{{ route('projects.rab-material.store', $project) }}">
+                        @csrf
+                        <label>Material
+                            <select name="material_id" required>
+                                @foreach ($materials as $availableMaterial)
+                                    <option value="{{ $availableMaterial->id }}">{{ $availableMaterial->kode }} — {{ $availableMaterial->nama }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label>Qty kebutuhan
+                            <input type="number" name="qty" min="0.001" step="0.001" required>
+                        </label>
+                        <button class="control-room__button" type="submit">Tambah kebutuhan</button>
+                    </form>
                 @endif
             </article>
             <article class="control-room__panel" id="project-timeline">

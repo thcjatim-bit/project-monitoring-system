@@ -8,6 +8,7 @@ use App\Models\MaterialRequest;
 use App\Models\MaterialSn;
 use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
+use App\Models\Project;
 use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
@@ -18,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class SuratJalanService
 {
-    /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
+    /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, project_id?:int|null, material_request_id?:int|null, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
     public function issueDirect(User $actor, array $data): SuratJalan
     {
         return DB::transaction(fn (): SuratJalan => $this->issueTransfer($actor, $data));
@@ -171,6 +172,8 @@ class SuratJalanService
                 'warehouse_tujuan_id' => $destination->id,
                 'tanggal' => $data['tanggal'],
                 'pengirim' => $data['pengirim'],
+                'project_id' => $original->project_id,
+                'material_request_id' => $original->material_request_id,
                 'sopir' => $data['sopir'] ?? null,
                 'plat_nomor' => $data['plat_nomor'] ?? null,
                 'items' => $items,
@@ -236,7 +239,7 @@ class SuratJalanService
         });
     }
 
-    /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
+    /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,project_id?:int|null,material_request_id?:int|null,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
     private function issueTransfer(User $actor, array $data, ?int $returnedFromId = null): SuratJalan
     {
         $origin = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_asal_id']);
@@ -251,6 +254,13 @@ class SuratJalanService
         if ($materialRequest !== null) {
             $this->ensureRequestQuantitiesAvailable($materialRequest, $data['items']);
         }
+        $projectId = $data['project_id'] ?? $materialRequest?->project_id;
+        if ($projectId !== null) {
+            $project = Project::query()->findOrFail($projectId);
+            if ($project->mitra_id !== $mitraId || ($materialRequest?->project_id !== null && $materialRequest->project_id !== $project->id)) {
+                throw ValidationException::withMessages(['project_id' => 'Project tidak cocok dengan Mitra atau Request Material.']);
+            }
+        }
         $suratJalan = SuratJalan::query()->create([
             'nomor' => $this->nextNumber($tanggal),
             'tanggal' => $tanggal->toDateString(),
@@ -258,6 +268,7 @@ class SuratJalanService
             'warehouse_tujuan_id' => $destination->id,
             'mitra_id' => $mitraId,
             'material_request_id' => $materialRequest?->id,
+            'project_id' => $projectId,
             'retur_dari_id' => $returnedFromId,
             'issued_by' => $actor->id,
             'issued_at' => now(),

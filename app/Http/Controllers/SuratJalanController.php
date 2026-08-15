@@ -22,6 +22,7 @@ class SuratJalanController extends Controller
             'warehouse_asal_id' => ['required', 'integer', $this->activeWarehouseRule()],
             'warehouse_tujuan_id' => ['required', 'integer', $this->activeWarehouseRule()],
             'material_request_id' => ['nullable', 'integer', Rule::exists('material_requests', 'id')],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
             'tanggal' => ['required', 'date'],
             'pengirim' => ['required', 'string', 'max:255'],
             'sopir' => ['nullable', 'string', 'max:255'],

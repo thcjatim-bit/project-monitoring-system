@@ -2,18 +2,24 @@
 
 namespace App\Queries;
 
+use App\Models\Material;
 use App\Models\Project;
 use App\Models\ProjectStep;
 use Carbon\CarbonInterface;
 
 class ProjectControlRoomQuery
 {
-    public function __construct(private ProjectCurveQuery $curveQuery) {}
+    public function __construct(
+        private ProjectCurveQuery $curveQuery,
+        private ProjectMaterialReadinessQuery $materialQuery,
+    ) {}
 
     /** @return array{project: Project, kpis: array<string, mixed>, steps: array<int, mixed>, timeline: array<int, mixed>, material: array<string, mixed>} */
     public function for(Project $project, CarbonInterface|string|null $asOf = null): array
     {
         ProjectStep::initialize($project);
+
+        $material = $this->materialQuery->calculate($project);
 
         return [
             'project' => $project->loadMissing('mitra'),
@@ -21,16 +27,12 @@ class ProjectControlRoomQuery
             'kpis' => [
                 'verified_progress' => null,
                 'spi' => null,
-                'material_readiness' => null,
+                'material_readiness' => $material['readiness_percent'],
             ],
             'steps' => ProjectStep::query()->where('project_id', $project->id)->orderBy('urutan')->get(),
             'timeline' => [],
-            'material' => [
-                'required' => null,
-                'delivered' => null,
-                'available' => null,
-                'state' => 'empty',
-            ],
+            'material' => $material,
+            'materials' => Material::query()->with('unit')->where('aktif', true)->orderBy('nama')->get(),
         ];
     }
 }

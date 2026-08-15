@@ -37,6 +37,11 @@ class Project extends Model
         return $this->hasMany(ProjectRabJasa::class);
     }
 
+    public function rabMaterials(): HasMany
+    {
+        return $this->hasMany(ProjectRabMaterial::class);
+    }
+
     public function baselines(): HasMany
     {
         return $this->hasMany(ProjectBaseline::class);
