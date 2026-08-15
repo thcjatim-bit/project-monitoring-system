@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Drum;
 use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Material;
+use App\Models\MaterialSn;
 use App\Models\Mitra;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -134,6 +136,67 @@ class SuratJalanTransferTest extends TestCase
             ->assertSee($destination->kode)
             ->assertSee('Tanda tangan penerima')
             ->assertSee('QR');
+    }
+
+    public function test_direct_transfer_moves_serial_number_and_drum_identities_without_consuming_them(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $user = $this->userWithWarehousePermission($mitra);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+
+        $serialMaterial = Material::factory()->create(['jenis' => 'ber_sn']);
+        $drumMaterial = Material::factory()->create(['jenis' => 'drum_kabel']);
+
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $serialMaterial->id,
+            'serial_number' => 'SN-TRANSFER-001',
+            'qty' => '1',
+            'reason' => 'Penerimaan SN',
+        ])->assertRedirect();
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $drumMaterial->id,
+            'drum_id' => 'DRM-TRANSFER-001',
+            'qty' => '200',
+            'reason' => 'Penerimaan drum',
+        ])->assertRedirect();
+
+        $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $serialMaterial->id, 'qty' => '1', 'serial_number' => 'SN-TRANSFER-001'],
+                ['material_id' => $drumMaterial->id, 'qty' => '200', 'drum_id' => 'DRM-TRANSFER-001'],
+            ],
+        ])->assertRedirect();
+
+        $serial = MaterialSn::query()->where('serial_number', 'SN-TRANSFER-001')->firstOrFail();
+        $drum = Drum::query()->where('drum_id', 'DRM-TRANSFER-001')->firstOrFail();
+        $this->assertSame('tersedia', $serial->status);
+        $this->assertSame('transit', $serial->lokasi_tipe);
+        $this->assertSame('200.000', $drum->sisa);
+        $this->assertSame('transit', $drum->lokasi_tipe);
+
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive")->assertRedirect();
+
+        $this->assertDatabaseHas('material_sns', [
+            'id' => $serial->id,
+            'status' => 'tersedia',
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $destination->id,
+        ]);
+        $this->assertDatabaseHas('drums', [
+            'id' => $drum->id,
+            'sisa' => '200.000',
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $destination->id,
+        ]);
     }
 
     /** @return array{Warehouse, Warehouse, Material, User} */
