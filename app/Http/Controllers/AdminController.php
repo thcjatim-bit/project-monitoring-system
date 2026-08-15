@@ -82,7 +82,7 @@ class AdminController extends Controller
     public function materials(): View
     {
         return view('admin.materials', [
-            'materials' => Material::with('unit')->latest()->get(),
+            'materials' => Material::with(['unit', 'stocks.warehouse'])->latest()->get(),
             'units' => Unit::query()->where('aktif', true)->orderBy('nama')->get(),
         ]);
     }
