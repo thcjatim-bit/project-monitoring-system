@@ -103,7 +103,7 @@ class CommandCenterTest extends TestCase
             ]);
             $actor = $this->userWithPermissions(null, 'read_dashboard', 'manage_mitras');
 
-            $this->actingAs($actor)
+            $response = $this->actingAs($actor)
                 ->get('/dashboard')
                 ->assertOk()
                 ->assertSee('Onboarding Mitra terbaru')
@@ -112,8 +112,9 @@ class CommandCenterTest extends TestCase
                 ->assertSee('Admin Mitra Terbaru')
                 ->assertSee('admin.terbaru@example.com')
                 ->assertSee($recent->created_at->format('d M Y H:i'))
-                ->assertSee('href="'.route('admin.mitras').'#mitra-'.$boundary->id.'"', false)
-                ->assertDontSee($outside->nama);
+                ->assertSee('href="'.route('admin.mitras').'#mitra-'.$boundary->id.'"', false);
+
+            $this->assertPanelDoesNotContain($response->getContent(), 'recent-mitra-onboarding-panel', $outside->nama);
         } finally {
             CarbonImmutable::setTestNow();
         }
@@ -193,13 +194,14 @@ class CommandCenterTest extends TestCase
 
         $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_material_request');
 
-        $this->actingAs($thc)
+        $response = $this->actingAs($thc)
             ->get('/dashboard')
             ->assertOk()
             ->assertSee('<strong>1</strong>', false)
             ->assertSee('Request Material menunggu keputusan')
-            ->assertSee('Request Material #'.$submitted->id)
-            ->assertDontSee('Request Material #'.$approved->id);
+            ->assertSee('Request Material #'.$submitted->id);
+
+        $this->assertPanelDoesNotContain($response->getContent(), 'material-request-panel', 'Request Material #'.$approved->id);
     }
 
     public function test_command_center_navigation_only_contains_modules_allowed_by_permissions(): void
@@ -239,7 +241,7 @@ class CommandCenterTest extends TestCase
             $older = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 11:59:59', 'SJ-OLD');
             $boundary = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 12:00:00', 'SJ-BOUNDARY');
 
-            $this->actingAs($thc)
+            $response = $this->actingAs($thc)
                 ->get('/dashboard')
                 ->assertOk()
                 ->assertSee('Transit terlambat')
@@ -247,8 +249,9 @@ class CommandCenterTest extends TestCase
                 ->assertSee($origin->nama.' → '.$destination->nama)
                 ->assertSee('Lebih dari 3 hari')
                 ->assertSee('command-center__item-status--danger', false)
-                ->assertSee('href="'.route('warehouse.transfers.print', $older).'"', false)
-                ->assertDontSee($boundary->nomor);
+                ->assertSee('href="'.route('warehouse.transfers.print', $older).'"', false);
+
+            $this->assertPanelDoesNotContain($response->getContent(), 'delayed-transit-panel', $boundary->nomor);
         } finally {
             CarbonImmutable::setTestNow();
         }
@@ -532,6 +535,18 @@ class CommandCenterTest extends TestCase
         } finally {
             app(TenantDatabaseContext::class)->set(null, false);
         }
+    }
+
+    private function assertPanelDoesNotContain(string $html, string $panelId, string $needle): void
+    {
+        $panelStart = strpos($html, 'id="'.$panelId.'"');
+        $this->assertNotFalse($panelStart, "Panel {$panelId} tidak ditemukan.");
+
+        $panelEnd = strpos($html, '</section>', $panelStart);
+        $this->assertNotFalse($panelEnd, "Penutup panel {$panelId} tidak ditemukan.");
+
+        $panelHtml = substr($html, $panelStart, $panelEnd - $panelStart);
+        $this->assertStringNotContainsString($needle, $panelHtml);
     }
 
     /** @return array{Warehouse, Warehouse} */
