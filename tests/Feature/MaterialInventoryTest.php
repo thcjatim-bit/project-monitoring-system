@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\TenantDatabaseContext;
 use Closure;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
@@ -91,6 +93,58 @@ class MaterialInventoryTest extends TestCase
             ->assertSessionHasErrors('material_id');
 
         $this->assertDatabaseCount('material_transaksis', 0);
+    }
+
+    public function test_stock_operations_accept_only_material_biasa(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $user = $this->userWith('operate_warehouse', $mitra);
+        $warehouse->users()->attach($user);
+
+        foreach (['ber_sn', 'drum_kabel'] as $jenis) {
+            $material = Material::factory()->create(['jenis' => $jenis]);
+
+            $this->actingAs($user)
+                ->post('/warehouse/stock/receive', [
+                    'warehouse_id' => $warehouse->id,
+                    'material_id' => $material->id,
+                    'qty' => '10',
+                    'reason' => 'Belum didukung',
+                ])
+                ->assertSessionHasErrors('material_id');
+
+            $this->actingAs($user)
+                ->post('/warehouse/stock/issue', [
+                    'warehouse_id' => $warehouse->id,
+                    'material_id' => $material->id,
+                    'qty' => '1',
+                    'reason' => 'Belum didukung',
+                ])
+                ->assertSessionHasErrors('material_id');
+        }
+
+        $this->assertDatabaseCount('material_transaksis', 0);
+    }
+
+    public function test_database_trigger_rejects_a_transaction_that_would_make_stock_negative(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $actor = $this->userWith('operate_warehouse', $mitra);
+
+        $this->expectException(QueryException::class);
+
+        $this->asThc(fn () => DB::table('material_transaksis')->insert([
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty_delta' => '-1',
+            'reason' => 'Tidak boleh',
+            'actor_id' => $actor->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
     }
 
     private function userWith(string $permission, Mitra $mitra): User

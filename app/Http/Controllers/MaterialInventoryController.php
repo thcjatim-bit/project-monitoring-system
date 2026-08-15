@@ -43,7 +43,7 @@ class MaterialInventoryController extends Controller
     private function activeMaterialRule(): Exists
     {
         return Rule::exists('materials', 'id')->where(function (Builder $query): void {
-            $query->where('aktif', true)->whereExists(function (Builder $units): void {
+            $query->where('aktif', true)->where('jenis', 'biasa')->whereExists(function (Builder $units): void {
                 $units->selectRaw('1')
                     ->from('units')
                     ->whereColumn('units.id', 'materials.unit_id')
