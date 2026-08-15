@@ -19,12 +19,8 @@
                         @csrf @method('PATCH')
                         <input name="kode" value="{{ $material->kode }}" required>
                         <input name="nama" value="{{ $material->nama }}" required>
-                        @if(!$material->unit->aktif)
-                            <input type="hidden" name="unit_id" value="{{ $material->unit->id }}">
-                            <span>{{ $material->unit->nama }} (nonaktif)</span>
-                        @else
-                            <select name="unit_id" required>@foreach($units as $unit)<option value="{{ $unit->id }}" @selected($material->unit_id === $unit->id)>{{ $unit->nama }}</option>@endforeach</select>
-                        @endif
+                        @if(!$material->unit->aktif)<span>Unit saat ini {{ $material->unit->nama }} (nonaktif); pilih pengganti aktif.</span>@endif
+                        <select name="unit_id" required>@foreach($units as $unit)<option value="{{ $unit->id }}" @selected($material->unit_id === $unit->id)>{{ $unit->nama }}</option>@endforeach</select>
                         <select name="jenis"><option value="biasa" @selected($material->jenis === 'biasa')>Biasa</option><option value="ber_sn" @selected($material->jenis === 'ber_sn')>Ber-SN</option><option value="drum_kabel" @selected($material->jenis === 'drum_kabel')>Drum kabel</option></select>
                         <button>Simpan perubahan</button>
                     </form>

@@ -160,6 +160,20 @@ class MasterDataManagementTest extends TestCase
         ]);
     }
 
+    public function test_material_edit_offers_active_unit_replacement_without_inactive_option(): void
+    {
+        $admin = User::factory()->create(['grup_id' => $this->groupWith('read_master_data', 'manage_materials')->id]);
+        $inactiveUnit = Unit::query()->create(['kode' => 'M-LAMA', 'nama' => 'Meter lama', 'aktif' => false]);
+        $activeUnit = Unit::query()->create(['kode' => 'M-BARU', 'nama' => 'Meter baru', 'aktif' => true]);
+        $material = Material::factory()->create(['unit_id' => $inactiveUnit->id]);
+
+        $this->actingAs($admin)
+            ->get('/admin/materials')
+            ->assertOk()
+            ->assertSee('value="'.$activeUnit->id.'"', false)
+            ->assertDontSee('value="'.$inactiveUnit->id.'"', false);
+    }
+
     private function groupWith(string ...$permissions): Grup
     {
         $group = Grup::factory()->create();
