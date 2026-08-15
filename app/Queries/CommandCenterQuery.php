@@ -8,10 +8,16 @@ use App\Models\MaterialRequest;
 use App\Models\MaterialSn;
 use App\Models\MaterialStok;
 use App\Models\Mitra;
+use App\Models\PekerjaanJasa;
+use App\Models\Pop;
 use App\Models\SuratJalan;
+use App\Models\Unit;
 use App\Models\User;
+use App\Models\Warehouse;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Collection;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 
 class CommandCenterQuery
 {
@@ -32,8 +38,8 @@ class CommandCenterQuery
         ];
     }
 
-    /** @return Collection<int, Mitra> */
-    public function recentMitraOnboardings(?CarbonImmutable $now = null): Collection
+    /** @return EloquentCollection<int, Mitra> */
+    public function recentMitraOnboardings(?CarbonImmutable $now = null): EloquentCollection
     {
         $cutoff = ($now ?? CarbonImmutable::now())->subDays(30);
 
@@ -44,8 +50,8 @@ class CommandCenterQuery
             ->get();
     }
 
-    /** @return Collection<int, MaterialRequest> */
-    public function pendingMaterialRequests(): Collection
+    /** @return EloquentCollection<int, MaterialRequest> */
+    public function pendingMaterialRequests(): EloquentCollection
     {
         return MaterialRequest::query()
             ->where('status', 'diajukan')
@@ -54,8 +60,8 @@ class CommandCenterQuery
             ->get();
     }
 
-    /** @return Collection<int, SuratJalan> */
-    public function delayedTransits(?CarbonImmutable $now = null): Collection
+    /** @return EloquentCollection<int, SuratJalan> */
+    public function delayedTransits(?CarbonImmutable $now = null): EloquentCollection
     {
         $cutoff = ($now ?? CarbonImmutable::now())->subDays(3);
 
@@ -67,8 +73,8 @@ class CommandCenterQuery
             ->get();
     }
 
-    /** @return Collection<int, Material> */
-    public function criticalStocks(): Collection
+    /** @return EloquentCollection<int, Material> */
+    public function criticalStocks(): EloquentCollection
     {
         $warehouseBalance = MaterialStok::query()
             ->selectRaw('COALESCE(SUM(qty), 0)')
@@ -114,5 +120,215 @@ class CommandCenterQuery
                 return $balance <= (float) $material->ambang_minimum;
             })
             ->values();
+    }
+
+    /**
+     * Build a read-only navigation feed from timestamps already persisted by each domain.
+     *
+     * @return Collection<int, array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string}>
+     */
+    public function activityFeed(User $actor, int $limit = 20): Collection
+    {
+        $activities = collect();
+
+        if ($actor->hasIzin('read_material_request')) {
+            MaterialRequest::query()
+                ->with('mitra')
+                ->latest('updated_at')
+                ->limit($limit)
+                ->get()
+                ->each(fn (MaterialRequest $request) => $activities->push($this->materialRequestActivity($request)));
+        }
+
+        if ($actor->hasIzin('operate_warehouse')) {
+            SuratJalan::query()
+                ->with(['origin', 'destination', 'mitra'])
+                ->latest('updated_at')
+                ->limit($limit)
+                ->get()
+                ->each(fn (SuratJalan $suratJalan) => $activities->push($this->suratJalanActivity($suratJalan)));
+        }
+
+        if ($actor->hasIzin('manage_users')) {
+            User::query()
+                ->with('mitra')
+                ->latest('updated_at')
+                ->limit($limit)
+                ->get()
+                ->each(fn (User $user) => $activities->push($this->userActivity($user)));
+        }
+
+        if ($actor->hasIzin('manage_mitras')) {
+            Mitra::query()
+                ->latest('updated_at')
+                ->limit($limit)
+                ->get()
+                ->each(fn (Mitra $mitra) => $activities->push($this->mitraActivity($mitra)));
+        }
+
+        if ($actor->hasIzin('read_master_data')) {
+            $this->appendMasterDataActivities($activities, Material::class, 'Material', fn () => route('admin.materials'), $limit);
+            $this->appendMasterDataActivities($activities, Unit::class, 'Unit', fn () => route('admin.master.index', 'units'), $limit);
+            $this->appendMasterDataActivities($activities, Pop::class, 'PoP', fn () => route('admin.master.index', 'pops'), $limit);
+            $this->appendMasterDataActivities($activities, PekerjaanJasa::class, 'Pekerjaan Jasa', fn () => route('admin.master.index', 'pekerjaan-jasa'), $limit);
+        }
+
+        if ($actor->hasIzin('manage_warehouses')) {
+            $this->appendMasterDataActivities($activities, Warehouse::class, 'Warehouse', fn () => route('admin.warehouses'), $limit);
+        }
+
+        return $activities
+            ->sortByDesc('sort_key')
+            ->take($limit)
+            ->values();
+    }
+
+    /** @return array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string} */
+    private function materialRequestActivity(MaterialRequest $request): array
+    {
+        $occurredAt = match ($request->status) {
+            'diajukan' => $request->created_at,
+            'disetujui', 'ditolak' => $request->decided_at ?? $request->updated_at,
+            default => $request->updated_at,
+        } ?? $request->created_at ?? CarbonImmutable::now();
+
+        return $this->activity(
+            source: 'Request Material',
+            entity: 'Request Material',
+            title: 'Request Material #'.$request->id,
+            description: $request->mitra?->nama ?? 'Mitra tidak tersedia',
+            status: $this->materialRequestStatus($request->status),
+            occurredAt: $occurredAt,
+            url: route('material-requests.show', $request),
+            id: (int) $request->id,
+        );
+    }
+
+    /** @return array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string} */
+    private function suratJalanActivity(SuratJalan $suratJalan): array
+    {
+        $occurredAt = match ($suratJalan->status) {
+            'terbit' => $suratJalan->issued_at,
+            'diterima' => $suratJalan->received_at ?? $suratJalan->updated_at,
+            default => $suratJalan->updated_at,
+        } ?? $suratJalan->issued_at ?? CarbonImmutable::now();
+        $origin = $suratJalan->origin?->nama ?? 'Warehouse asal tidak tersedia';
+        $destination = $suratJalan->destination?->nama ?? 'Warehouse tujuan tidak tersedia';
+
+        return $this->activity(
+            source: 'Surat Jalan',
+            entity: 'Surat Jalan',
+            title: $suratJalan->nomor,
+            description: $origin.' → '.$destination,
+            status: $this->suratJalanStatus($suratJalan->status),
+            occurredAt: $occurredAt,
+            url: route('warehouse.transfers.print', $suratJalan),
+            id: (int) $suratJalan->id,
+        );
+    }
+
+    /** @return array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string} */
+    private function userActivity(User $user): array
+    {
+        $created = $this->wasCreated($user);
+
+        return $this->activity(
+            source: 'User',
+            entity: 'User',
+            title: 'User: '.$user->name,
+            description: $user->email.($user->mitra?->nama ? ' · '.$user->mitra->nama : ' · THC'),
+            status: $created ? 'Dibuat' : 'Diperbarui',
+            occurredAt: $user->updated_at ?? $user->created_at ?? CarbonImmutable::now(),
+            url: route('admin.users'),
+            id: (int) $user->id,
+        );
+    }
+
+    /** @return array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string} */
+    private function mitraActivity(Mitra $mitra): array
+    {
+        return $this->activity(
+            source: 'Mitra',
+            entity: 'Mitra',
+            title: 'Mitra: '.$mitra->nama,
+            description: $mitra->kode,
+            status: $this->wasCreated($mitra) ? 'Dibuat' : 'Diperbarui',
+            occurredAt: $mitra->updated_at ?? $mitra->created_at ?? CarbonImmutable::now(),
+            url: route('admin.mitras'),
+            id: (int) $mitra->id,
+        );
+    }
+
+    private function appendMasterDataActivities(Collection $activities, string $modelClass, string $label, callable $url, int $limit): void
+    {
+        $modelClass::query()
+            ->latest('updated_at')
+            ->limit($limit)
+            ->get()
+            ->each(function ($record) use ($activities, $label, $url): void {
+                $activities->push($this->activity(
+                    source: 'Master Data',
+                    entity: $label,
+                    title: $label.': '.$record->nama,
+                    description: $record->kode,
+                    status: $this->wasCreated($record) ? 'Dibuat' : 'Diperbarui',
+                    occurredAt: $record->updated_at ?? $record->created_at ?? CarbonImmutable::now(),
+                    url: $url(),
+                    id: (int) $record->id,
+                ));
+            });
+    }
+
+    private function wasCreated(object $record): bool
+    {
+        return $record->created_at !== null
+            && $record->updated_at !== null
+            && $record->created_at->equalTo($record->updated_at);
+    }
+
+    private function materialRequestStatus(string $status): string
+    {
+        return [
+            'diajukan' => 'Diajukan',
+            'disetujui' => 'Disetujui THC',
+            'ditolak' => 'Ditolak THC',
+            'terpenuhi_sebagian' => 'Terpenuhi sebagian',
+            'selesai' => 'Selesai',
+            'ditutup' => 'Ditutup THC',
+            'dibatalkan' => 'Dibatalkan',
+        ][$status] ?? $status;
+    }
+
+    private function suratJalanStatus(string $status): string
+    {
+        return [
+            'terbit' => 'Terbit',
+            'diterima' => 'Diterima',
+            'dibatalkan' => 'Dibatalkan',
+        ][$status] ?? $status;
+    }
+
+    /** @return array{source: string, entity: string, title: string, description: string, status: string, occurred_at: CarbonInterface, url: string, id: int, sort_key: string} */
+    private function activity(
+        string $source,
+        string $entity,
+        string $title,
+        string $description,
+        string $status,
+        CarbonInterface $occurredAt,
+        string $url,
+        int $id,
+    ): array {
+        return [
+            'source' => $source,
+            'entity' => $entity,
+            'title' => $title,
+            'description' => $description,
+            'status' => $status,
+            'occurred_at' => $occurredAt,
+            'url' => $url,
+            'id' => $id,
+            'sort_key' => $occurredAt->format('YmdHis.u').sprintf('-%s-%020d', $source, $id),
+        ];
     }
 }

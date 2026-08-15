@@ -377,6 +377,124 @@ class CommandCenterTest extends TestCase
             ->assertDontSee('method="POST" action="'.route('material-requests.approve', $submitted).'"', false);
     }
 
+    public function test_command_center_merges_operational_activity_sources_in_chronological_order(): void
+    {
+        $now = CarbonImmutable::parse('2026-08-20 12:00:00');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $mitra = Mitra::factory()->create([
+                'nama' => 'Mitra Feed',
+                'created_at' => $now->subHours(4),
+                'updated_at' => $now->subHours(4),
+            ]);
+            $actor = $this->userWithPermissions(
+                null,
+                'read_dashboard',
+                'read_material_request',
+                'operate_warehouse',
+                'manage_users',
+                'manage_mitras',
+                'read_master_data',
+                'manage_warehouses',
+            );
+            $request = $this->asThc(fn () => MaterialRequest::query()->create([
+                'mitra_id' => $mitra->id,
+                'requested_by' => $actor->id,
+                'status' => 'disetujui',
+                'decided_by' => $actor->id,
+                'decided_at' => $now->subHours(5),
+                'created_at' => $now->subHours(6),
+                'updated_at' => $now->subHours(5),
+            ]));
+            $material = Material::factory()->create([
+                'nama' => 'Material Feed',
+                'created_at' => $now->subHour(),
+                'updated_at' => $now->subHour(),
+            ]);
+            [$origin, $destination] = $this->warehousesFor($mitra);
+            $suratJalan = $this->createIssuedTransfer(
+                $origin,
+                $destination,
+                $material,
+                $now->subHours(3)->format('Y-m-d H:i:s'),
+                'SJ-FEED',
+            );
+            $user = User::factory()->create([
+                'name' => 'User Feed',
+                'email' => 'user.feed@example.com',
+                'mitra_id' => $mitra->id,
+                'created_at' => $now->subHours(2),
+                'updated_at' => $now->subHours(2),
+            ]);
+
+            $response = $this->actingAs($actor)->get('/dashboard');
+
+            $response
+                ->assertOk()
+                ->assertSee('Aktivitas lintas operasional')
+                ->assertSee('Request Material #'.$request->id)
+                ->assertSee('SJ-FEED')
+                ->assertSee('User Feed')
+                ->assertSee('Mitra Feed')
+                ->assertSee('Material Feed')
+                ->assertSee('Disetujui THC')
+                ->assertSee($now->subHours(5)->format('d M Y H:i'))
+                ->assertSee($now->subHours(3)->format('d M Y H:i'))
+                ->assertSee($now->subHours(2)->format('d M Y H:i'))
+                ->assertSee($now->subHours(4)->format('d M Y H:i'))
+                ->assertSee($now->subHour()->format('d M Y H:i'))
+                ->assertSee('href="'.route('material-requests.show', $request).'"', false)
+                ->assertSee('href="'.route('warehouse.transfers.print', $suratJalan).'"', false)
+                ->assertSee('href="'.route('admin.users').'"', false)
+                ->assertSee('href="'.route('admin.mitras').'"', false)
+                ->assertSee('href="'.route('admin.materials').'"', false);
+
+            $html = $response->getContent();
+            $this->assertLessThan(strpos($html, 'User Feed'), strpos($html, 'Material Feed'));
+            $this->assertLessThan(strpos($html, 'Mitra Feed'), strpos($html, 'User Feed'));
+            $this->assertLessThan(strpos($html, 'SJ-FEED'), strpos($html, 'Mitra Feed'));
+            $this->assertLessThan(strpos($html, 'Request Material #'.$request->id), strpos($html, 'SJ-FEED'));
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_command_center_activity_feed_is_permission_gated_and_has_empty_loading_states(): void
+    {
+        $viewer = $this->userWithPermissions(null, 'read_dashboard');
+
+        $this->actingAs($viewer)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Aktivitas lintas operasional')
+            ->assertSee('Memuat aktivitas lintas operasional')
+            ->assertSee('Belum ada aktivitas lintas operasional yang dapat ditampilkan.')
+            ->assertDontSee('Request Material #')
+            ->assertDontSee('User Feed')
+            ->assertDontSee('Mitra Feed');
+
+        $requestReader = $this->userWithPermissions(null, 'read_dashboard', 'read_material_request');
+
+        $this->actingAs($requestReader)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Aktivitas lintas operasional')
+            ->assertSee('Belum ada aktivitas lintas operasional yang dapat ditampilkan.')
+            ->assertDontSee('href="'.route('admin.users').'"', false)
+            ->assertDontSee('href="'.route('admin.mitras').'"', false);
+    }
+
+    public function test_mitra_cannot_receive_cross_operational_activity_feed(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'read_dashboard', 'read_material_request', 'operate_warehouse');
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertForbidden();
+    }
+
     public function test_mitra_cannot_open_another_mitras_request_detail(): void
     {
         [$requestA, $userA] = $this->createSubmittedRequest();
