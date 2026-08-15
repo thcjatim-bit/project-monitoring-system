@@ -8,7 +8,11 @@ use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SuratJalanController;
+use App\Http\Middleware\SetTenantDatabaseContext;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 Route::redirect('/', '/dashboard');
 
@@ -22,28 +26,28 @@ Route::middleware('guest')->group(function (): void {
 if (! app()->environment('production')) {
     Route::get('/prototype/gelombang-1', fn () => view('prototypes.gelombang-1'))
         ->withoutMiddleware([
-            \App\Http\Middleware\SetTenantDatabaseContext::class,
-            \Illuminate\Session\Middleware\StartSession::class,
-            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
         ])
         ->name('prototype.gelombang-1');
 
     Route::get('/prototype/gelombang-2', fn () => view('prototypes.gelombang-2'))
         ->withoutMiddleware([
-            \App\Http\Middleware\SetTenantDatabaseContext::class,
-            \Illuminate\Session\Middleware\StartSession::class,
-            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
         ])
         ->name('prototype.gelombang-2');
 
     Route::get('/prototype/gelombang-3', fn () => view('prototypes.gelombang-3'))
         ->withoutMiddleware([
-            \App\Http\Middleware\SetTenantDatabaseContext::class,
-            \Illuminate\Session\Middleware\StartSession::class,
-            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
         ])
         ->name('prototype.gelombang-3');
 }
