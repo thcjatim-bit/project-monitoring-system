@@ -67,7 +67,7 @@ class ProjectTimelineCommentTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $project = $this->projectFor($mitra);
-        $actor = $this->userWith($mitra, 'read_project', 'read_project_timeline', 'create_project_comment');
+        $actor = $this->userWith($mitra, 'read_project', 'read_project_timeline', 'create_project_comment', 'mention_project_user');
         $target = $this->userWith(null, 'read_project', 'read_project_timeline', 'create_project_comment');
         $target->update(['no_wa' => '628123456789']);
         $waha = Mockery::mock(WahaClient::class);
