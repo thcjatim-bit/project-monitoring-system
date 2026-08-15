@@ -115,21 +115,29 @@ class MasterDataManagementTest extends TestCase
         }
     }
 
-    public function test_mitra_cannot_manage_shared_master_data_even_with_permission(): void
+    public function test_mitra_can_read_shared_master_data_but_cannot_manage_it(): void
     {
         $mitraUser = User::factory()->create([
-            'grup_id' => $this->groupWith('read_dashboard', 'manage_master_data', 'manage_materials', 'manage_warehouses')->id,
+            'grup_id' => $this->groupWith('read_dashboard', 'read_master_data', 'manage_master_data', 'manage_materials', 'manage_warehouses')->id,
             'mitra_id' => Mitra::factory()->create()->id,
         ]);
 
-        foreach (['/admin/master/units', '/admin/materials', '/admin/warehouses'] as $url) {
-            $this->actingAs($mitraUser)->get($url)->assertForbidden();
+        foreach (['/admin/master/units', '/admin/materials'] as $url) {
+            $this->actingAs($mitraUser)->get($url)->assertOk();
         }
+
+        $this->actingAs($mitraUser)->get('/admin/warehouses')->assertForbidden();
+
+        $this->actingAs($mitraUser)->post('/admin/master/units', [
+            'kode' => 'M',
+            'nama' => 'Meter',
+        ])->assertForbidden();
 
         $this->actingAs($mitraUser)->get('/dashboard')
             ->assertOk()
-            ->assertDontSee(route('admin.warehouses'), false)
-            ->assertDontSee(route('admin.materials'), false);
+            ->assertSee(route('admin.master.index', 'units'), false)
+            ->assertSee(route('admin.materials'), false)
+            ->assertDontSee(route('admin.warehouses'), false);
     }
 
     public function test_material_can_keep_its_historical_inactive_unit_when_updated(): void

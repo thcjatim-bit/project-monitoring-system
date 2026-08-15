@@ -31,21 +31,25 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/admin/mitras', [AdminController::class, 'onboardMitra'])->middleware('izin:manage_mitras')->name('admin.mitras.create');
     Route::middleware('thc')->group(function (): void {
         Route::get('/admin/warehouses', [AdminController::class, 'warehouses'])->middleware('izin:manage_warehouses')->name('admin.warehouses');
-        Route::get('/admin/materials', [AdminController::class, 'materials'])->middleware('izin:manage_materials')->name('admin.materials');
-        Route::post('/admin/materials', [AdminController::class, 'createMaterial'])->middleware('izin:manage_materials')->name('admin.materials.create');
-        Route::patch('/admin/materials/{material}', [AdminController::class, 'updateMaterial'])->middleware('izin:manage_materials')->name('admin.materials.update');
-        Route::patch('/admin/materials/{material}/deactivate', [AdminController::class, 'deactivateMaterial'])->middleware('izin:manage_materials')->name('admin.materials.deactivate');
         Route::post('/admin/warehouses', [AdminController::class, 'createWarehouse'])->middleware('izin:manage_warehouses')->name('admin.warehouses.create');
         Route::patch('/admin/warehouses/{warehouse}', [AdminController::class, 'updateWarehouse'])->middleware('izin:manage_warehouses')->name('admin.warehouses.update');
         Route::patch('/admin/warehouses/{warehouse}/deactivate', [AdminController::class, 'deactivateWarehouse'])->middleware('izin:manage_warehouses')->name('admin.warehouses.deactivate');
         Route::post('/admin/warehouses/{warehouse}/users', [AdminController::class, 'assignWarehouse'])->middleware('izin:manage_warehouses')->name('admin.warehouses.assign');
         Route::delete('/admin/warehouses/{warehouse}/users/{user}', [AdminController::class, 'unassignWarehouse'])->middleware('izin:manage_warehouses')->name('admin.warehouses.unassign');
     });
-    Route::prefix('/admin/master')->middleware(['thc', 'izin:manage_master_data'])->group(function (): void {
-        Route::get('/{entity}', [MasterDataController::class, 'index'])->name('admin.master.index');
-        Route::post('/{entity}', [MasterDataController::class, 'store'])->name('admin.master.store');
-        Route::patch('/{entity}/{id}', [MasterDataController::class, 'update'])->name('admin.master.update');
-        Route::patch('/{entity}/{id}/deactivate', [MasterDataController::class, 'deactivate'])->name('admin.master.deactivate');
+    Route::get('/admin/materials', [AdminController::class, 'materials'])->middleware('izin:read_master_data')->name('admin.materials');
+    Route::middleware(['thc', 'izin:manage_materials'])->group(function (): void {
+        Route::post('/admin/materials', [AdminController::class, 'createMaterial'])->name('admin.materials.create');
+        Route::patch('/admin/materials/{material}', [AdminController::class, 'updateMaterial'])->name('admin.materials.update');
+        Route::patch('/admin/materials/{material}/deactivate', [AdminController::class, 'deactivateMaterial'])->name('admin.materials.deactivate');
+    });
+    Route::prefix('/admin/master')->group(function (): void {
+        Route::get('/{entity}', [MasterDataController::class, 'index'])->middleware('izin:read_master_data')->name('admin.master.index');
+        Route::middleware(['thc', 'izin:manage_master_data'])->group(function (): void {
+            Route::post('/{entity}', [MasterDataController::class, 'store'])->name('admin.master.store');
+            Route::patch('/{entity}/{id}', [MasterDataController::class, 'update'])->name('admin.master.update');
+            Route::patch('/{entity}/{id}/deactivate', [MasterDataController::class, 'deactivate'])->name('admin.master.deactivate');
+        });
     });
     Route::post('/webhooks/waha', [AdminController::class, 'wahaWebhook'])->withoutMiddleware(['web']);
     Route::middleware('izin:operate_warehouse')->group(function (): void {

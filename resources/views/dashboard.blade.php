@@ -11,10 +11,8 @@
         @if ($user->mitra_id === null && $user->hasIzin('manage_warehouses'))
             <a href="{{ route('admin.warehouses') }}">Warehouse</a>
         @endif
-        @if ($user->mitra_id === null && $user->hasIzin('manage_materials'))
+        @if ($user->hasIzin('read_master_data'))
             <a href="{{ route('admin.materials') }}">Material</a>
-        @endif
-        @if ($user->mitra_id === null && $user->hasIzin('manage_master_data'))
             <a href="{{ route('admin.master.index', 'units') }}">Unit</a>
             <a href="{{ route('admin.master.index', 'pops') }}">PoP</a>
             <a href="{{ route('admin.master.index', 'pekerjaan-jasa') }}">Pekerjaan Jasa</a>

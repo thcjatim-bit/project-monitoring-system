@@ -6,6 +6,7 @@ use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Material;
 use App\Models\Mitra;
+use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\TenantDatabaseContext;
@@ -67,6 +68,27 @@ class MaterialInventoryTest extends TestCase
                 'reason' => 'Tidak boleh',
             ])
             ->assertSessionHasErrors('qty');
+
+        $this->assertDatabaseCount('material_transaksis', 0);
+    }
+
+    public function test_material_with_inactive_unit_cannot_be_used_for_new_stock_operations(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $unit = Unit::query()->create(['kode' => 'M', 'nama' => 'Meter', 'aktif' => false]);
+        $material = Material::factory()->create(['unit_id' => $unit->id]);
+        $user = $this->userWith('operate_warehouse', $mitra);
+        $warehouse->users()->attach($user);
+
+        $this->actingAs($user)
+            ->post('/warehouse/stock/receive', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'qty' => '10',
+                'reason' => 'Tidak boleh',
+            ])
+            ->assertSessionHasErrors('material_id');
 
         $this->assertDatabaseCount('material_transaksis', 0);
     }
