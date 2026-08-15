@@ -367,7 +367,8 @@ class CommandCenterTest extends TestCase
             $this->asThc(function () use ($actor, $ready, $attention, $ordinary, $serialised, $drum): void {
                 $inventory = app(MaterialInventoryService::class);
                 $inventory->receive($actor, $ready, $ordinary->id, '20', 'Stok readiness');
-                $inventory->receive($actor, $ready, $serialised->id, '2', 'Stok readiness', 'SN-READINESS-1');
+                $inventory->receive($actor, $ready, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-1');
+                $inventory->receive($actor, $ready, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-1B');
                 $inventory->receive($actor, $ready, $drum->id, '101', 'Stok readiness', null, 'DRM-READINESS-1');
                 $inventory->receive($actor, $attention, $ordinary->id, '5', 'Stok readiness');
                 $inventory->receive($actor, $attention, $serialised->id, '1', 'Stok readiness', 'SN-READINESS-2');
