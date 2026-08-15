@@ -17,11 +17,17 @@ class SuratJalanItem extends Model
         'material_sn_id',
         'drum_id',
         'qty',
+        'qty_diterima',
+        'qty_diretur',
     ];
 
     protected function casts(): array
     {
-        return ['qty' => 'decimal:3'];
+        return [
+            'qty' => 'decimal:3',
+            'qty_diterima' => 'decimal:3',
+            'qty_diretur' => 'decimal:3',
+        ];
     }
 
     public function suratJalan(): BelongsTo

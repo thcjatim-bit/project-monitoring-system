@@ -63,6 +63,12 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/warehouse/transfers/{suratJalan}/print', [SuratJalanController::class, 'print'])->name('warehouse.transfers.print');
         Route::get('/warehouse/transit', [SuratJalanController::class, 'transit'])->name('warehouse.transit');
     });
+    Route::middleware(['thc', 'izin:operate_warehouse'])->group(function (): void {
+        Route::post('/warehouse/transfers/{suratJalan}/resolve', [SuratJalanController::class, 'resolve'])->name('warehouse.transfers.resolve');
+        Route::post('/warehouse/transfers/{suratJalan}/cancel', [SuratJalanController::class, 'cancel'])->name('warehouse.transfers.cancel');
+        Route::post('/warehouse/transfers/{suratJalan}/return', [SuratJalanController::class, 'createReturn'])->name('warehouse.transfers.return');
+        Route::post('/warehouse/material-transactions/{materialTransaksi}/correct', [SuratJalanController::class, 'correct'])->name('warehouse.material-transactions.correct');
+    });
     Route::middleware('izin:read_material_request')->group(function (): void {
         Route::get('/material-requests', [MaterialRequestController::class, 'index'])->name('material-requests.index');
     });

@@ -17,14 +17,18 @@ class SuratJalan extends Model
         'warehouse_asal_id',
         'warehouse_tujuan_id',
         'mitra_id',
+        'retur_dari_id',
         'issued_by',
         'issued_at',
         'status',
+        'transit_resolution',
         'pengirim',
         'sopir',
         'plat_nomor',
         'received_by',
         'received_at',
+        'resolved_by',
+        'resolved_at',
         'catatan',
     ];
 
@@ -34,6 +38,7 @@ class SuratJalan extends Model
             'tanggal' => 'date',
             'issued_at' => 'datetime',
             'received_at' => 'datetime',
+            'resolved_at' => 'datetime',
         ];
     }
 
@@ -50,6 +55,11 @@ class SuratJalan extends Model
     public function mitra(): BelongsTo
     {
         return $this->belongsTo(Mitra::class);
+    }
+
+    public function returnedFrom(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'retur_dari_id');
     }
 
     public function issuer(): BelongsTo

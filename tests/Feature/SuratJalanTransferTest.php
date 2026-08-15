@@ -199,6 +199,228 @@ class SuratJalanTransferTest extends TestCase
         ]);
     }
 
+    public function test_receiving_part_of_a_transfer_leaves_the_residual_in_transit_until_it_is_resolved_as_lost(): void
+    {
+        [$origin, $destination, $material, $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $itemId = DB::table('surat_jalan_items')->value('id');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($user)
+            ->post("/warehouse/transfers/{$suratJalanId}/receive", [
+                'items' => [['surat_jalan_item_id' => $itemId, 'qty' => '2']],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('surat_jalans', ['id' => $suratJalanId, 'status' => 'terbit']);
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'id' => $itemId,
+            'qty_diterima' => '2.000',
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'transit',
+            'lokasi_id' => $suratJalanId,
+            'qty' => '2.000',
+        ]);
+
+        $this->actingAs($thc)
+            ->post("/warehouse/transfers/{$suratJalanId}/resolve", ['resolution' => 'hilang_dalam_perjalanan'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('surat_jalans', [
+            'id' => $suratJalanId,
+            'status' => 'diterima',
+            'transit_resolution' => 'hilang_dalam_perjalanan',
+            'resolved_by' => $thc->id,
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'transit',
+            'lokasi_id' => $suratJalanId,
+            'qty' => '0.000',
+        ]);
+        $this->assertDatabaseHas('material_transaksis', [
+            'surat_jalan_id' => $suratJalanId,
+            'jenis_transaksi' => 'hilang_dalam_perjalanan',
+            'qty_delta' => '-2.000',
+            'actor_id' => $thc->id,
+        ]);
+    }
+
+    public function test_thc_can_resolve_a_partial_transit_by_returning_the_residual_to_origin(): void
+    {
+        [$origin, $destination, $material, $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $itemId = DB::table('surat_jalan_items')->value('id');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive", [
+            'items' => [['surat_jalan_item_id' => $itemId, 'qty' => '2']],
+        ])->assertRedirect();
+
+        $this->actingAs($thc)->post("/warehouse/transfers/{$suratJalanId}/resolve", [
+            'resolution' => 'kembali_ke_asal',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('surat_jalans', [
+            'id' => $suratJalanId,
+            'status' => 'diterima',
+            'transit_resolution' => 'kembali_ke_asal',
+            'resolved_by' => $thc->id,
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $origin->id,
+            'qty' => '8.000',
+        ]);
+        $this->assertDatabaseHas('material_transaksis', [
+            'surat_jalan_id' => $suratJalanId,
+            'lokasi_tipe' => 'warehouse',
+            'qty_delta' => '2.000',
+            'actor_id' => $thc->id,
+        ]);
+    }
+
+    public function test_thc_can_cancel_an_unreceived_transfer(): void
+    {
+        [$origin, $destination, $material, $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($thc)
+            ->post("/warehouse/transfers/{$suratJalanId}/cancel")
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('surat_jalans', ['id' => $suratJalanId, 'status' => 'dibatalkan']);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $origin->id,
+            'qty' => '10.000',
+        ]);
+
+    }
+
+    public function test_thc_cannot_cancel_a_transfer_after_receipt(): void
+    {
+        [$origin, $destination, , $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive")->assertRedirect();
+        $this->actingAs($thc)
+            ->post("/warehouse/transfers/{$suratJalanId}/cancel")
+            ->assertSessionHasErrors('status');
+    }
+
+    public function test_a_received_transfer_returns_through_a_new_reverse_surat_jalan(): void
+    {
+        [$origin, $destination, $material, $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive")->assertRedirect();
+
+        $response = $this->actingAs($thc)->post("/warehouse/transfers/{$suratJalanId}/return", [
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas THC',
+        ]);
+
+        $response->assertRedirect();
+        $returnId = DB::table('surat_jalans')->where('retur_dari_id', $suratJalanId)->value('id');
+        $this->assertNotNull($returnId);
+        $this->assertDatabaseHas('surat_jalans', [
+            'id' => $returnId,
+            'status' => 'terbit',
+            'warehouse_asal_id' => $destination->id,
+            'warehouse_tujuan_id' => $origin->id,
+            'retur_dari_id' => $suratJalanId,
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $destination->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'transit',
+            'lokasi_id' => $returnId,
+            'qty' => '4.000',
+        ]);
+    }
+
+    public function test_thc_correction_appends_reversal_and_corrected_rows_without_mutating_the_original(): void
+    {
+        [$origin, $destination, $material, $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive")->assertRedirect();
+        $original = DB::table('material_transaksis')
+            ->where('surat_jalan_id', $suratJalanId)
+            ->where('lokasi_tipe', 'warehouse')
+            ->where('qty_delta', '4.000')
+            ->first();
+
+        $this->actingAs($thc)
+            ->post("/warehouse/material-transactions/{$original->id}/correct", [
+                'qty_delta' => '3',
+                'reason' => 'Koreksi jumlah diterima',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('material_transaksis', [
+            'id' => $original->id,
+            'qty_delta' => '4.000',
+            'jenis_transaksi' => 'receipt',
+        ]);
+        $this->assertDatabaseHas('material_transaksis', [
+            'koreksi_dari_id' => $original->id,
+            'qty_delta' => '-4.000',
+            'jenis_transaksi' => 'koreksi',
+            'reason' => 'Koreksi jumlah diterima',
+            'actor_id' => $thc->id,
+        ]);
+        $this->assertDatabaseHas('material_transaksis', [
+            'koreksi_dari_id' => $original->id,
+            'qty_delta' => '3.000',
+            'jenis_transaksi' => 'koreksi',
+            'reason' => 'Koreksi jumlah diterima',
+            'actor_id' => $thc->id,
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $destination->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $destination->id,
+            'qty' => '3.000',
+        ]);
+    }
+
+    public function test_mitra_cannot_use_thc_only_surat_jalan_correction_endpoints(): void
+    {
+        [$origin, $destination, , $user] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+
+        $this->actingAs($user)
+            ->post("/warehouse/transfers/{$suratJalanId}/cancel")
+            ->assertForbidden();
+    }
+
     /** @return array{Warehouse, Warehouse, Material, User} */
     private function issueOrdinaryTransfer(): array
     {
@@ -241,9 +463,23 @@ class SuratJalanTransferTest extends TestCase
     private function userWithWarehousePermission(Mitra $mitra): User
     {
         $group = Grup::factory()->create();
-        $group->izins()->attach(Izin::factory()->create(['kode' => 'operate_warehouse']));
+        $group->izins()->attach(Izin::query()->firstOrCreate(
+            ['kode' => 'operate_warehouse'],
+            ['nama' => 'Operate warehouse'],
+        ));
 
         return User::factory()->create(['mitra_id' => $mitra->id, 'grup_id' => $group->id]);
+    }
+
+    private function thcUserWithWarehousePermission(): User
+    {
+        $group = Grup::factory()->create();
+        $group->izins()->attach(Izin::query()->firstOrCreate(
+            ['kode' => 'operate_warehouse'],
+            ['nama' => 'Operate warehouse'],
+        ));
+
+        return User::factory()->create(['mitra_id' => null, 'grup_id' => $group->id]);
     }
 
     private function asThc(Closure $callback): mixed

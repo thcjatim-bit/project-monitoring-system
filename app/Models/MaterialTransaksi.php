@@ -21,6 +21,7 @@ class MaterialTransaksi extends Model
         'project_id',
         'mitra_id',
         'surat_jalan_id',
+        'koreksi_dari_id',
         'reason',
         'catatan',
         'actor_id',
@@ -44,6 +45,11 @@ class MaterialTransaksi extends Model
     public function suratJalan(): BelongsTo
     {
         return $this->belongsTo(SuratJalan::class);
+    }
+
+    public function correctionSource(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'koreksi_dari_id');
     }
 
     public function serialNumber(): BelongsTo
