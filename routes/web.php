@@ -11,6 +11,7 @@ use App\Http\Controllers\ProjectPlanningController;
 use App\Http\Controllers\ProjectProgressController;
 use App\Http\Controllers\ProjectMaterialController;
 use App\Http\Controllers\ProjectPhotoController;
+use App\Http\Controllers\ProjectTimelineController;
 use App\Http\Controllers\ProjectStepController;
 use App\Http\Controllers\SuratJalanController;
 use App\Http\Middleware\SetTenantDatabaseContext;
@@ -65,6 +66,15 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->middleware('izin:read_project')->name('projects.show');
+    Route::get('/projects/{project}/timeline', [ProjectTimelineController::class, 'index'])
+        ->middleware('izin:read_project_timeline')
+        ->name('projects.timeline.index');
+    Route::post('/projects/{project}/comments', [ProjectTimelineController::class, 'store'])
+        ->middleware('izin:create_project_comment')
+        ->name('projects.comments.store');
+    Route::patch('/projects/{project}/comments/{timeline}', [ProjectTimelineController::class, 'update'])
+        ->middleware('izin:edit_project_comment')
+        ->name('projects.comments.update');
     Route::middleware(['thc', 'izin:manage_project_plan'])->group(function (): void {
         Route::post('/projects/{project}/rab-jasa', [ProjectPlanningController::class, 'storeRabJasa'])->name('projects.rab-jasa.store');
         Route::put('/projects/{project}/plan', [ProjectPlanningController::class, 'updatePlan'])->name('projects.plan.update');

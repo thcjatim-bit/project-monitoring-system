@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\ProjectBaseline;
 use App\Models\ProjectBaselineDay;
 use App\Models\ProjectRabJasa;
+use App\Models\ProjectTimeline;
 use App\Models\ProjectVariationOrder;
 use App\Models\ProjectVariationOrderItem;
 use App\Models\User;
@@ -100,6 +101,11 @@ class ProjectPlanningService
             }
 
             $project->update(['toc' => $tocDate]);
+            ProjectTimeline::recordSystem($project, $actor, 'toc_changed', [
+                'toc' => $tocDate,
+                'baseline_id' => $baseline->id,
+                'baseline_kind' => $baseline->kind,
+            ]);
 
             return $baseline->load('days');
         });
@@ -167,6 +173,10 @@ class ProjectPlanningService
                 ]);
             }
 
+            ProjectTimeline::recordSystem($project, $actor, 'variation_order_created', [
+                'variation_order_id' => $variation->id,
+            ]);
+
             return $variation->load('items');
         });
     }
@@ -205,6 +215,9 @@ class ProjectPlanningService
                 'status' => 'approved',
                 'disetujui_oleh' => $actor->id,
                 'disetujui_at' => now(),
+            ]);
+            ProjectTimeline::recordSystem($project, $actor, 'variation_order_approved', [
+                'variation_order_id' => $variation->id,
             ]);
 
             return $variation->fresh('items');

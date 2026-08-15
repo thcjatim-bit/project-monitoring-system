@@ -63,6 +63,17 @@
             .control-room__photo-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
             .control-room__photo-form select, .control-room__photo-form input { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
             .control-room__photo-help { color: #687684; font-size: .75rem; margin: 8px 0 0; }
+            .control-room__timeline-list { display: grid; gap: 10px; list-style: none; margin: 15px 0 0; padding: 0; }
+            .control-room__timeline-entry { border-left: 3px solid #cbd6dc; border-radius: 0 8px 8px 0; background: #f6f8f9; padding: 11px 13px; }
+            .control-room__timeline-entry--comment { border-color: #087f8c; }
+            .control-room__timeline-entry--internal_note { background: #fff7e8; border-color: #d79c38; }
+            .control-room__timeline-meta { color: #687684; display: flex; flex-wrap: wrap; font-size: .73rem; gap: 6px 12px; }
+            .control-room__timeline-body { color: #172033; line-height: 1.45; margin: 7px 0 0; white-space: pre-wrap; }
+            .control-room__timeline-edit { margin-top: 9px; }
+            .control-room__timeline-edit textarea, .control-room__comment-form textarea { border: 1px solid #cbd6dc; border-radius: 7px; display: block; min-height: 70px; padding: 8px; width: 100%; }
+            .control-room__comment-form { border-top: 1px solid #e8edef; display: grid; gap: 8px; margin-top: 16px; padding-top: 15px; }
+            .control-room__comment-form select { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px; }
+            .control-room__comment-options { align-items: center; color: #687684; display: flex; flex-wrap: wrap; font-size: .75rem; gap: 12px; }
             .control-room__step-list { display: grid; gap: 9px; grid-template-columns: repeat(11, minmax(90px, 1fr)); list-style: none; margin: 18px 0 0; overflow-x: auto; padding: 0; }
             .control-room__step { border-top: 3px solid #dce4e8; min-width: 90px; padding-top: 9px; }
             .control-room__step--active { border-color: #087f8c; }
@@ -238,7 +249,56 @@
             </article>
             <article class="control-room__panel" id="project-timeline">
                 <h2>Linimasa Gabungan</h2>
-                <div class="control-room__state" data-dashboard-state="empty">Belum ada aktivitas Project yang dapat ditampilkan.</div>
+                @if ($timeline->isEmpty())
+                    <div class="control-room__state" data-dashboard-state="empty">Belum ada aktivitas Project yang dapat ditampilkan.</div>
+                @else
+                    <ol class="control-room__timeline-list">
+                        @foreach ($timeline as $entry)
+                            <li class="control-room__timeline-entry control-room__timeline-entry--{{ $entry->type }}">
+                                <div class="control-room__timeline-meta">
+                                    <strong>{{ $entry->type === 'internal_note' ? 'Komentar Internal' : ($entry->type === 'comment' ? 'Komentar' : 'Log Sistem') }}</strong>
+                                    <span>{{ $entry->actor?->name ?? 'Sistem' }}</span>
+                                    <time datetime="{{ $entry->created_at?->toIso8601String() }}">{{ $entry->created_at?->format('d M Y H:i') }}</time>
+                                    @if ($entry->edited_at)<span>edited</span>@endif
+                                </div>
+                                @if ($entry->type === 'system_log')
+                                    <p class="control-room__timeline-body">{{ ucwords(str_replace('_', ' ', $entry->event_key ?? 'Aktivitas sistem')) }}</p>
+                                @else
+                                    <p class="control-room__timeline-body">{{ $entry->body }}</p>
+                                    @if (auth()->user()->hasIzin('edit_project_comment') && (auth()->id() === $entry->actor_id || auth()->user()->mitra_id === null))
+                                        <form class="control-room__timeline-edit" method="POST" action="{{ route('projects.comments.update', [$project, $entry->id]) }}">
+                                            @csrf
+                                            @method('PATCH')
+                                            <textarea name="body" required>{{ $entry->body }}</textarea>
+                                            <button class="control-room__button control-room__button--muted" type="submit">Simpan edit</button>
+                                        </form>
+                                    @endif
+                                @endif
+                            </li>
+                        @endforeach
+                    </ol>
+                @endif
+                @if (auth()->user()->hasIzin('create_project_comment'))
+                    <form class="control-room__comment-form" method="POST" action="{{ route('projects.comments.store', $project) }}">
+                        @csrf
+                        <textarea name="body" placeholder="Tulis komentar Project..." required></textarea>
+                        @if ($mentionableUsers->isNotEmpty())
+                            <label class="control-room__comment-options">Mention user
+                                <select name="mentions[]" multiple>
+                                    @foreach ($mentionableUsers as $mentionableUser)
+                                        <option value="{{ $mentionableUser->id }}">{{ $mentionableUser->name }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                        @endif
+                        <div class="control-room__comment-options">
+                            @if (auth()->user()->mitra_id === null)
+                                <label><input type="checkbox" name="internal" value="1"> Komentar Internal THC</label>
+                            @endif
+                            <button class="control-room__button" type="submit">Tambah komentar</button>
+                        </div>
+                    </form>
+                @endif
             </article>
             <article class="control-room__panel control-room__steps">
                 <h2>Step Project</h2>

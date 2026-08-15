@@ -62,6 +62,11 @@ class Project extends Model
         return $this->hasMany(ProjectTimeline::class);
     }
 
+    public function photos(): HasMany
+    {
+        return $this->hasMany(ProjectPhoto::class);
+    }
+
     public function steps(): HasMany
     {
         return $this->hasMany(ProjectStep::class)->orderBy('urutan');

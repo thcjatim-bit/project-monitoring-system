@@ -9,6 +9,7 @@ use App\Models\MaterialSn;
 use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
 use App\Models\Project;
+use App\Models\ProjectTimeline;
 use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
@@ -58,6 +59,9 @@ class SuratJalanService
             }
 
             $this->updateMaterialRequestStatus($suratJalan);
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_received', [
+                'status' => $suratJalan->status,
+            ]);
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
@@ -109,6 +113,9 @@ class SuratJalanService
                 'received_by' => $suratJalan->received_by ?? $actor->id,
                 'received_at' => $suratJalan->received_at ?? now(),
             ]);
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_resolved', [
+                'resolution' => $resolution,
+            ]);
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
@@ -132,6 +139,7 @@ class SuratJalanService
             }
 
             $suratJalan->update(['status' => 'dibatalkan']);
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_cancelled');
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
         });
@@ -185,6 +193,9 @@ class SuratJalanService
                     $item->update(['qty_diretur' => $this->formatQuantity((float) $item->qty_diretur + (float) $qty)]);
                 }
             }
+            $this->recordProjectEvent($return, $actor, 'surat_jalan_returned', [
+                'returned_from_id' => $original->id,
+            ]);
 
             return $return->fresh(['origin', 'destination', 'returnedFrom', 'items.material', 'items.serialNumber', 'items.drum']);
         });
@@ -284,6 +295,10 @@ class SuratJalanService
             $item = $this->createItem($suratJalan, $material, $origin, $itemData, $mitraId);
             $this->moveToTransit($actor, $suratJalan, $item, $origin, $mitraId);
         }
+
+        $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_issued', [
+            'status' => $suratJalan->status,
+        ]);
 
         return $suratJalan->load(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
     }
@@ -580,6 +595,19 @@ class SuratJalanService
     {
         if ((float) $qty <= 0.0) {
             throw ValidationException::withMessages(['items' => 'Jumlah harus lebih besar dari nol.']);
+        }
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function recordProjectEvent(SuratJalan $suratJalan, User $actor, string $eventKey, array $metadata = []): void
+    {
+        if ($suratJalan->project_id === null) {
+            return;
+        }
+
+        $project = Project::query()->find($suratJalan->project_id);
+        if ($project !== null) {
+            ProjectTimeline::recordSystem($project, $actor, $eventKey, $metadata + ['surat_jalan_id' => $suratJalan->id]);
         }
     }
 
