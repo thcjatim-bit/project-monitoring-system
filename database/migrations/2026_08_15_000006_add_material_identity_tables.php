@@ -60,6 +60,10 @@ return new class extends Migration
         }
 
         DB::unprepared(<<<'SQL'
+            GRANT SELECT ON material_stoks TO pms_app;
+            GRANT SELECT, INSERT, UPDATE ON material_sns, drums TO pms_app;
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES material_sns_id_seq, drums_id_seq TO pms_app;
+
             CREATE OR REPLACE FUNCTION apply_material_transaction() RETURNS trigger AS $fn$
             DECLARE next_qty numeric(18,3);
             BEGIN
