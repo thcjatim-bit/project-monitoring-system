@@ -9,6 +9,7 @@ use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectPlanningController;
 use App\Http\Controllers\ProjectProgressController;
+use App\Http\Controllers\ProjectStepController;
 use App\Http\Controllers\SuratJalanController;
 use App\Http\Middleware\SetTenantDatabaseContext;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -73,6 +74,7 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/projects/{project}/progress/{progress}/verify', [ProjectProgressController::class, 'verify'])->name('projects.progress.verify');
         Route::patch('/projects/{project}/progress/{progress}/reject', [ProjectProgressController::class, 'reject'])->name('projects.progress.reject');
     });
+    Route::patch('/projects/{project}/step', [ProjectStepController::class, 'update'])->middleware('izin:update_project_step')->name('projects.step.update');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->middleware('izin:update_project')->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->middleware('izin:delete_project')->name('projects.destroy');
     Route::post('/keluar', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

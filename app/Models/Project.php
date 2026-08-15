@@ -11,6 +11,13 @@ class Project extends Model
 {
     use HasMitraScope;
 
+    protected static function booted(): void
+    {
+        static::created(function (self $project): void {
+            ProjectStep::initialize($project);
+        });
+    }
+
     protected $fillable = ['id_project', 'nama', 'mitra_id', 'status', 'toc'];
 
     protected function casts(): array
@@ -48,5 +55,10 @@ class Project extends Model
     public function timelines(): HasMany
     {
         return $this->hasMany(ProjectTimeline::class);
+    }
+
+    public function steps(): HasMany
+    {
+        return $this->hasMany(ProjectStep::class)->orderBy('urutan');
     }
 }

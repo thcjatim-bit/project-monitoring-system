@@ -43,6 +43,13 @@
             .control-room__legend .plan { color: #9daab2; }
             .control-room__legend .actual { color: #087f8c; }
             .control-room__legend .pending { color: #d79c38; }
+            .control-room__steps { grid-column: 1 / -1; }
+            .control-room__step-list { display: grid; gap: 9px; grid-template-columns: repeat(11, minmax(90px, 1fr)); list-style: none; margin: 18px 0 0; overflow-x: auto; padding: 0; }
+            .control-room__step { border-top: 3px solid #dce4e8; min-width: 90px; padding-top: 9px; }
+            .control-room__step--active { border-color: #087f8c; }
+            .control-room__step--completed { border-color: #58a98c; }
+            .control-room__step-name { display: block; font-size: .75rem; font-weight: 750; }
+            .control-room__step-status { color: #687684; display: block; font-size: .68rem; margin-top: 4px; }
             @media (max-width: 780px) { .control-room { padding: 24px 16px 50px; } .control-room__header { align-items: flex-start; flex-direction: column; } .control-room__meta, .control-room__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .control-room__grid { grid-template-columns: 1fr; } }
         </style>
 
@@ -123,6 +130,21 @@
             <article class="control-room__panel" id="project-timeline">
                 <h2>Linimasa Gabungan</h2>
                 <div class="control-room__state" data-dashboard-state="empty">Belum ada aktivitas Project yang dapat ditampilkan.</div>
+            </article>
+            <article class="control-room__panel control-room__steps">
+                <h2>Step Project</h2>
+                <p>Step dapat dilompati atau dimundurkan; hanya tanggal aktual selesai yang dicatat.</p>
+                <ol class="control-room__step-list">
+                    @foreach ($steps as $step)
+                        <li class="control-room__step control-room__step--{{ $step->status }}">
+                            <span class="control-room__step-name">{{ $step->label() }}</span>
+                            <span class="control-room__step-status">
+                                {{ $step->status === 'completed' ? 'Selesai' : ($step->status === 'active' ? 'Aktif' : 'Belum selesai') }}
+                                @if ($step->completed_at) · {{ $step->completed_at->format('d M Y') }} @endif
+                            </span>
+                        </li>
+                    @endforeach
+                </ol>
             </article>
         </section>
     </main>
