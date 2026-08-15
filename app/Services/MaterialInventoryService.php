@@ -78,10 +78,10 @@ class MaterialInventoryService
             }
 
             $suffix = $parent->children()->lockForUpdate()->get()->count() + 1;
-        $child = Drum::query()->create([
-            'material_id' => $parent->material_id,
-            'mitra_id' => $warehouse->mitra_id,
-            'drum_id' => $parent->drum_id.'-'.$suffix,
+            $child = Drum::query()->create([
+                'material_id' => $parent->material_id,
+                'mitra_id' => $warehouse->mitra_id,
+                'drum_id' => $parent->drum_id.'-'.$suffix,
                 'panjang_awal' => $qty,
                 'sisa' => $qty,
                 'induk_drum_id' => $parent->id,

@@ -199,6 +199,7 @@ class SuratJalanService
             if ($serial === null || $serial->lokasi_tipe !== 'transit' || (int) $serial->lokasi_id !== $suratJalan->id) {
                 throw ValidationException::withMessages(['status' => 'Serial Number tidak berada di Transit Surat Jalan ini.']);
             }
+
             return;
         }
 
@@ -207,6 +208,7 @@ class SuratJalanService
             if ($drum === null || $drum->lokasi_tipe !== 'transit' || (int) $drum->lokasi_id !== $suratJalan->id) {
                 throw ValidationException::withMessages(['status' => 'Drum tidak berada di Transit Surat Jalan ini.']);
             }
+
             return;
         }
 
@@ -226,11 +228,17 @@ class SuratJalanService
     {
         $prefix = 'SJ-'.$tanggal->format('ym').'-';
         if (DB::getDriverName() === 'pgsql') {
-            DB::select("select pg_advisory_xact_lock(hashtext(?))", [$prefix]);
+            DB::select('select pg_advisory_xact_lock(hashtext(?))', [$prefix]);
         }
 
-        $last = SuratJalan::query()->where('nomor', 'like', $prefix.'%')->lockForUpdate()->pluck('nomor');
-        $sequence = $last->map(fn (string $number): int => (int) substr($number, -4))->max() + 1;
+        DB::table('surat_jalan_sequences')->insertOrIgnore([
+            'prefix' => $prefix,
+            'last_number' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('surat_jalan_sequences')->where('prefix', $prefix)->increment('last_number');
+        $sequence = (int) DB::table('surat_jalan_sequences')->where('prefix', $prefix)->value('last_number');
 
         return $prefix.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
     }

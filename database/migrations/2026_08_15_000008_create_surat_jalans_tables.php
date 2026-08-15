@@ -29,6 +29,12 @@ return new class extends Migration
             $table->index(['mitra_id', 'status']);
         });
 
+        Schema::create('surat_jalan_sequences', function (Blueprint $table): void {
+            $table->string('prefix')->primary();
+            $table->unsignedInteger('last_number')->default(0);
+            $table->timestamps();
+        });
+
         Schema::create('surat_jalan_items', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('surat_jalan_id')->constrained()->cascadeOnDelete();
@@ -219,6 +225,7 @@ return new class extends Migration
 
             GRANT SELECT, INSERT, UPDATE ON surat_jalans, surat_jalan_items TO pms_app;
             GRANT USAGE, SELECT, UPDATE ON SEQUENCE surat_jalans_id_seq, surat_jalan_items_id_seq TO pms_app;
+            GRANT SELECT, INSERT, UPDATE ON surat_jalan_sequences TO pms_app;
         SQL);
     }
 
@@ -251,6 +258,7 @@ return new class extends Migration
             $table->dropColumn('mitra_id');
         });
         Schema::dropIfExists('surat_jalan_items');
+        Schema::dropIfExists('surat_jalan_sequences');
         Schema::dropIfExists('surat_jalans');
     }
 };

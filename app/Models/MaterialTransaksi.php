@@ -20,6 +20,7 @@ class MaterialTransaksi extends Model
         'drum_id',
         'project_id',
         'mitra_id',
+        'surat_jalan_id',
         'reason',
         'catatan',
         'actor_id',
