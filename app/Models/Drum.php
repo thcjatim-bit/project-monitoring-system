@@ -10,6 +10,7 @@ class Drum extends Model
 {
     protected $fillable = [
         'material_id',
+        'mitra_id',
         'drum_id',
         'panjang_awal',
         'sisa',

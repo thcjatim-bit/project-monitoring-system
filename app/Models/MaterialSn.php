@@ -10,7 +10,7 @@ class MaterialSn extends Model
 {
     protected $table = 'material_sns';
 
-    protected $fillable = ['material_id', 'serial_number', 'lokasi_tipe', 'lokasi_id', 'status', 'project_id'];
+    protected $fillable = ['material_id', 'mitra_id', 'serial_number', 'lokasi_tipe', 'lokasi_id', 'status', 'project_id'];
 
     public function material(): BelongsTo
     {

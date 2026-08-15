@@ -40,6 +40,11 @@ class MaterialTransaksi extends Model
         return $this->belongsTo(User::class, 'actor_id');
     }
 
+    public function suratJalan(): BelongsTo
+    {
+        return $this->belongsTo(SuratJalan::class);
+    }
+
     public function serialNumber(): BelongsTo
     {
         return $this->belongsTo(MaterialSn::class, 'material_sn_id');

@@ -6,6 +6,7 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\SuratJalanController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -57,6 +58,10 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/warehouse/stock/receive', [MaterialInventoryController::class, 'receive'])->name('warehouse.stock.receive');
         Route::post('/warehouse/stock/issue', [MaterialInventoryController::class, 'issue'])->name('warehouse.stock.issue');
         Route::post('/warehouse/stock/drum-split', [MaterialInventoryController::class, 'splitDrum'])->name('warehouse.stock.drum-split');
+        Route::post('/warehouse/transfers', [SuratJalanController::class, 'issue'])->name('warehouse.transfers.issue');
+        Route::post('/warehouse/transfers/{suratJalan}/receive', [SuratJalanController::class, 'receive'])->name('warehouse.transfers.receive');
+        Route::get('/warehouse/transfers/{suratJalan}/print', [SuratJalanController::class, 'print'])->name('warehouse.transfers.print');
+        Route::get('/warehouse/transit', [SuratJalanController::class, 'transit'])->name('warehouse.transit');
     });
     Route::middleware('izin:read_material_request')->group(function (): void {
         Route::get('/material-requests', [MaterialRequestController::class, 'index'])->name('material-requests.index');

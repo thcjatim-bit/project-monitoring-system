@@ -78,9 +78,10 @@ class MaterialInventoryService
             }
 
             $suffix = $parent->children()->lockForUpdate()->get()->count() + 1;
-            $child = Drum::query()->create([
-                'material_id' => $parent->material_id,
-                'drum_id' => $parent->drum_id.'-'.$suffix,
+        $child = Drum::query()->create([
+            'material_id' => $parent->material_id,
+            'mitra_id' => $warehouse->mitra_id,
+            'drum_id' => $parent->drum_id.'-'.$suffix,
                 'panjang_awal' => $qty,
                 'sisa' => $qty,
                 'induk_drum_id' => $parent->id,
@@ -112,6 +113,7 @@ class MaterialInventoryService
 
         $serial = MaterialSn::query()->create([
             'material_id' => $material->id,
+            'mitra_id' => $warehouse->mitra_id,
             'serial_number' => $serialNumber,
             'lokasi_tipe' => 'warehouse',
             'lokasi_id' => $warehouse->id,
@@ -138,6 +140,7 @@ class MaterialInventoryService
 
         $drum = Drum::query()->create([
             'material_id' => $material->id,
+            'mitra_id' => $warehouse->mitra_id,
             'drum_id' => $drumId,
             'panjang_awal' => $qty,
             'sisa' => $qty,
