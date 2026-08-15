@@ -32,6 +32,7 @@
         .command-center__item a { font-weight: 700; text-decoration: none; }
         .command-center__item p { color: #526071; margin: 4px 0 0; }
         .command-center__item-status { background: #fef3c7; border-radius: 999px; color: #92400e; font-size: 0.82rem; padding: 5px 9px; white-space: nowrap; }
+        .command-center__item-status--danger { background: #fee2e2; color: #991b1b; }
         .command-center__state { border-radius: 10px; margin-top: 20px; padding: 16px; }
         .command-center__state--empty { background: #f8fafc; color: #526071; }
         .command-center__state--error { background: #fef2f2; color: #991b1b; }
@@ -182,7 +183,7 @@
                                     </p>
                                     <p>Terbit {{ $suratJalan->issued_at->format('d M Y H:i') }} · Umur Transit {{ $suratJalan->issued_at->diffInDays(now()) }} hari · Lebih dari 3 hari</p>
                                 </div>
-                                <span class="command-center__item-status">{{ $suratJalan->items->count() }} item</span>
+                                <span class="command-center__item-status command-center__item-status--danger">{{ $suratJalan->items->count() }} item</span>
                             </li>
                         @endforeach
                     </ul>
