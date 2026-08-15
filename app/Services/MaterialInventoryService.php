@@ -206,7 +206,7 @@ class MaterialInventoryService
 
     private function issueOrdinary(User $actor, Warehouse $warehouse, int $materialId, string $qty, string $reason): MaterialTransaksi
     {
-        $stock = $warehouse->stocks()->where('material_id', $materialId)->lockForUpdate()->value('qty');
+        $stock = $warehouse->stocks()->where('material_id', $materialId)->value('qty');
         if ($stock === null || (float) $stock + 0.0005 < (float) $qty) {
             throw ValidationException::withMessages(['qty' => 'Saldo material tidak mencukupi.']);
         }
