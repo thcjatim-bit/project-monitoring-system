@@ -185,7 +185,6 @@ class SuratJalanService
             ->where('material_id', $material->id)
             ->where('lokasi_tipe', 'warehouse')
             ->where('lokasi_id', $origin->id)
-            ->lockForUpdate()
             ->first();
         if ($stock === null || (float) $stock->qty + 0.0005 < (float) $qty) {
             throw ValidationException::withMessages(['items' => 'Saldo material tidak mencukupi di Warehouse asal.']);
@@ -217,7 +216,6 @@ class SuratJalanService
             ->where('material_id', $item->material_id)
             ->where('lokasi_tipe', 'transit')
             ->where('lokasi_id', $suratJalan->id)
-            ->lockForUpdate()
             ->first();
         if ($stock === null || (float) $stock->qty !== (float) $item->qty) {
             throw ValidationException::withMessages(['status' => 'Saldo Transit tidak sesuai dengan isi Surat Jalan.']);
