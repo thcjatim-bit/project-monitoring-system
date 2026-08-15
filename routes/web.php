@@ -10,6 +10,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectPlanningController;
 use App\Http\Controllers\ProjectProgressController;
 use App\Http\Controllers\ProjectMaterialController;
+use App\Http\Controllers\ProjectPhotoController;
 use App\Http\Controllers\ProjectStepController;
 use App\Http\Controllers\SuratJalanController;
 use App\Http\Middleware\SetTenantDatabaseContext;
@@ -79,6 +80,12 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/projects/{project}/rab-material', [ProjectMaterialController::class, 'store'])
         ->middleware(['thc', 'izin:manage_project_material'])
         ->name('projects.rab-material.store');
+    Route::post('/projects/{project}/photos', [ProjectPhotoController::class, 'store'])
+        ->middleware('izin:upload_project_photo')
+        ->name('projects.photos.store');
+    Route::get('/projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'show'])
+        ->middleware('izin:read_project')
+        ->name('projects.photos.show');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->middleware('izin:update_project')->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->middleware('izin:delete_project')->name('projects.destroy');
     Route::post('/keluar', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Models\Material;
 use App\Models\Project;
+use App\Models\ProjectPhoto;
 use App\Models\ProjectStep;
 use Carbon\CarbonInterface;
 
@@ -33,6 +34,7 @@ class ProjectControlRoomQuery
             'timeline' => [],
             'material' => $material,
             'materials' => Material::query()->with('unit')->where('aktif', true)->orderBy('nama')->get(),
+            'photos' => ProjectPhoto::query()->with(['step', 'uploader'])->where('project_id', $project->id)->latest()->get(),
         ];
     }
 }

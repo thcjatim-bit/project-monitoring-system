@@ -55,6 +55,14 @@
             .control-room__material-form { align-items: end; border-top: 1px solid #e8edef; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 16px; }
             .control-room__material-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
             .control-room__material-form select, .control-room__material-form input { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
+            .control-room__photos { grid-column: 1 / -1; }
+            .control-room__photo-list { display: grid; gap: 8px; list-style: none; margin: 15px 0 0; padding: 0; }
+            .control-room__photo-list a { color: #087f8c; font-weight: 700; text-decoration: none; }
+            .control-room__photo-list small { color: #687684; display: block; margin-top: 3px; }
+            .control-room__photo-form { align-items: end; border-top: 1px solid #e8edef; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 16px; }
+            .control-room__photo-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
+            .control-room__photo-form select, .control-room__photo-form input { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
+            .control-room__photo-help { color: #687684; font-size: .75rem; margin: 8px 0 0; }
             .control-room__step-list { display: grid; gap: 9px; grid-template-columns: repeat(11, minmax(90px, 1fr)); list-style: none; margin: 18px 0 0; overflow-x: auto; padding: 0; }
             .control-room__step { border-top: 3px solid #dce4e8; min-width: 90px; padding-top: 9px; }
             .control-room__step--active { border-color: #087f8c; }
@@ -192,6 +200,42 @@
                     </form>
                 @endif
             </article>
+            <article class="control-room__panel control-room__photos" id="project-photos">
+                <h2>Foto Pekerjaan</h2>
+                <p>Bukti lapangan terikat pada Project dan Step. Status sinkronisasi tidak mengubah akses terhadap file aplikasi.</p>
+                @if ($photos->isEmpty())
+                    <div class="control-room__state">Belum ada Foto Pekerjaan untuk Project ini.</div>
+                @else
+                    <ul class="control-room__photo-list">
+                        @foreach ($photos as $photo)
+                            <li>
+                                <a href="{{ route('projects.photos.show', [$project, $photo->id]) }}">{{ $photo->original_name }}</a>
+                                <small>{{ $photo->step->label() }} · {{ $photo->created_at?->format('d M Y H:i') }} · Sync: {{ $photo->sync_status }}</small>
+                                @if ($photo->sync_status === 'failed' && $photo->sync_error)
+                                    <small role="alert">{{ $photo->sync_error }}</small>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+                @if (auth()->user()->hasIzin('upload_project_photo'))
+                    <form class="control-room__photo-form" data-photo-upload method="POST" action="{{ route('projects.photos.store', $project) }}" enctype="multipart/form-data">
+                        @csrf
+                        <label>Step
+                            <select name="step" required>
+                                @foreach ($steps as $step)
+                                    <option value="{{ $step->step }}">{{ $step->label() }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label>Foto JPEG
+                            <input data-photo-input type="file" name="photos[]" accept="image/jpeg,.jpg,.jpeg" multiple required>
+                        </label>
+                        <button class="control-room__button" type="submit">Unggah Foto</button>
+                    </form>
+                    <p class="control-room__photo-help">Maksimal 10 foto per unggahan, 5 MB mentah per foto. Browser mengompres ke maksimal 1920×1080.</p>
+                @endif
+            </article>
             <article class="control-room__panel" id="project-timeline">
                 <h2>Linimasa Gabungan</h2>
                 <div class="control-room__state" data-dashboard-state="empty">Belum ada aktivitas Project yang dapat ditampilkan.</div>
@@ -213,4 +257,54 @@
             </article>
         </section>
     </main>
+    <script>
+        (() => {
+            const form = document.querySelector('[data-photo-upload]');
+            const input = form?.querySelector('[data-photo-input]');
+            if (!form || !input) return;
+
+            const maxWidth = 1920;
+            const maxHeight = 1080;
+            const maxBytes = 5 * 1024 * 1024;
+
+            const resizeToJpeg = (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(reader.error || new Error('Foto tidak dapat dibaca.'));
+                reader.onload = () => {
+                    const image = new Image();
+                    image.onerror = () => reject(new Error('Foto JPEG tidak valid.'));
+                    image.onload = () => {
+                        const ratio = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+                        canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+                        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((blob) => {
+                            if (!blob) return reject(new Error('Foto gagal dikompres.'));
+                            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+                        }, 'image/jpeg', 0.82);
+                    };
+                    image.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            form.addEventListener('submit', async (event) => {
+                if (form.dataset.compressed === 'true') return;
+                event.preventDefault();
+                const files = Array.from(input.files || []);
+                if (files.length > 10 || files.some((file) => file.size > maxBytes || file.type !== 'image/jpeg')) {
+                    input.setCustomValidity('Pilih maksimal 10 JPEG dengan ukuran mentah maksimal 5 MB per foto.');
+                    input.reportValidity();
+                    return;
+                }
+                input.setCustomValidity('');
+                const transfer = new DataTransfer();
+                for (const file of files) transfer.items.add(await resizeToJpeg(file));
+                input.files = transfer.files;
+                form.dataset.compressed = 'true';
+                form.submit();
+            });
+        })();
+    </script>
 </x-layouts.app>
