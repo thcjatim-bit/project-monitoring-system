@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Drum;
 use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Material;
@@ -197,6 +198,24 @@ class MaterialInventoryTest extends TestCase
 
         $this->assertDatabaseCount('drums', 1);
         $this->assertDatabaseCount('material_transaksis', 1);
+    }
+
+    public function test_database_rejects_a_drum_remaining_length_outside_its_initial_length(): void
+    {
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create());
+        $material = Material::factory()->create(['jenis' => 'drum_kabel']);
+        $drum = $this->asThc(fn () => Drum::query()->create([
+            'material_id' => $material->id,
+            'drum_id' => 'DRM-00044',
+            'panjang_awal' => '100',
+            'sisa' => '100',
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $warehouse->id,
+        ]));
+
+        $this->expectException(QueryException::class);
+
+        $this->asThc(fn () => DB::table('drums')->where('id', $drum->id)->update(['sisa' => '101']));
     }
 
     public function test_warehouse_officer_can_receive_and_issue_serialised_material_by_serial_number(): void

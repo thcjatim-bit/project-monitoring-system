@@ -88,7 +88,7 @@ class MaterialInventoryService
                 'lokasi_id' => $warehouse->id,
             ]);
 
-            $parent->update(['sisa' => (string) ((float) $parent->sisa - (float) $qty)]);
+            $parent->decrement('sisa', $qty);
             $this->record($actor, $warehouse, $parent->material_id, '-'.$qty, $reason, null, $parent->id, 'drum_split');
             $this->record($actor, $warehouse, $parent->material_id, $qty, $reason, null, $child->id, 'drum_split');
 
@@ -199,7 +199,7 @@ class MaterialInventoryService
             throw ValidationException::withMessages(['qty' => 'Sisa meter drum tidak mencukupi.']);
         }
 
-        $drum->update(['sisa' => (string) ((float) $drum->sisa - (float) $qty)]);
+        $drum->decrement('sisa', $qty);
 
         return $this->record($actor, $warehouse, $material->id, '-'.$qty, $reason, null, $drum->id);
     }
