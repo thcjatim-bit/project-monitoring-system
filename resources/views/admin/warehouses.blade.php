@@ -7,7 +7,7 @@
         <button>Simpan Warehouse</button>
     </form>
     @foreach($warehouses as $warehouse)
-        <section><h2>{{ $warehouse->nama }} ({{ $warehouse->kode }})</h2>
+        <section id="warehouse-{{ $warehouse->id }}"><h2>{{ $warehouse->nama }} ({{ $warehouse->kode }})</h2>
             <form method="POST" action="{{ route('admin.warehouses.update', $warehouse) }}">
                 @csrf @method('PATCH')
                 <input name="kode" value="{{ $warehouse->kode }}" required><input name="nama" value="{{ $warehouse->nama }}" required>

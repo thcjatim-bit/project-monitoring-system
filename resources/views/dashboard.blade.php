@@ -35,6 +35,10 @@
         .command-center__item p { color: #526071; margin: 4px 0 0; }
         .command-center__item-status { background: #fef3c7; border-radius: 999px; color: #92400e; font-size: 0.82rem; padding: 5px 9px; white-space: nowrap; }
         .command-center__item-status--danger { background: #fee2e2; color: #991b1b; }
+        .command-center__item-status--success { background: #dcfce7; color: #166534; }
+        .command-center__facts { display: grid; gap: 5px 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
+        .command-center__fact { color: #526071; font-size: 0.92rem; }
+        .command-center__fact a { font-weight: 500; }
         .command-center__state { border-radius: 10px; margin-top: 20px; padding: 16px; }
         .command-center__state--empty { background: #f8fafc; color: #526071; }
         .command-center__state--error { background: #fef2f2; color: #991b1b; }
@@ -440,6 +444,108 @@
                     (() => {
                         const panel = document.getElementById('critical-stock-panel');
                         const loading = document.getElementById('critical-stock-loading');
+
+                        panel?.querySelectorAll('a').forEach((link) => {
+                            link.addEventListener('click', () => {
+                                if (link.target !== '_blank') {
+                                    loading.hidden = false;
+                                    panel.setAttribute('aria-busy', 'true');
+                                }
+                            });
+                        });
+                    })();
+                </script>
+            </section>
+        @endif
+
+        @if ($warehouseReadinessVisible)
+            @php
+                $canManageWarehouses = $warehouseReadinessPermissions['manage_warehouses'];
+                $canReadWarehouseStock = $warehouseReadinessPermissions['read_master_data'];
+                $canOperateWarehouseTransit = $warehouseReadinessPermissions['operate_warehouse'];
+                $canDeriveWarehouseStatus = $canManageWarehouses && $canReadWarehouseStock && $canOperateWarehouseTransit;
+                $warehouseReadinessSource = $canManageWarehouses
+                    ? route('admin.warehouses')
+                    : ($canReadWarehouseStock ? route('admin.materials') : route('warehouse.transit'));
+            @endphp
+            <section id="warehouse-readiness-panel" class="command-center__panel" aria-labelledby="warehouse-readiness-title" aria-busy="false">
+                <div class="command-center__panel-header">
+                    <div>
+                        <h2 id="warehouse-readiness-title">Kesiapan Warehouse</h2>
+                        <p>Fakta penugasan, stok kritis, dan Transit untuk Warehouse aktif dalam cakupan THC.</p>
+                    </div>
+                    @if ($canManageWarehouses)
+                        <a class="command-center__metric" href="{{ route('admin.warehouses') }}">
+                            <strong>{{ $warehouseReadiness->count() }}</strong>
+                            <span>Warehouse aktif</span>
+                        </a>
+                    @else
+                        <div class="command-center__metric">
+                            <strong>{{ $warehouseReadiness->count() }}</strong>
+                            <span>Warehouse aktif</span>
+                        </div>
+                    @endif
+                </div>
+
+                <div id="warehouse-readiness-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                    Memuat kesiapan Warehouse…
+                </div>
+
+                @if ($warehouseReadinessError)
+                    <div class="command-center__state command-center__state--error" data-dashboard-state="error" role="alert">
+                        {{ $warehouseReadinessError }}
+                        <a href="{{ $warehouseReadinessSource }}">Buka modul sumber</a> untuk mencoba lagi.
+                    </div>
+                @elseif ($warehouseReadiness->isEmpty())
+                    <div class="command-center__state command-center__state--empty" data-dashboard-state="empty">
+                        Belum ada Warehouse aktif dalam cakupan THC.
+                    </div>
+                @else
+                    <ul class="command-center__list" data-dashboard-state="ready">
+                        @foreach ($warehouseReadiness as $warehouse)
+                            <li id="warehouse-readiness-{{ $warehouse->id }}" class="command-center__item command-center__item--start">
+                                <div>
+                                    @if ($canManageWarehouses)
+                                        <a href="{{ route('admin.warehouses') }}#warehouse-{{ $warehouse->id }}">{{ $warehouse->nama }}</a>
+                                    @else
+                                        <strong>{{ $warehouse->nama }}</strong>
+                                    @endif
+                                    <p>{{ $warehouse->kode }} · Kepemilikan: {{ $warehouse->mitra?->nama ?? 'THC' }}</p>
+                                    <div class="command-center__facts">
+                                        @if ($canManageWarehouses)
+                                            <a class="command-center__fact" href="{{ route('admin.warehouses') }}#warehouse-{{ $warehouse->id }}">
+                                                Petugas Gudang aktif: {{ (int) $warehouse->active_petugas_count }}
+                                            </a>
+                                        @endif
+                                        @if ($canReadWarehouseStock)
+                                            <a class="command-center__fact" href="{{ route('admin.materials') }}">
+                                                Material kritis: {{ (int) $warehouse->critical_material_count }}
+                                            </a>
+                                        @endif
+                                        @if ($canOperateWarehouseTransit)
+                                            <a class="command-center__fact" href="{{ route('warehouse.transit') }}">
+                                                Transit aktif: {{ (int) $warehouse->active_transit_count }} · Terlambat: {{ (int) $warehouse->delayed_transit_count }}
+                                            </a>
+                                        @endif
+                                    </div>
+                                    @unless ($canDeriveWarehouseStatus)
+                                        <p>Status kesiapan memerlukan izin sumber Warehouse, stok, dan Transit.</p>
+                                    @endunless
+                                </div>
+                                @if ($canDeriveWarehouseStatus)
+                                    <span class="command-center__item-status {{ $warehouse->readiness_status === 'Siap' ? 'command-center__item-status--success' : 'command-center__item-status--danger' }}">
+                                        {{ $warehouse->readiness_status }}
+                                    </span>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                <script>
+                    (() => {
+                        const panel = document.getElementById('warehouse-readiness-panel');
+                        const loading = document.getElementById('warehouse-readiness-loading');
 
                         panel?.querySelectorAll('a').forEach((link) => {
                             link.addEventListener('click', () => {

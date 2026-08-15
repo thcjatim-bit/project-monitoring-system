@@ -21,8 +21,17 @@ class CommandCenterController extends Controller
         $transitError = null;
         $criticalStocks = collect();
         $criticalStockError = null;
+        $warehouseReadiness = collect();
+        $warehouseReadinessError = null;
         $activityFeed = collect();
         $activityFeedError = null;
+
+        $warehouseReadinessPermissions = [
+            'manage_warehouses' => $request->user()->hasIzin('manage_warehouses'),
+            'read_master_data' => $request->user()->hasIzin('read_master_data'),
+            'operate_warehouse' => $request->user()->hasIzin('operate_warehouse'),
+        ];
+        $warehouseReadinessVisible = in_array(true, $warehouseReadinessPermissions, true);
 
         try {
             $activityFeed = $commandCenterQuery->activityFeed($request->user());
@@ -76,6 +85,15 @@ class CommandCenterController extends Controller
             }
         }
 
+        if ($warehouseReadinessVisible) {
+            try {
+                $warehouseReadiness = $commandCenterQuery->warehouseReadiness($request->user());
+            } catch (Throwable $exception) {
+                report($exception);
+                $warehouseReadinessError = 'Kesiapan Warehouse belum dapat dimuat. Coba lagi atau buka modul sumbernya.';
+            }
+        }
+
         return view('dashboard', [
             'user' => $request->user(),
             'activeUserCounts' => $activeUserCounts,
@@ -88,6 +106,10 @@ class CommandCenterController extends Controller
             'transitError' => $transitError,
             'criticalStocks' => $criticalStocks,
             'criticalStockError' => $criticalStockError,
+            'warehouseReadiness' => $warehouseReadiness,
+            'warehouseReadinessError' => $warehouseReadinessError,
+            'warehouseReadinessVisible' => $warehouseReadinessVisible,
+            'warehouseReadinessPermissions' => $warehouseReadinessPermissions,
             'activityFeed' => $activityFeed,
             'activityFeedError' => $activityFeedError,
         ]);
