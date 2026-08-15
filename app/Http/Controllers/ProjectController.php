@@ -26,7 +26,7 @@ class ProjectController extends Controller
 
     public function show(Project $project, ProjectControlRoomQuery $query): View
     {
-        return view('projects.show', $query->for($project));
+        return view('projects.show', $query->for($project, request()->query('as_of')));
     }
 
     public function store(Request $request): RedirectResponse

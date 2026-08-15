@@ -3,14 +3,18 @@
 namespace App\Queries;
 
 use App\Models\Project;
+use Carbon\CarbonInterface;
 
 class ProjectControlRoomQuery
 {
+    public function __construct(private ProjectCurveQuery $curveQuery) {}
+
     /** @return array{project: Project, kpis: array<string, mixed>, steps: array<int, mixed>, timeline: array<int, mixed>, material: array<string, mixed>} */
-    public function for(Project $project): array
+    public function for(Project $project, CarbonInterface|string|null $asOf = null): array
     {
         return [
             'project' => $project->loadMissing('mitra'),
+            'curve' => $this->curveQuery->calculate($project, $asOf),
             'kpis' => [
                 'verified_progress' => null,
                 'spi' => null,

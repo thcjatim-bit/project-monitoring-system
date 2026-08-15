@@ -24,7 +24,26 @@
             .control-room__panel h2 { color: #15324b; font-size: 1.08rem; margin: 0 0 8px; }
             .control-room__panel p { color: #687684; line-height: 1.5; margin: 0 0 15px; }
             .control-room__state { align-items: center; background: #f6f8f9; border-radius: 10px; color: #687684; display: flex; min-height: 92px; padding: 16px; }
-            @media (max-width: 780px) { .control-room { padding: 24px 16px 50px; } .control-room__header { align-items: flex-start; flex-direction: column; } .control-room__meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .control-room__grid { grid-template-columns: 1fr; } }
+            .control-room__kpis { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
+            .control-room__kpi { background: #fff; border: 1px solid #dce4e8; border-radius: 12px; padding: 16px; }
+            .control-room__kpi-label { color: #687684; display: block; font-size: .74rem; }
+            .control-room__kpi-value { color: #15324b; display: block; font-size: 1.55rem; font-weight: 800; letter-spacing: -.04em; margin-top: 5px; }
+            .control-room__kpi-note { color: #687684; display: block; font-size: .76rem; margin-top: 4px; }
+            .control-room__kpi--green .control-room__kpi-value { color: #11664f; }
+            .control-room__kpi--yellow .control-room__kpi-value { color: #a86314; }
+            .control-room__kpi--red .control-room__kpi-value { color: #b34444; }
+            .control-room__chart { min-height: 260px; overflow: hidden; }
+            .control-room__chart svg { display: block; height: 230px; width: 100%; }
+            .control-room__chart-grid { stroke: #e8edef; stroke-width: 1; }
+            .control-room__chart-plan { fill: none; stroke: #9daab2; stroke-dasharray: 5 5; stroke-width: 2; }
+            .control-room__chart-actual { fill: none; stroke: #087f8c; stroke-linecap: round; stroke-linejoin: round; stroke-width: 4; }
+            .control-room__chart-pending { fill: none; stroke: #d79c38; stroke-dasharray: 3 6; stroke-linecap: round; stroke-width: 3; }
+            .control-room__legend { color: #687684; display: flex; flex-wrap: wrap; font-size: .74rem; gap: 12px; margin-top: 5px; }
+            .control-room__legend span::before { background: currentColor; content: ""; display: inline-block; height: 3px; margin: 0 5px 3px 0; width: 17px; }
+            .control-room__legend .plan { color: #9daab2; }
+            .control-room__legend .actual { color: #087f8c; }
+            .control-room__legend .pending { color: #d79c38; }
+            @media (max-width: 780px) { .control-room { padding: 24px 16px 50px; } .control-room__header { align-items: flex-start; flex-direction: column; } .control-room__meta, .control-room__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .control-room__grid { grid-template-columns: 1fr; } }
         </style>
 
         <a class="control-room__back" href="{{ route('projects.index') }}">← Kembali ke daftar Project</a>
@@ -46,11 +65,60 @@
             <div><dt>Akses</dt><dd>Read Project</dd></div>
         </dl>
 
+        <section class="control-room__kpis" aria-label="KPI Project">
+            <article class="control-room__kpi">
+                <span class="control-room__kpi-label">Realisasi jasa verified</span>
+                <strong class="control-room__kpi-value">{{ number_format($curve['verified_percent'], 2, '.', '') }}%</strong>
+                <span class="control-room__kpi-note">Pending shadow: {{ number_format($curve['pending_percent'], 2, '.', '') }}%</span>
+            </article>
+            <article class="control-room__kpi control-room__kpi--{{ $curve['spi_status'] }}">
+                <span class="control-room__kpi-label">SPI terhadap baseline berlaku</span>
+                <strong class="control-room__kpi-value">{{ $curve['spi_label'] }}</strong>
+                <span class="control-room__kpi-note">Rencana: {{ number_format($curve['plan_percent'], 2, '.', '') }}% per {{ $curve['as_of'] }}</span>
+            </article>
+            <article class="control-room__kpi">
+                <span class="control-room__kpi-label">Kesiapan material</span>
+                <strong class="control-room__kpi-value">Terpisah</strong>
+                <span class="control-room__kpi-note">Tidak dicampur ke bobot Kurva S</span>
+            </article>
+        </section>
+
         <section class="control-room__grid" aria-label="Ringkasan Project Control Room">
             <article class="control-room__panel">
-                <h2>Ringkasan kendali</h2>
-                <p>KPI jasa, Kurva S, Step, aktivitas, dan kesiapan material dirakit dari read model Project.</p>
-                <div class="control-room__state" role="status">Data kendali belum memiliki rencana atau progres terverifikasi.</div>
+                <h2>Kurva S dan SPI</h2>
+                <p>Baseline berlaku: {{ $curve['revised_baseline'] ? 'Revised Baseline' : ($curve['original_baseline'] ? 'Original Baseline' : 'Belum tersedia') }}. Nilai pending tidak masuk Realisasi.</p>
+                <div class="control-room__chart" role="img" aria-label="Kurva S baseline, realisasi verified, dan pending">
+                    @php
+                        $chartDates = collect($curve['baseline_series'])->pluck('date')
+                            ->merge(collect($curve['verified_series'])->pluck('date'))
+                            ->merge(collect($curve['pending_series'])->pluck('date'))
+                            ->unique()->sort()->values();
+                        $chartPoint = function (array $series) use ($chartDates): string {
+                            $values = collect($series)->keyBy('date');
+                            $lastIndex = max(1, $chartDates->count() - 1);
+                            return $chartDates->map(function (string $date, int $index) use ($values, $lastIndex): ?string {
+                                $point = $values->get($date);
+                                return $point === null ? null : (string) (20 + (600 * $index / $lastIndex)).','. (210 - (1.7 * (float) $point['percent']));
+                            })->filter()->implode(' ');
+                        };
+                    @endphp
+                    @if ($chartDates->isEmpty())
+                        <div class="control-room__state">Belum ada titik baseline atau progres untuk diplot.</div>
+                    @else
+                        <svg viewBox="0 0 640 230" preserveAspectRatio="none">
+                            <line class="control-room__chart-grid" x1="20" y1="40" x2="620" y2="40" />
+                            <line class="control-room__chart-grid" x1="20" y1="125" x2="620" y2="125" />
+                            <line class="control-room__chart-grid" x1="20" y1="210" x2="620" y2="210" />
+                            <polyline class="control-room__chart-plan" points="{{ $chartPoint($curve['baseline_series']) }}" />
+                            <polyline class="control-room__chart-actual" points="{{ $chartPoint($curve['verified_series']) }}" />
+                            <polyline class="control-room__chart-pending" points="{{ $chartPoint($curve['pending_series']) }}" />
+                        </svg>
+                        <div class="control-room__legend"><span class="plan">Baseline</span><span class="actual">Verified</span><span class="pending">Pending shadow</span></div>
+                    @endif
+                </div>
+                @if ($curve['overdue'])
+                    <p role="alert">Project melewati TOC; sumbu waktu diperpanjang sampai {{ $curve['x_axis_end'] }}@if ($curve['baseline_flat_after_toc']) dan baseline mendatar di 100%@endif.</p>
+                @endif
             </article>
             <article class="control-room__panel" id="project-timeline">
                 <h2>Linimasa Gabungan</h2>
