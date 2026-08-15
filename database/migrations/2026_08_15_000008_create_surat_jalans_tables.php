@@ -27,6 +27,7 @@ return new class extends Migration
             $table->text('catatan')->nullable();
             $table->timestamps();
             $table->index(['mitra_id', 'status']);
+            $table->unique(['id', 'mitra_id']);
         });
 
         Schema::create('surat_jalan_sequences', function (Blueprint $table): void {
@@ -37,14 +38,18 @@ return new class extends Migration
 
         Schema::create('surat_jalan_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('surat_jalan_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('surat_jalan_id');
             $table->foreignId('mitra_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('material_id')->constrained()->restrictOnDelete();
-            $table->foreignId('material_sn_id')->nullable()->constrained('material_sns')->restrictOnDelete();
-            $table->foreignId('drum_id')->nullable()->constrained('drums')->restrictOnDelete();
+            $table->unsignedBigInteger('material_sn_id')->nullable();
+            $table->unsignedBigInteger('drum_id')->nullable();
             $table->decimal('qty', 18, 3);
             $table->timestamps();
             $table->index(['mitra_id', 'surat_jalan_id']);
+            $table->foreign(['surat_jalan_id', 'mitra_id'])
+                ->references(['id', 'mitra_id'])
+                ->on('surat_jalans')
+                ->cascadeOnDelete();
         });
 
         Schema::table('material_stoks', function (Blueprint $table): void {
@@ -53,14 +58,34 @@ return new class extends Migration
 
         Schema::table('material_sns', function (Blueprint $table): void {
             $table->foreignId('mitra_id')->nullable()->after('material_id')->constrained()->nullOnDelete();
+            $table->unique(['id', 'mitra_id']);
         });
 
         Schema::table('drums', function (Blueprint $table): void {
             $table->foreignId('mitra_id')->nullable()->after('material_id')->constrained()->nullOnDelete();
+            $table->unique(['id', 'mitra_id']);
+        });
+
+        Schema::table('surat_jalan_items', function (Blueprint $table): void {
+            $table->foreign(['material_sn_id', 'mitra_id'])
+                ->references(['id', 'mitra_id'])
+                ->on('material_sns')
+                ->restrictOnDelete();
+            $table->foreign(['drum_id', 'mitra_id'])
+                ->references(['id', 'mitra_id'])
+                ->on('drums')
+                ->restrictOnDelete();
         });
 
         Schema::table('material_transaksis', function (Blueprint $table): void {
-            $table->foreignId('surat_jalan_id')->nullable()->after('mitra_id')->constrained()->nullOnDelete();
+            $table->unsignedBigInteger('surat_jalan_id')->nullable()->after('mitra_id');
+        });
+
+        Schema::table('material_transaksis', function (Blueprint $table): void {
+            $table->foreign(['surat_jalan_id', 'mitra_id'])
+                ->references(['id', 'mitra_id'])
+                ->on('surat_jalans')
+                ->nullOnDelete();
         });
 
         if (DB::getDriverName() !== 'pgsql') {
@@ -241,15 +266,23 @@ return new class extends Migration
             SQL);
         }
 
+        Schema::table('surat_jalan_items', function (Blueprint $table): void {
+            $table->dropForeign(['material_sn_id', 'mitra_id']);
+            $table->dropForeign(['drum_id', 'mitra_id']);
+            $table->dropForeign(['surat_jalan_id', 'mitra_id']);
+        });
+
         Schema::table('material_transaksis', function (Blueprint $table): void {
-            $table->dropForeign(['surat_jalan_id']);
+            $table->dropForeign(['surat_jalan_id', 'mitra_id']);
             $table->dropColumn('surat_jalan_id');
         });
         Schema::table('drums', function (Blueprint $table): void {
+            $table->dropUnique(['id', 'mitra_id']);
             $table->dropForeign(['mitra_id']);
             $table->dropColumn('mitra_id');
         });
         Schema::table('material_sns', function (Blueprint $table): void {
+            $table->dropUnique(['id', 'mitra_id']);
             $table->dropForeign(['mitra_id']);
             $table->dropColumn('mitra_id');
         });
