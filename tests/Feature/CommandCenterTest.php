@@ -238,8 +238,8 @@ class CommandCenterTest extends TestCase
             [$origin, $destination] = $this->warehousesFor($mitra);
             $material = Material::factory()->create(['nama' => 'Kabel FO']);
             $thc = $this->userWithPermissions(null, 'read_dashboard', 'operate_warehouse');
-            $older = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 11:59:59', 'SJ-OLD');
-            $boundary = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 12:00:00', 'SJ-BOUNDARY');
+            $older = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-16 23:59:59', 'SJ-OLD');
+            $boundary = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 00:00:00', 'SJ-BOUNDARY');
 
             $response = $this->actingAs($thc)
                 ->get('/dashboard')
