@@ -35,7 +35,7 @@ class CommandCenterTest extends TestCase
     public function test_mitra_with_read_dashboard_is_forbidden_from_the_command_center(): void
     {
         $mitra = Mitra::factory()->create();
-        $user = $this->userWithPermissions($mitra->id, 'read_dashboard');
+        $user = $this->userWithPermissions($mitra->id, 'read_dashboard', 'operate_warehouse', 'read_master_data');
 
         $this->actingAs($user)
             ->get('/dashboard')
@@ -210,6 +210,25 @@ class CommandCenterTest extends TestCase
             ->assertOk()
             ->assertDontSee('Transit terlambat')
             ->assertDontSee('Stok kritis');
+    }
+
+    public function test_command_center_inventory_panels_follow_their_source_permissions(): void
+    {
+        $transitReader = $this->userWithPermissions(null, 'read_dashboard', 'operate_warehouse');
+
+        $this->actingAs($transitReader)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Transit terlambat')
+            ->assertDontSee('Stok kritis');
+
+        $stockReader = $this->userWithPermissions(null, 'read_dashboard', 'read_master_data');
+
+        $this->actingAs($stockReader)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Transit terlambat')
+            ->assertSee('Stok kritis');
     }
 
     public function test_command_center_uses_read_only_queue_and_detail_links(): void
