@@ -8,12 +8,13 @@
             <input name="nama" placeholder="Nama" required>
             <select name="unit_id" required>@foreach($units as $unit)<option value="{{ $unit->id }}">{{ $unit->nama }}</option>@endforeach</select>
             <select name="jenis"><option value="biasa">Biasa</option><option value="ber_sn">Ber-SN</option><option value="drum_kabel">Drum kabel</option></select>
+            <label>Ambang minimum <input name="ambang_minimum" type="number" min="0" step="0.001" placeholder="Kosong = belum dikonfigurasi"></label>
             <button>Simpan</button>
         </form>
     @endif
     <ul>
         @foreach($materials as $material)
-            <li>
+            <li id="material-{{ $material->id }}">
                 @if (auth()->user()->mitra_id === null && auth()->user()->hasIzin('manage_materials'))
                     <form method="POST" action="{{ route('admin.materials.update', $material) }}">
                         @csrf @method('PATCH')
@@ -22,6 +23,7 @@
                         @if(!$material->unit->aktif)<span>Unit saat ini {{ $material->unit->nama }} (nonaktif); pilih pengganti aktif.</span>@endif
                         <select name="unit_id" required>@foreach($units as $unit)<option value="{{ $unit->id }}" @selected($material->unit_id === $unit->id)>{{ $unit->nama }}</option>@endforeach</select>
                         <select name="jenis"><option value="biasa" @selected($material->jenis === 'biasa')>Biasa</option><option value="ber_sn" @selected($material->jenis === 'ber_sn')>Ber-SN</option><option value="drum_kabel" @selected($material->jenis === 'drum_kabel')>Drum kabel</option></select>
+                        <label>Ambang minimum <input name="ambang_minimum" type="number" min="0" step="0.001" value="{{ $material->ambang_minimum }}" placeholder="Kosong = belum dikonfigurasi"></label>
                         <button>Simpan perubahan</button>
                     </form>
                     @if($material->aktif)

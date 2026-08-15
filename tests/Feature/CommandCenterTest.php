@@ -6,9 +6,15 @@ use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Material;
 use App\Models\MaterialRequest;
+use App\Models\MaterialTransaksi;
 use App\Models\Mitra;
-use App\Support\TenantDatabaseContext;
+use App\Models\SuratJalan;
+use App\Models\SuratJalanItem;
 use App\Models\User;
+use App\Models\Warehouse;
+use App\Services\MaterialInventoryService;
+use App\Support\TenantDatabaseContext;
+use Carbon\CarbonImmutable;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
@@ -97,6 +103,115 @@ class CommandCenterTest extends TestCase
             ->assertDontSee('Request Material menunggu keputusan');
     }
 
+    public function test_command_center_marks_only_transit_older_than_three_days_as_delayed(): void
+    {
+        $now = CarbonImmutable::parse('2026-08-20 12:00:00');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $mitra = Mitra::factory()->create(['nama' => 'Mitra Transit']);
+            [$origin, $destination] = $this->warehousesFor($mitra);
+            $material = Material::factory()->create(['nama' => 'Kabel FO']);
+            $thc = $this->userWithPermissions(null, 'read_dashboard', 'operate_warehouse');
+            $older = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 11:59:59', 'SJ-OLD');
+            $boundary = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 12:00:00', 'SJ-BOUNDARY');
+
+            $this->actingAs($thc)
+                ->get('/dashboard')
+                ->assertOk()
+                ->assertSee('Transit terlambat')
+                ->assertSee($older->nomor)
+                ->assertSee($origin->nama.' → '.$destination->nama)
+                ->assertSee('Lebih dari 3 hari')
+                ->assertSee('href="'.route('warehouse.transfers.print', $older).'"', false)
+                ->assertDontSee($boundary->nomor);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_thc_can_set_and_change_a_material_minimum_threshold_through_master_data(): void
+    {
+        $material = Material::factory()->create();
+        $thc = $this->userWithPermissions(null, 'manage_materials');
+
+        $this->actingAs($thc)
+            ->patch('/admin/materials/'.$material->id, [
+                'kode' => $material->kode,
+                'nama' => $material->nama,
+                'unit_id' => $material->unit_id,
+                'jenis' => $material->jenis,
+                'ambang_minimum' => '10',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('materials', ['id' => $material->id, 'ambang_minimum' => '10.000']);
+
+        $this->actingAs($thc)
+            ->patch('/admin/materials/'.$material->id, [
+                'kode' => $material->kode,
+                'nama' => $material->nama,
+                'unit_id' => $material->unit_id,
+                'jenis' => $material->jenis,
+                'ambang_minimum' => '4',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('materials', ['id' => $material->id, 'ambang_minimum' => '4.000']);
+    }
+
+    public function test_command_center_uses_warehouse_balance_for_all_material_types_and_excludes_transit(): void
+    {
+        $warehouse = $this->asThc(fn () => Warehouse::factory()->create(['nama' => 'Warehouse THC']));
+        $ordinary = Material::factory()->create(['nama' => 'Material Biasa', 'ambang_minimum' => '10']);
+        $serialised = Material::factory()->create(['nama' => 'Material Ber-SN', 'jenis' => 'ber_sn', 'ambang_minimum' => '2']);
+        $drum = Material::factory()->create(['nama' => 'Material Drum', 'jenis' => 'drum_kabel', 'ambang_minimum' => '100']);
+        $actor = $this->userWithPermissions(null, 'operate_warehouse', 'read_dashboard', 'read_master_data');
+
+        $this->asThc(function () use ($actor, $warehouse, $ordinary, $serialised, $drum): void {
+            $service = app(MaterialInventoryService::class);
+            $service->receive($actor, $warehouse, $ordinary->id, '5', 'Stok awal');
+            $service->receive($actor, $warehouse, $serialised->id, '1', 'Stok awal', 'SN-COMMAND-001');
+            $service->receive($actor, $warehouse, $drum->id, '100', 'Stok awal', null, 'DRM-COMMAND-001');
+
+            MaterialTransaksi::query()->create([
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $ordinary->id,
+                'jenis_transaksi' => 'transfer',
+                'lokasi_tipe' => 'transit',
+                'lokasi_id' => 999,
+                'qty_delta' => '10',
+                'mitra_id' => null,
+                'reason' => 'Transit belum tiba',
+                'actor_id' => $actor->id,
+            ]);
+        });
+
+        $this->actingAs($actor)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Stok kritis')
+            ->assertSee('Material Biasa')
+            ->assertSee('Material Ber-SN')
+            ->assertSee('Material Drum')
+            ->assertSee('5.000')
+            ->assertSee('1.000')
+            ->assertSee('100.000')
+            ->assertSee('Warehouse THC')
+            ->assertSee('href="'.route('admin.materials').'#material-'.$ordinary->id.'"', false);
+    }
+
+    public function test_command_center_hides_inventory_panels_without_their_source_permissions(): void
+    {
+        $thc = $this->userWithPermissions(null, 'read_dashboard');
+
+        $this->actingAs($thc)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Transit terlambat')
+            ->assertDontSee('Stok kritis');
+    }
+
     public function test_command_center_uses_read_only_queue_and_detail_links(): void
     {
         [$submitted] = $this->createSubmittedRequest();
@@ -149,6 +264,45 @@ class CommandCenterTest extends TestCase
         } finally {
             app(TenantDatabaseContext::class)->set(null, false);
         }
+    }
+
+    /** @return array{Warehouse, Warehouse} */
+    private function warehousesFor(Mitra $mitra): array
+    {
+        return $this->asThc(fn (): array => [
+            Warehouse::factory()->create(['mitra_id' => $mitra->id, 'nama' => 'Warehouse Asal']),
+            Warehouse::factory()->create(['mitra_id' => $mitra->id, 'nama' => 'Warehouse Tujuan']),
+        ]);
+    }
+
+    private function createIssuedTransfer(
+        Warehouse $origin,
+        Warehouse $destination,
+        Material $material,
+        string $issuedAt,
+        string $number,
+    ): SuratJalan {
+        return $this->asThc(function () use ($origin, $destination, $material, $issuedAt, $number): SuratJalan {
+            $suratJalan = SuratJalan::query()->create([
+                'nomor' => $number,
+                'tanggal' => substr($issuedAt, 0, 10),
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'mitra_id' => $origin->mitra_id,
+                'issued_by' => User::query()->whereNull('mitra_id')->firstOrFail()->id,
+                'issued_at' => $issuedAt,
+                'status' => 'terbit',
+                'pengirim' => 'Petugas Gudang',
+            ]);
+            SuratJalanItem::query()->create([
+                'surat_jalan_id' => $suratJalan->id,
+                'mitra_id' => $origin->mitra_id,
+                'material_id' => $material->id,
+                'qty' => 1,
+            ]);
+
+            return $suratJalan;
+        });
     }
 
     /** @return array{MaterialRequest, User} */

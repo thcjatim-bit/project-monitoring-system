@@ -13,11 +13,11 @@ class Material extends Model
     /** @use HasFactory<MaterialFactory> */
     use HasFactory;
 
-    protected $fillable = ['kode', 'nama', 'unit_id', 'jenis', 'aktif'];
+    protected $fillable = ['kode', 'nama', 'unit_id', 'jenis', 'ambang_minimum', 'aktif'];
 
     protected function casts(): array
     {
-        return ['aktif' => 'boolean'];
+        return ['aktif' => 'boolean', 'ambang_minimum' => 'decimal:3'];
     }
 
     public function stocks(): HasMany
