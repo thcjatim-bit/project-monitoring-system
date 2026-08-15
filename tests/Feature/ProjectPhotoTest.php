@@ -29,7 +29,7 @@ class ProjectPhotoTest extends TestCase
         $this->actingAs($user)
             ->post(route('projects.photos.store', $project), [
                 'step' => 'survey',
-                'photos' => [UploadedFile::fake()->image('survey.jpg', 800, 600)->size(120)],
+                'photos' => [$this->jpeg('survey.jpg')],
             ])
             ->assertRedirect(route('projects.show', $project));
 
@@ -66,12 +66,12 @@ class ProjectPhotoTest extends TestCase
             ->from(route('projects.show', $project))
             ->post(route('projects.photos.store', $project), [
                 'step' => 'survey',
-                'photos' => [UploadedFile::fake()->image('large.jpg')->size(5121)],
+                'photos' => [UploadedFile::fake()->create('large.jpg', 5121, 'image/jpeg')],
             ])
             ->assertRedirect(route('projects.show', $project))
             ->assertSessionHasErrors('photos.0');
 
-        $photos = collect(range(1, 11))->map(fn (int $number) => UploadedFile::fake()->image("photo-{$number}.jpg"))->all();
+        $photos = collect(range(1, 11))->map(fn (int $number) => UploadedFile::fake()->create("photo-{$number}.jpg", 1, 'image/jpeg'))->all();
         $this->actingAs($user)
             ->from(route('projects.show', $project))
             ->post(route('projects.photos.store', $project), ['step' => 'survey', 'photos' => $photos])
@@ -96,7 +96,7 @@ class ProjectPhotoTest extends TestCase
         $this->actingAs($userA)
             ->post(route('projects.photos.store', $projectB), [
                 'step' => 'survey',
-                'photos' => [UploadedFile::fake()->image('survey.jpg')],
+                'photos' => [$this->jpeg('survey.jpg')],
             ])
             ->assertNotFound();
     }
@@ -111,7 +111,7 @@ class ProjectPhotoTest extends TestCase
         $this->actingAs($user)
             ->post(route('projects.photos.store', $project), [
                 'step' => 'survey',
-                'photos' => [UploadedFile::fake()->image('survey.jpg')],
+                'photos' => [$this->jpeg('survey.jpg')],
             ])
             ->assertForbidden();
     }
@@ -123,6 +123,11 @@ class ProjectPhotoTest extends TestCase
             'nama' => 'Project Photo',
             'mitra_id' => $mitra->id,
         ]));
+    }
+
+    private function jpeg(string $name): UploadedFile
+    {
+        return UploadedFile::fake()->createWithContent($name, base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AX//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AX//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8Qf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8Qf//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8Qf//Z', true));
     }
 
     private function userWith(Mitra $mitra, string ...$permissions): User
