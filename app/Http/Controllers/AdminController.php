@@ -94,6 +94,7 @@ class AdminController extends Controller
             'nama' => ['required', 'string', 'max:255'],
             'unit_id' => ['required', Rule::exists('units', 'id')->where('aktif', true)],
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
+            'ambang_minimum' => ['nullable', 'numeric', 'min:0'],
         ]);
         Material::create($data);
 
@@ -109,6 +110,7 @@ class AdminController extends Controller
                 fn ($query) => $query->where('aktif', true)->orWhere('id', $material->unit_id)
             )],
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
+            'ambang_minimum' => ['nullable', 'numeric', 'min:0'],
         ]);
         $material->update($data);
 

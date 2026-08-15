@@ -20,6 +20,7 @@
         .command-center__nav a { border-radius: 6px; padding: 7px 4px; text-decoration: none; }
         .command-center__nav a[aria-current="page"] { background: #e0f2fe; font-weight: 700; padding-left: 9px; padding-right: 9px; }
         .command-center__panel { background: #fff; border: 1px solid #dbe2ea; border-radius: 14px; box-shadow: 0 8px 24px rgb(23 32 51 / 6%); padding: 22px; }
+        .command-center > .command-center__panel + .command-center__panel { margin-top: 20px; }
         .command-center__panel-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
         .command-center__panel h2 { margin: 0 0 5px; font-size: 1.25rem; }
         .command-center__panel-header p { color: #526071; margin: 0; }
@@ -35,6 +36,7 @@
         .command-center__state--empty { background: #f8fafc; color: #526071; }
         .command-center__state--error { background: #fef2f2; color: #991b1b; }
         .command-center__state--loading { background: #f0f9ff; color: #155e75; }
+        .command-center__item--start { align-items: flex-start; }
         @media (max-width: 680px) {
             .command-center { padding: 24px 14px 36px; }
             .command-center__header, .command-center__panel-header, .command-center__item { align-items: stretch; flex-direction: column; }
@@ -125,6 +127,138 @@
                     (() => {
                         const panel = document.getElementById('material-request-panel');
                         const loading = document.getElementById('command-center-loading');
+
+                        panel?.querySelectorAll('a').forEach((link) => {
+                            link.addEventListener('click', () => {
+                                if (link.target !== '_blank') {
+                                    loading.hidden = false;
+                                    panel.setAttribute('aria-busy', 'true');
+                                }
+                            });
+                        });
+                    })();
+                </script>
+            </section>
+        @endif
+
+        @if ($user->hasIzin('operate_warehouse'))
+            <section id="delayed-transit-panel" class="command-center__panel" aria-labelledby="delayed-transit-title" aria-busy="false">
+                <div class="command-center__panel-header">
+                    <div>
+                        <h2 id="delayed-transit-title">Transit terlambat</h2>
+                        <p>Surat Jalan berstatus <strong>terbit</strong> yang lebih dari 3 hari berdasarkan waktu terbit.</p>
+                    </div>
+                    <a class="command-center__metric" href="{{ route('warehouse.transit') }}">
+                        <strong>{{ $delayedTransits->count() }}</strong>
+                        <span>Transit terlambat</span>
+                    </a>
+                </div>
+
+                <div id="delayed-transit-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                    Memuat antrean Transit…
+                </div>
+
+                @if ($transitError)
+                    <div class="command-center__state command-center__state--error" data-dashboard-state="error" role="alert">
+                        {{ $transitError }}
+                        <a href="{{ route('warehouse.transit') }}">Buka modul Transit</a> untuk mencoba lagi.
+                    </div>
+                @elseif ($delayedTransits->isEmpty())
+                    <div class="command-center__state command-center__state--empty" data-dashboard-state="empty">
+                        Tidak ada Transit yang melewati batas 3 hari.
+                    </div>
+                @else
+                    <ul class="command-center__list" data-dashboard-state="ready">
+                        @foreach ($delayedTransits as $suratJalan)
+                            <li class="command-center__item command-center__item--start" data-surat-jalan-id="{{ $suratJalan->id }}">
+                                <div>
+                                    <a href="{{ route('warehouse.transfers.print', $suratJalan) }}">{{ $suratJalan->nomor }}</a>
+                                    <p>{{ $suratJalan->origin->nama }} → {{ $suratJalan->destination->nama }}</p>
+                                    <p>Warehouse: {{ $suratJalan->origin->nama }} → {{ $suratJalan->destination->nama }}</p>
+                                    <p>Material:
+                                        @foreach ($suratJalan->items as $item)
+                                            {{ $item->material->nama }} ({{ $item->qty }} {{ $item->material->unit->nama }})@if (!$loop->last), @endif
+                                        @endforeach
+                                    </p>
+                                    <p>Terbit {{ $suratJalan->issued_at->format('d M Y H:i') }} · Umur Transit {{ $suratJalan->issued_at->diffInDays(now()) }} hari · Lebih dari 3 hari</p>
+                                </div>
+                                <span class="command-center__item-status">{{ $suratJalan->items->count() }} item</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                <script>
+                    (() => {
+                        const panel = document.getElementById('delayed-transit-panel');
+                        const loading = document.getElementById('delayed-transit-loading');
+
+                        panel?.querySelectorAll('a').forEach((link) => {
+                            link.addEventListener('click', () => {
+                                if (link.target !== '_blank') {
+                                    loading.hidden = false;
+                                    panel.setAttribute('aria-busy', 'true');
+                                }
+                            });
+                        });
+                    })();
+                </script>
+            </section>
+        @endif
+
+        @if ($user->hasIzin('read_master_data'))
+            <section id="critical-stock-panel" class="command-center__panel" aria-labelledby="critical-stock-title" aria-busy="false">
+                <div class="command-center__panel-header">
+                    <div>
+                        <h2 id="critical-stock-title">Stok kritis</h2>
+                        <p>Material dengan saldo aktual Warehouse pada atau di bawah ambang minimum positif.</p>
+                    </div>
+                    <a class="command-center__metric" href="{{ route('admin.materials') }}">
+                        <strong>{{ $criticalStocks->count() }}</strong>
+                        <span>Material kritis</span>
+                    </a>
+                </div>
+
+                <div id="critical-stock-loading" class="command-center__state command-center__state--loading" data-dashboard-state="loading" role="status" aria-live="polite" hidden>
+                    Memuat ringkasan stok…
+                </div>
+
+                @if ($criticalStockError)
+                    <div class="command-center__state command-center__state--error" data-dashboard-state="error" role="alert">
+                        {{ $criticalStockError }}
+                        <a href="{{ route('admin.materials') }}">Buka modul Material</a> untuk mencoba lagi.
+                    </div>
+                @elseif ($criticalStocks->isEmpty())
+                    <div class="command-center__state command-center__state--empty" data-dashboard-state="empty">
+                        Tidak ada Material dengan stok kritis. Material tanpa ambang minimum tidak dihitung.
+                    </div>
+                @else
+                    <ul class="command-center__list" data-dashboard-state="ready">
+                        @foreach ($criticalStocks as $material)
+                            <li class="command-center__item command-center__item--start" data-material-id="{{ $material->id }}">
+                                <div>
+                                    <a href="{{ route('admin.materials') }}#material-{{ $material->id }}">{{ $material->nama }}</a>
+                                    <p>{{ $material->kode }} · {{ ucfirst(str_replace('_', ' ', $material->jenis)) }}</p>
+                                    <p>Warehouse:
+                                        @forelse ($material->stocks as $stock)
+                                            {{ $stock->warehouse?->nama }}@if (!$loop->last), @endif
+                                        @empty
+                                            —
+                                        @endforelse
+                                    </p>
+                                </div>
+                                <span class="command-center__item-status">
+                                    {{ number_format((float) $material->actual_balance, 3, '.', '') }} {{ $material->unit->nama }} · minimum {{ number_format((float) $material->ambang_minimum, 3, '.', '') }}
+                                </span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                <script>
+                    (() => {
+                        const panel = document.getElementById('critical-stock-panel');
+                        const loading = document.getElementById('critical-stock-loading');
 
                         panel?.querySelectorAll('a').forEach((link) => {
                             link.addEventListener('click', () => {
