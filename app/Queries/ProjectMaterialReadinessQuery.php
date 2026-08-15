@@ -82,7 +82,7 @@ class ProjectMaterialReadinessQuery
                 'delivered' => $delivered,
                 'transit' => $transit,
                 'readiness_percent' => $required > 0 ? min(100, $delivered / $required * 100) : 0.0,
-                'request_ids' => $requestIds->all(),
+                'request_ids' => $requestIds,
                 'surat_jalan_ids' => $suratJalanIds,
             ];
         })->values();
