@@ -247,6 +247,7 @@ class CommandCenterTest extends TestCase
                 ->assertSee('Transit terlambat')
                 ->assertSee($older->nomor)
                 ->assertSee($origin->nama.' → '.$destination->nama)
+                ->assertSee('Umur Transit 4 hari')
                 ->assertSee('Lebih dari 3 hari')
                 ->assertSee('command-center__item-status--danger', false)
                 ->assertSee('href="'.route('warehouse.transfers.print', $older).'"', false);
