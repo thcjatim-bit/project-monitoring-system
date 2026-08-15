@@ -3,6 +3,7 @@
 namespace App\Queries;
 
 use App\Models\MaterialRequest;
+use App\Models\MaterialRequestItem;
 use App\Models\Project;
 use App\Models\ProjectRabMaterial;
 use App\Models\SuratJalan;
@@ -54,19 +55,25 @@ class ProjectMaterialReadinessQuery
         $requestIds = MaterialRequest::query()
             ->where('project_id', $project->id)
             ->pluck('id');
+        $requestIdsByMaterial = MaterialRequestItem::query()
+            ->whereIn('material_request_id', $requestIds)
+            ->whereIn('material_id', $requirements->pluck('material_id')->unique())
+            ->get(['material_id', 'material_request_id'])
+            ->groupBy('material_id');
         $linksByMaterial = SuratJalanItem::query()
             ->whereIn('surat_jalan_id', $suratJalanIds)
             ->whereIn('material_id', $requirements->pluck('material_id')->unique())
             ->get(['material_id', 'surat_jalan_id'])
             ->groupBy('material_id');
 
-        $items = $requirements->groupBy('material_id')->map(function ($lines, int|string $materialId) use ($quantities, $linksByMaterial, $requestIds): array {
+        $items = $requirements->groupBy('material_id')->map(function ($lines, int|string $materialId) use ($quantities, $linksByMaterial, $requestIdsByMaterial): array {
             $required = (float) $lines->sum('qty');
             $quantity = $quantities->get($materialId);
             $delivered = (float) ($quantity?->delivered_qty ?? 0);
             $transit = (float) ($quantity?->transit_qty ?? 0);
             $material = $lines->first()->material;
             $suratJalanIds = $linksByMaterial->get($materialId, collect())->pluck('surat_jalan_id')->unique()->values()->all();
+            $requestIds = $requestIdsByMaterial->get($materialId, collect())->pluck('material_request_id')->unique()->values()->all();
 
             return [
                 'material_id' => (int) $materialId,

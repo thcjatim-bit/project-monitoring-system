@@ -23,7 +23,20 @@ class ProjectControlRoomQuery
     {
         ProjectStep::initialize($project);
 
-        $material = $this->materialQuery->calculate($project);
+        $canReadMaterial = $viewer === null
+            || $viewer->hasIzin('read_project_material')
+            || $viewer->hasIzin('manage_project_material');
+        $material = $canReadMaterial
+            ? $this->materialQuery->calculate($project)
+            : [
+                'required' => 0.0,
+                'delivered' => 0.0,
+                'transit' => 0.0,
+                'available' => 0.0,
+                'readiness_percent' => null,
+                'state' => 'forbidden',
+                'items' => [],
+            ];
         $timeline = $viewer?->hasIzin('read_project_timeline')
             ? $this->timelineQuery->for($project, $viewer)
             : new Collection;
@@ -39,7 +52,9 @@ class ProjectControlRoomQuery
             'steps' => ProjectStep::query()->where('project_id', $project->id)->orderBy('urutan')->get(),
             'timeline' => $timeline,
             'material' => $material,
-            'materials' => Material::query()->with('unit')->where('aktif', true)->orderBy('nama')->get(),
+            'materials' => $viewer?->hasIzin('manage_project_material') || $viewer === null
+                ? Material::query()->with('unit')->where('aktif', true)->orderBy('nama')->get()
+                : new Collection,
             'photos' => ProjectPhoto::query()->with(['step', 'uploader'])->where('project_id', $project->id)->latest()->get(),
             'mentionableUsers' => $viewer?->hasIzin('mention_project_user')
                 ? $this->timelineQuery->mentionableUsers($project)

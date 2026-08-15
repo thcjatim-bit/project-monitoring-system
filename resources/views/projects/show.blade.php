@@ -115,8 +115,13 @@
             </article>
             <article class="control-room__kpi">
                 <span class="control-room__kpi-label">Kesiapan material</span>
-                <strong class="control-room__kpi-value">{{ number_format($material['readiness_percent'], 2, '.', '') }}%</strong>
-                <span class="control-room__kpi-note">Diterima / kebutuhan RAB Material</span>
+                @if ($material['state'] === 'forbidden')
+                    <strong class="control-room__kpi-value">Terbatas</strong>
+                    <span class="control-room__kpi-note">Izin material diperlukan</span>
+                @else
+                    <strong class="control-room__kpi-value">{{ number_format($material['readiness_percent'], 2, '.', '') }}%</strong>
+                    <span class="control-room__kpi-note">Diterima / kebutuhan RAB Material</span>
+                @endif
             </article>
         </section>
 
@@ -160,7 +165,9 @@
             <article class="control-room__panel control-room__materials" id="project-materials">
                 <h2>Kesiapan Material</h2>
                 <p>Material yang masih Transit tidak dihitung sebagai material siap pakai.</p>
-                @if ($material['state'] === 'empty')
+                @if ($material['state'] === 'forbidden')
+                    <div class="control-room__state">Data kesiapan material memerlukan izin baca modul material.</div>
+                @elseif ($material['state'] === 'empty')
                     <div class="control-room__state">Kebutuhan RAB Material belum disusun.</div>
                 @else
                     <div class="control-room__material-summary">

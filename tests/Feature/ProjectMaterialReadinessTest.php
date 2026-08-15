@@ -28,7 +28,7 @@ class ProjectMaterialReadinessTest extends TestCase
         $mitra = Mitra::factory()->create();
         $material = Material::factory()->create();
         $project = $this->projectFor($mitra);
-        $thc = $this->userWith(null, 'read_project', 'manage_project_material');
+        $thc = $this->userWith(null, 'read_project', 'read_project_material', 'manage_project_material');
 
         $this->actingAs($thc)
             ->post(route('projects.rab-material.store', $project), [
@@ -87,7 +87,7 @@ class ProjectMaterialReadinessTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $project = $this->projectFor($mitra);
-        $user = $this->userWith($mitra, 'read_project');
+        $user = $this->userWith($mitra, 'read_project', 'read_project_material');
 
         $this->actingAs($user)
             ->get(route('projects.show', $project))
@@ -115,6 +115,26 @@ class ProjectMaterialReadinessTest extends TestCase
             ->assertNotFound();
 
         $this->asThc(fn (): bool => ! ProjectRabMaterial::query()->exists());
+    }
+
+    public function test_material_panel_is_hidden_without_material_read_permission(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create();
+        $project = $this->projectFor($mitra);
+        $this->asThc(fn (): ProjectRabMaterial => ProjectRabMaterial::query()->create([
+            'mitra_id' => $mitra->id,
+            'project_id' => $project->id,
+            'material_id' => $material->id,
+            'qty' => 5,
+        ]));
+        $user = $this->userWith($mitra, 'read_project');
+
+        $this->actingAs($user)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('Terbatas')
+            ->assertDontSee($material->nama);
     }
 
     private function projectFor(Mitra $mitra): Project

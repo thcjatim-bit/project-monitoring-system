@@ -226,10 +226,13 @@ class ProjectPlanningService
 
     public function currentRabQuantity(ProjectRabJasa $rab): float
     {
-        return (float) $rab->qty + (float) ProjectVariationOrderItem::query()
+        $adjustments = ProjectVariationOrderItem::query()
             ->where('rab_jasa_id', $rab->id)
             ->where('status', 'applied')
+            ->when($rab->variation_order_id !== null, fn ($query) => $query->where('project_variation_order_id', '!=', $rab->variation_order_id))
             ->sum('quantity_delta');
+
+        return (float) $rab->qty + (float) $adjustments;
     }
 
     private function positiveQuantity(string|int|float $qty): string

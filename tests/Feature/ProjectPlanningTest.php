@@ -13,6 +13,7 @@ use App\Models\ProjectBaseline;
 use App\Models\ProjectRabJasa;
 use App\Models\ProjectVariationOrder;
 use App\Models\User;
+use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -138,6 +139,25 @@ class ProjectPlanningTest extends TestCase
         $this->assertSame('approved', $variation->fresh()->status);
     }
 
+    public function test_new_rab_line_created_by_variation_order_is_not_double_counted(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $job, $price] = $this->rabFixtureWithoutRab($mitra);
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->actingAs($thc)->post(route('projects.variation-orders.store', $project), [
+            'reason' => 'Pekerjaan tambahan',
+            'items' => [['harga_jasa_id' => $price->id, 'quantity_delta' => '3']],
+        ])->assertRedirect();
+        $variation = ProjectVariationOrder::query()->firstOrFail();
+        $this->actingAs($thc)
+            ->patch(route('projects.variation-orders.approve', [$project, $variation]))
+            ->assertRedirect();
+
+        $addedRab = ProjectRabJasa::query()->where('variation_order_id', $variation->id)->firstOrFail();
+        $this->assertSame(3.0, app(ProjectPlanningService::class)->currentRabQuantity($addedRab));
+    }
+
     public function test_project_planning_routes_require_thc_permission(): void
     {
         $mitra = Mitra::factory()->create();
@@ -180,6 +200,33 @@ class ProjectPlanningTest extends TestCase
         ])->assertRedirect();
 
         return [$project, $job, $price, ProjectRabJasa::query()->firstOrFail()];
+    }
+
+    /** @return array{Project, PekerjaanJasa, MitraHargaJasa} */
+    private function rabFixtureWithoutRab(Mitra $mitra): array
+    {
+        $project = $this->projectFor($mitra);
+        $job = $this->asThc(fn (): PekerjaanJasa => PekerjaanJasa::create([
+            'kode' => 'JASA-003',
+            'nama' => 'Pekerjaan Tambahan',
+            'aktif' => true,
+        ]));
+        $pks = $this->asThc(fn (): Pks => Pks::create([
+            'mitra_id' => $mitra->id,
+            'nomor' => 'PKS-003',
+            'tanggal_mulai' => '2026-01-01',
+            'tanggal_berakhir' => '2026-12-31',
+        ]));
+        $price = $this->asThc(fn (): MitraHargaJasa => MitraHargaJasa::create([
+            'mitra_id' => $mitra->id,
+            'pks_id' => $pks->id,
+            'pekerjaan_jasa_id' => $job->id,
+            'harga' => '125000.00',
+            'status' => 'disetujui',
+            'berlaku_mulai' => '2026-01-01',
+        ]));
+
+        return [$project, $job, $price];
     }
 
     private function projectFor(Mitra $mitra): Project

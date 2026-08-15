@@ -150,4 +150,51 @@ class PostgresIntegrationTest extends TestCase
         $this->assertFalse($privileges->can_update_stock);
         $this->assertTrue($privileges->can_insert_surat_jalan);
     }
+
+    public function test_project_control_room_tables_have_forced_rls_and_expected_policies(): void
+    {
+        $expected = [
+            'mitra_harga_jasas' => 'mitra_harga_jasa_tenant_isolation',
+            'pks' => 'pks_tenant_isolation',
+            'project_baseline_days' => 'project_baseline_day_tenant_isolation',
+            'project_baselines' => 'project_baseline_tenant_isolation',
+            'project_notifications' => 'project_notification_tenant_isolation',
+            'project_photos' => 'project_photo_tenant_isolation',
+            'project_progresses' => 'project_progress_tenant_isolation',
+            'project_rab_jasas' => 'project_rab_jasa_tenant_isolation',
+            'project_rab_materials' => 'project_rab_material_tenant_isolation',
+            'project_steps' => 'project_step_tenant_isolation',
+            'project_timeline_mentions' => 'project_timeline_mention_tenant_isolation',
+            'project_timelines' => 'project_timeline_tenant_isolation',
+            'project_variation_order_items' => 'project_variation_order_item_tenant_isolation',
+            'project_variation_orders' => 'project_variation_order_tenant_isolation',
+        ];
+        ksort($expected);
+
+        $tables = DB::table('pg_class as c')
+            ->join('pg_namespace as n', 'n.oid', '=', 'c.relnamespace')
+            ->where('n.nspname', 'public')
+            ->whereIn('c.relname', array_keys($expected))
+            ->where('c.relkind', 'r')
+            ->select(['c.relname', 'c.relrowsecurity', 'c.relforcerowsecurity'])
+            ->orderBy('c.relname')
+            ->get()
+            ->keyBy('relname');
+
+        $this->assertSame(array_keys($expected), $tables->keys()->all());
+        foreach ($tables as $table) {
+            $this->assertTrue($table->relrowsecurity);
+            $this->assertTrue($table->relforcerowsecurity);
+        }
+
+        $this->assertSame(
+            $expected,
+            DB::table('pg_policies')
+                ->where('schemaname', 'public')
+                ->whereIn('tablename', array_keys($expected))
+                ->pluck('policyname', 'tablename')
+                ->sortKeys()
+                ->all(),
+        );
+    }
 }
