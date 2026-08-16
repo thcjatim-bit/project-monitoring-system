@@ -24,8 +24,8 @@ class ProjectProgressTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         [$project, $rab] = $this->rabFixture($mitra);
-        $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'report_project_progress');
-        $thc = $this->userWithPermissions(null, 'read_project', 'verify_project_progress');
+        $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'read_project_progress', 'report_project_progress');
+        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_progress', 'verify_project_progress');
 
         $this->actingAs($mitraUser)
             ->post(route('projects.progress.store', $project), [
@@ -53,6 +53,77 @@ class ProjectProgressTest extends TestCase
             $this->assertDatabaseHas('project_progresses', ['status' => 'verified']);
             $this->assertDatabaseHas('project_timelines', ['event_key' => 'progress_verified']);
         });
+    }
+
+    public function test_thc_can_reject_pending_progress_with_a_reason_and_rejected_qty_becomes_available_again(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $rab] = $this->rabFixture($mitra);
+        $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'read_project_progress', 'report_project_progress');
+        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_progress', 'verify_project_progress');
+
+        $this->actingAs($mitraUser)
+            ->post(route('projects.progress.store', $project), [
+                'project_rab_jasa_id' => $rab->id,
+                'actual_date' => '2026-08-15',
+                'qty' => '6',
+            ])
+            ->assertRedirect();
+
+        $progressId = $this->asThc(fn (): int => (int) DB::table('project_progresses')->value('id'));
+
+        $this->actingAs($thc)
+            ->patch(route('projects.progress.reject', [$project, $progressId]), ['note' => 'Bukti pekerjaan belum lengkap.'])
+            ->assertRedirect(route('projects.show', $project));
+
+        $this->asThc(function () use ($progressId): void {
+            $this->assertDatabaseHas('project_progresses', [
+                'id' => $progressId,
+                'status' => 'rejected',
+                'verification_note' => 'Bukti pekerjaan belum lengkap.',
+            ]);
+            $this->assertDatabaseHas('project_timelines', [
+                'event_key' => 'progress_rejected',
+                'metadata->progress_id' => $progressId,
+            ]);
+        });
+
+        $this->actingAs($mitraUser)
+            ->post(route('projects.progress.store', $project), [
+                'project_rab_jasa_id' => $rab->id,
+                'actual_date' => '2026-08-16',
+                'qty' => '10',
+            ])
+            ->assertRedirect();
+    }
+
+    public function test_project_control_room_exposes_progress_submission_and_pending_decision_controls(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $rab] = $this->rabFixture($mitra);
+        $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'read_project_progress', 'report_project_progress');
+        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_progress', 'verify_project_progress');
+
+        $this->actingAs($mitraUser)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('Progres Jasa')
+            ->assertSee(route('projects.progress.store', $project), false)
+            ->assertSee('Ajukan progres jasa');
+
+        $this->actingAs($mitraUser)->post(route('projects.progress.store', $project), [
+            'project_rab_jasa_id' => $rab->id,
+            'actual_date' => '2026-08-15',
+            'qty' => '2',
+        ])->assertRedirect();
+        $progressId = $this->asThc(fn (): int => (int) DB::table('project_progresses')->value('id'));
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('Pending')
+            ->assertSee(route('projects.progress.verify', [$project, $progressId]), false)
+            ->assertSee(route('projects.progress.reject', [$project, $progressId]), false);
     }
 
     public function test_progress_cannot_exceed_remaining_rab_quantity(): void

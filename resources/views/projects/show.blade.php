@@ -1,6 +1,7 @@
 <x-layouts.app>
     @php
         $statusLabel = $project->status_project === 'selesai' ? 'Selesai' : 'Aktif';
+        $progressStatusLabels = ['pending' => 'Pending', 'verified' => 'Verified', 'rejected' => 'Ditolak'];
     @endphp
     <main class="control-room">
         <style>
@@ -40,6 +41,25 @@
             .control-room__chart-plan { fill: none; stroke: #9daab2; stroke-dasharray: 5 5; stroke-width: 2; }
             .control-room__chart-actual { fill: none; stroke: #087f8c; stroke-linecap: round; stroke-linejoin: round; stroke-width: 4; }
             .control-room__chart-pending { fill: none; stroke: #d79c38; stroke-dasharray: 3 6; stroke-linecap: round; stroke-width: 3; }
+            .control-room__progress { grid-column: 1 / -1; }
+            .control-room__progress-list { border-top: 1px solid #e8edef; display: grid; gap: 10px; list-style: none; margin: 15px 0 0; padding: 12px 0 0; }
+            .control-room__progress-row { align-items: flex-start; background: #f6f8f9; border-left: 3px solid #cbd6dc; border-radius: 0 8px 8px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: space-between; padding: 11px 13px; }
+            .control-room__progress-row--pending { border-color: #d79c38; }
+            .control-room__progress-row--verified { border-color: #58a98c; }
+            .control-room__progress-row--rejected { border-color: #b34444; }
+            .control-room__progress-title { color: #15324b; display: block; font-weight: 750; }
+            .control-room__progress-meta, .control-room__progress-note { color: #687684; display: block; font-size: .76rem; margin-top: 4px; }
+            .control-room__progress-status { border-radius: 999px; display: inline-block; font-size: .72rem; font-weight: 750; padding: 4px 8px; }
+            .control-room__progress-status--pending { background: #fff0d5; color: #a86314; }
+            .control-room__progress-status--verified { background: #dff3ed; color: #11664f; }
+            .control-room__progress-status--rejected { background: #fbe4e4; color: #9b3d3d; }
+            .control-room__progress-actions { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+            .control-room__progress-actions form, .control-room__progress-form { display: grid; gap: 7px; }
+            .control-room__progress-actions form { flex: 1 1 240px; }
+            .control-room__progress-form { align-items: end; border-top: 1px solid #e8edef; grid-template-columns: minmax(160px, 1fr) 150px 130px auto; margin-top: 18px; padding-top: 16px; }
+            .control-room__progress-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
+            .control-room__progress-form select, .control-room__progress-form input, .control-room__progress-actions textarea { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
+            .control-room__progress-actions textarea { min-height: 58px; width: 100%; }
             .control-room__legend { color: #687684; display: flex; flex-wrap: wrap; font-size: .74rem; gap: 12px; margin-top: 5px; }
             .control-room__legend span::before { background: currentColor; content: ""; display: inline-block; height: 3px; margin: 0 5px 3px 0; width: 17px; }
             .control-room__legend .plan { color: #9daab2; }
@@ -82,7 +102,7 @@
             .control-room__step--completed { border-color: #58a98c; }
             .control-room__step-name { display: block; font-size: .75rem; font-weight: 750; }
             .control-room__step-status { color: #687684; display: block; font-size: .68rem; margin-top: 4px; }
-            @media (max-width: 780px) { .control-room { padding: 24px 16px 50px; } .control-room__header { align-items: flex-start; flex-direction: column; } .control-room__meta, .control-room__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .control-room__grid { grid-template-columns: 1fr; } }
+            @media (max-width: 780px) { .control-room { padding: 24px 16px 50px; } .control-room__header { align-items: flex-start; flex-direction: column; } .control-room__meta, .control-room__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .control-room__grid { grid-template-columns: 1fr; } .control-room__progress-form { grid-template-columns: 1fr 1fr; } }
         </style>
 
         <a class="control-room__back" href="{{ route('projects.index') }}">← Kembali ke daftar Project</a>
@@ -93,6 +113,7 @@
                 <p class="control-room__subtitle">{{ $project->nama }}</p>
             </div>
             <div class="control-room__actions">
+                <a class="control-room__button control-room__button--muted" href="#project-progress">Progres</a>
                 <a class="control-room__button control-room__button--muted" href="#project-timeline">Linimasa</a>
             </div>
         </header>
@@ -174,6 +195,69 @@
                 </div>
                 @if ($curve['overdue'])
                     <p role="alert">Project melewati TOC; sumbu waktu diperpanjang sampai {{ $curve['x_axis_end'] }}@if ($curve['baseline_flat_after_toc']) dan baseline mendatar di 100%@endif.</p>
+                @endif
+            </article>
+            <article class="control-room__panel control-room__progress" id="project-progress">
+                <h2>Progres Jasa</h2>
+                @if (! $canReadProgress)
+                    <div class="control-room__state">Data Progres Jasa memerlukan izin baca progres.</div>
+                @else
+                    <p>Progres memakai tanggal aktual pekerjaan. Hanya status Verified yang masuk Realisasi; Pending tetap terlihat untuk ditindaklanjuti.</p>
+                    @if ($progresses->isEmpty())
+                        <div class="control-room__state">Belum ada Progres Jasa yang dilaporkan.</div>
+                    @else
+                        <ul class="control-room__progress-list">
+                            @foreach ($progresses as $progress)
+                                <li class="control-room__progress-row control-room__progress-row--{{ $progress->status }}">
+                                    <div>
+                                        <span class="control-room__progress-title">{{ $progress->rabJasa?->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa' }}</span>
+                                        <span class="control-room__progress-meta">{{ $progress->actual_date->format('d M Y') }} · Qty {{ number_format((float) $progress->qty, 3, '.', '') }} · Dilaporkan {{ $progress->reporter?->name ?? 'User' }}</span>
+                                        @if ($progress->verification_note)
+                                            <span class="control-room__progress-note">Catatan: {{ $progress->verification_note }}</span>
+                                        @endif
+                                    </div>
+                                    <span class="control-room__progress-status control-room__progress-status--{{ $progress->status }}">{{ $progressStatusLabels[$progress->status] ?? ucfirst($progress->status) }}</span>
+                                    @if ($progress->status === 'pending' && auth()->user()->mitra_id === null && auth()->user()->hasIzin('verify_project_progress'))
+                                        <div class="control-room__progress-actions">
+                                            <form method="POST" action="{{ route('projects.progress.verify', [$project, $progress->id]) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <textarea name="note" maxlength="1000" placeholder="Catatan verifikasi (opsional)"></textarea>
+                                                <button class="control-room__button" type="submit">Verifikasi progres</button>
+                                            </form>
+                                            <form method="POST" action="{{ route('projects.progress.reject', [$project, $progress->id]) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <textarea name="note" maxlength="1000" placeholder="Alasan penolakan" required></textarea>
+                                                <button class="control-room__button control-room__button--muted" type="submit">Tolak progres</button>
+                                            </form>
+                                        </div>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if (auth()->user()->hasIzin('report_project_progress') && $rabJasas->isNotEmpty())
+                        <form class="control-room__progress-form" method="POST" action="{{ route('projects.progress.store', $project) }}">
+                            @csrf
+                            <label>Pekerjaan Jasa
+                                <select name="project_rab_jasa_id" required>
+                                    @foreach ($rabJasas as $rabJasa)
+                                        <option value="{{ $rabJasa->id }}">{{ $rabJasa->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa' }} · RAB {{ number_format((float) $rabJasa->qty, 3, '.', '') }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label>Tanggal aktual
+                                <input type="date" name="actual_date" value="{{ now()->toDateString() }}" required>
+                            </label>
+                            <label>Qty progres
+                                <input type="number" name="qty" min="0.001" step="0.001" required>
+                            </label>
+                            <button class="control-room__button" type="submit">Ajukan progres jasa</button>
+                        </form>
+                    @elseif (auth()->user()->hasIzin('report_project_progress'))
+                        <div class="control-room__state">Belum ada RAB Jasa sebagai sumber Progres Jasa.</div>
+                    @endif
                 @endif
             </article>
             <article class="control-room__panel control-room__materials" id="project-materials">

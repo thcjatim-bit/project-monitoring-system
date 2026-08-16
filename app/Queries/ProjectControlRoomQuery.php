@@ -5,6 +5,8 @@ namespace App\Queries;
 use App\Models\Material;
 use App\Models\Project;
 use App\Models\ProjectPhoto;
+use App\Models\ProjectProgress;
+use App\Models\ProjectRabJasa;
 use App\Models\ProjectStep;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -26,6 +28,7 @@ class ProjectControlRoomQuery
         $canReadMaterial = $viewer === null
             || $viewer->hasIzin('read_project_material')
             || $viewer->hasIzin('manage_project_material');
+        $canReadProgress = $viewer === null || $viewer->hasIzin('read_project_progress');
         $material = $canReadMaterial
             ? $this->materialQuery->calculate($project)
             : [
@@ -40,10 +43,25 @@ class ProjectControlRoomQuery
         $timeline = $viewer?->hasIzin('read_project_timeline')
             ? $this->timelineQuery->for($project, $viewer)
             : new Collection;
+        $progresses = $canReadProgress
+            ? ProjectProgress::query()
+                ->where('project_id', $project->id)
+                ->with(['rabJasa.pekerjaanJasa', 'reporter', 'verifier'])
+                ->latest('actual_date')
+                ->latest('id')
+                ->get()
+            : new Collection;
+        $rabJasas = $canReadProgress
+            ? ProjectRabJasa::query()
+                ->where('project_id', $project->id)
+                ->with('pekerjaanJasa')
+                ->orderBy('id')
+                ->get()
+            : new Collection;
 
         return [
             'project' => $project->loadMissing('mitra'),
-            'curve' => $this->curveQuery->calculate($project, $asOf),
+            'curve' => $this->curveQuery->calculate($project, $asOf, $canReadProgress),
             'kpis' => [
                 'verified_progress' => null,
                 'spi' => null,
@@ -51,6 +69,9 @@ class ProjectControlRoomQuery
             ],
             'steps' => ProjectStep::query()->where('project_id', $project->id)->orderBy('urutan')->get(),
             'timeline' => $timeline,
+            'progresses' => $progresses,
+            'rabJasas' => $rabJasas,
+            'canReadProgress' => $canReadProgress,
             'material' => $material,
             'materials' => $viewer?->hasIzin('manage_project_material') || $viewer === null
                 ? Material::query()->with('unit')->where('aktif', true)->orderBy('nama')->get()
@@ -72,6 +93,7 @@ class ProjectControlRoomQuery
             'project' => $project->loadMissing('mitra'),
             'curve' => [
                 'as_of' => $today,
+                'grand_total_rab_jasa' => 0.0,
                 'verified_percent' => 0.0,
                 'pending_percent' => 0.0,
                 'plan_percent' => 0.0,
@@ -93,6 +115,9 @@ class ProjectControlRoomQuery
             ],
             'steps' => new Collection,
             'timeline' => new Collection,
+            'progresses' => new Collection,
+            'rabJasas' => new Collection,
+            'canReadProgress' => false,
             'material' => [
                 'required' => 0.0,
                 'delivered' => 0.0,

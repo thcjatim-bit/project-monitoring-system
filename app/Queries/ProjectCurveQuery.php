@@ -13,7 +13,7 @@ use Carbon\CarbonInterface;
 class ProjectCurveQuery
 {
     /** @return array<string, mixed> */
-    public function calculate(Project $project, CarbonInterface|string|null $asOf = null): array
+    public function calculate(Project $project, CarbonInterface|string|null $asOf = null, bool $includeProgress = true): array
     {
         $asOfDate = $asOf instanceof CarbonInterface
             ? CarbonImmutable::instance($asOf)
@@ -37,12 +37,14 @@ class ProjectCurveQuery
         }
         $grandTotal = max(0, round($grandTotal, 2));
 
-        $progresses = ProjectProgress::query()
-            ->where('project_id', $project->id)
-            ->whereIn('status', ['pending', 'verified'])
-            ->with('rabJasa')
-            ->orderBy('actual_date')
-            ->get();
+        $progresses = $includeProgress
+            ? ProjectProgress::query()
+                ->where('project_id', $project->id)
+                ->whereIn('status', ['pending', 'verified'])
+                ->with('rabJasa')
+                ->orderBy('actual_date')
+                ->get()
+            : collect();
         $verifiedByDate = [];
         $pendingByDate = [];
         foreach ($progresses as $progress) {
