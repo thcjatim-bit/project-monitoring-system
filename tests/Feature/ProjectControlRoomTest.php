@@ -23,7 +23,7 @@ class ProjectControlRoomTest extends TestCase
             'id_project' => 'PRJ-2608-0040',
             'nama' => 'Instalasi Site Utama',
             'mitra_id' => $mitra->id,
-            'status' => 'aktif',
+            'status_project' => 'selesai',
             'toc' => '2026-09-30',
         ]));
 
@@ -39,8 +39,17 @@ class ProjectControlRoomTest extends TestCase
             ->assertSee('PRJ-2608-0040')
             ->assertSee('Instalasi Site Utama')
             ->assertSee('Mitra Nusantara')
-            ->assertSee('Aktif')
+            ->assertSee('Selesai')
             ->assertSee('30 Sep 2026');
+
+        $this->actingAs($user)
+            ->get(route('projects.show', $project))
+            ->assertSee('href="'.route('projects.index').'"', false)
+            ->assertDontSee('href="'.route('dashboard').'"', false)
+            ->assertSee('data-control-room-state="loading"', false)
+            ->assertSee('Memuat Control Room', false)
+            ->assertSee('data-control-room-state="error"', false)
+            ->assertSee('Gagal memuat Control Room', false);
     }
 
     public function test_user_without_read_project_cannot_open_control_room_directly(): void

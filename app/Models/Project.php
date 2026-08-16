@@ -18,7 +18,7 @@ class Project extends Model
         });
     }
 
-    protected $fillable = ['id_project', 'nama', 'mitra_id', 'status', 'toc'];
+    protected $fillable = ['id_project', 'nama', 'mitra_id', 'status_project', 'toc'];
 
     protected function casts(): array
     {

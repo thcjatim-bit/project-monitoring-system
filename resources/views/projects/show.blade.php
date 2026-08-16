@@ -1,6 +1,6 @@
 <x-layouts.app>
     @php
-        $statusLabel = $project->status === 'selesai' ? 'Selesai' : 'Aktif';
+        $statusLabel = $project->status_project === 'selesai' ? 'Selesai' : 'Aktif';
     @endphp
     <main class="control-room">
         <style>
@@ -24,6 +24,8 @@
             .control-room__panel h2 { color: #15324b; font-size: 1.08rem; margin: 0 0 8px; }
             .control-room__panel p { color: #687684; line-height: 1.5; margin: 0 0 15px; }
             .control-room__state { align-items: center; background: #f6f8f9; border-radius: 10px; color: #687684; display: flex; min-height: 92px; padding: 16px; }
+            .control-room__state--error { background: #fef2f2; color: #991b1b; }
+            .control-room__state--loading { background: #f0f9ff; color: #155e75; }
             .control-room__kpis { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
             .control-room__kpi { background: #fff; border: 1px solid #dce4e8; border-radius: 12px; padding: 16px; }
             .control-room__kpi-label { color: #687684; display: block; font-size: .74rem; }
@@ -95,9 +97,16 @@
             </div>
         </header>
 
+        <div class="control-room__state control-room__state--loading" data-control-room-state="loading" role="status" aria-live="polite" hidden>
+            Memuat Control Room {{ $project->id_project }}…
+        </div>
+        <div class="control-room__state control-room__state--error" data-control-room-state="error" role="alert" hidden>
+            Gagal memuat Control Room {{ $project->id_project }}. Coba lagi atau kembali ke daftar Project.
+        </div>
+
         <dl class="control-room__meta">
             <div><dt>Mitra pemilik</dt><dd>{{ $project->mitra->nama }}</dd></div>
-            <div><dt>Status Project</dt><dd><span class="control-room__badge {{ $project->status === 'selesai' ? 'control-room__badge--done' : 'control-room__badge--active' }}">{{ $statusLabel }}</span></dd></div>
+            <div><dt>Status Project</dt><dd><span class="control-room__badge {{ $project->status_project === 'selesai' ? 'control-room__badge--done' : 'control-room__badge--active' }}">{{ $statusLabel }}</span></dd></div>
             <div><dt>TOC</dt><dd>{{ $project->toc?->format('d M Y') ?? 'Belum ditetapkan' }}</dd></div>
             <div><dt>Akses</dt><dd>Read Project</dd></div>
         </dl>

@@ -27,13 +27,24 @@
     </head>
     <body>
         @auth
+            @php
+                $authenticatedUser = auth()->user();
+                $canViewDashboard = $authenticatedUser->mitra_id === null && $authenticatedUser->hasIzin('read_dashboard');
+                $canViewProjects = $authenticatedUser->hasIzin('read_project');
+            @endphp
             <header class="app-shell__bar">
-                <a class="app-shell__brand" href="{{ route('dashboard') }}">PMS <span>THC</span></a>
+                @if ($canViewDashboard)
+                    <a class="app-shell__brand" href="{{ route('dashboard') }}">PMS <span>THC</span></a>
+                @elseif ($canViewProjects)
+                    <a class="app-shell__brand" href="{{ route('projects.index') }}">PMS <span>THC</span></a>
+                @else
+                    <span class="app-shell__brand">PMS <span>THC</span></span>
+                @endif
                 <nav class="app-shell__nav" aria-label="Navigasi utama">
-                    @if (auth()->user()->hasIzin('read_dashboard'))
+                    @if ($canViewDashboard)
                         <a href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>Dashboard</a>
                     @endif
-                    @if (auth()->user()->hasIzin('read_project'))
+                    @if ($canViewProjects)
                         <a href="{{ route('projects.index') }}" @if (request()->routeIs('projects.*')) aria-current="page" @endif>Project</a>
                     @endif
                     @if (auth()->user()->hasIzin('read_material_request'))
