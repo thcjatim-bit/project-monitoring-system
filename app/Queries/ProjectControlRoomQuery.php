@@ -18,7 +18,7 @@ class ProjectControlRoomQuery
         private ProjectTimelineQuery $timelineQuery,
     ) {}
 
-    /** @return array{project: Project, kpis: array<string, mixed>, steps: array<int, mixed>, timeline: array<int, mixed>, material: array<string, mixed>} */
+    /** @return array<string, mixed> */
     public function for(Project $project, CarbonInterface|string|null $asOf = null, ?User $viewer = null): array
     {
         ProjectStep::initialize($project);
@@ -59,6 +59,53 @@ class ProjectControlRoomQuery
             'mentionableUsers' => $viewer?->hasIzin('mention_project_user')
                 ? $this->timelineQuery->mentionableUsers($project)
                 : new Collection,
+            'controlRoomError' => false,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function errorState(Project $project): array
+    {
+        $today = now()->toDateString();
+
+        return [
+            'project' => $project->loadMissing('mitra'),
+            'curve' => [
+                'as_of' => $today,
+                'verified_percent' => 0.0,
+                'pending_percent' => 0.0,
+                'plan_percent' => 0.0,
+                'spi_label' => 'N/A',
+                'spi_status' => 'na',
+                'verified_series' => [],
+                'pending_series' => [],
+                'baseline_series' => [],
+                'original_baseline' => null,
+                'revised_baseline' => null,
+                'overdue' => false,
+                'baseline_flat_after_toc' => false,
+                'x_axis_end' => $today,
+            ],
+            'kpis' => [
+                'verified_progress' => null,
+                'spi' => null,
+                'material_readiness' => null,
+            ],
+            'steps' => new Collection,
+            'timeline' => new Collection,
+            'material' => [
+                'required' => 0.0,
+                'delivered' => 0.0,
+                'transit' => 0.0,
+                'available' => 0.0,
+                'readiness_percent' => null,
+                'state' => 'error',
+                'items' => [],
+            ],
+            'materials' => new Collection,
+            'photos' => new Collection,
+            'mentionableUsers' => new Collection,
+            'controlRoomError' => true,
         ];
     }
 }

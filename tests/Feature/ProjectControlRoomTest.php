@@ -67,6 +67,53 @@ class ProjectControlRoomTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_thc_with_read_project_can_open_control_room_from_project_list(): void
+    {
+        $thc = $this->userWithPermissions(null, 'read_project');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0043',
+            'nama' => 'Project THC',
+            'mitra_id' => Mitra::factory()->create()->id,
+        ]));
+
+        $this->actingAs($thc)
+            ->get('/projects')
+            ->assertOk()
+            ->assertSee(route('projects.show', $project), false)
+            ->assertDontSee('href="'.route('dashboard').'"', false);
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee($project->id_project)
+            ->assertSee($project->nama);
+    }
+
+    public function test_control_room_renders_contextual_error_without_leaking_other_projects(): void
+    {
+        $mitraA = Mitra::factory()->create();
+        $mitraB = Mitra::factory()->create();
+        $userA = $this->userWithPermissions($mitraA->id, 'read_project');
+        $projectA = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0044',
+            'nama' => 'Project Dengan Error',
+            'mitra_id' => $mitraA->id,
+        ]));
+        $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0045',
+            'nama' => 'Project Tenant Lain',
+            'mitra_id' => $mitraB->id,
+        ]));
+
+        $this->actingAs($userA)
+            ->get(route('projects.show', $projectA).'?as_of=not-a-date')
+            ->assertOk()
+            ->assertSee($projectA->id_project)
+            ->assertSee('Gagal memuat Control Room', false)
+            ->assertSee('data-control-room-state="error"', false)
+            ->assertDontSee('Project Tenant Lain');
+    }
+
     public function test_mitra_cannot_open_another_mitras_control_room(): void
     {
         $mitraA = Mitra::factory()->create();

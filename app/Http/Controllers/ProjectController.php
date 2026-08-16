@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class ProjectController extends Controller
 {
@@ -26,7 +27,13 @@ class ProjectController extends Controller
 
     public function show(Project $project, ProjectControlRoomQuery $query): View
     {
-        return view('projects.show', $query->for($project, request()->query('as_of'), request()->user()));
+        try {
+            return view('projects.show', $query->for($project, request()->query('as_of'), request()->user()));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return view('projects.show', $query->errorState($project));
+        }
     }
 
     public function store(Request $request): RedirectResponse

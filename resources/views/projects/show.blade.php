@@ -103,6 +103,11 @@
         <div class="control-room__state control-room__state--error" data-control-room-state="error" role="alert" hidden>
             Gagal memuat Control Room {{ $project->id_project }}. Coba lagi atau kembali ke daftar Project.
         </div>
+        @if ($controlRoomError)
+            <div class="control-room__state control-room__state--error" data-control-room-state="error" role="alert">
+                Gagal memuat Control Room {{ $project->id_project }}. Data diringkas agar konteks Project tetap terlihat.
+            </div>
+        @endif
 
         <dl class="control-room__meta">
             <div><dt>Mitra pemilik</dt><dd>{{ $project->mitra->nama }}</dd></div>
