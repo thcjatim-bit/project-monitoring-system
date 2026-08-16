@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Queries\ProjectControlRoomQuery;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class ProjectController extends Controller
 {
@@ -21,6 +23,17 @@ class ProjectController extends Controller
     public function create(): View
     {
         return view('projects.create', ['user' => request()->user()]);
+    }
+
+    public function show(Project $project, ProjectControlRoomQuery $query): View
+    {
+        try {
+            return view('projects.show', $query->for($project, request()->query('as_of'), request()->user()));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return view('projects.show', $query->errorState($project));
+        }
     }
 
     public function store(Request $request): RedirectResponse

@@ -7,8 +7,18 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectMaterialController;
+use App\Http\Controllers\ProjectPhotoController;
+use App\Http\Controllers\ProjectPlanningController;
+use App\Http\Controllers\ProjectProgressController;
+use App\Http\Controllers\ProjectStepController;
+use App\Http\Controllers\ProjectTimelineController;
 use App\Http\Controllers\SuratJalanController;
+use App\Http\Middleware\SetTenantDatabaseContext;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 Route::redirect('/', '/dashboard');
 
@@ -17,6 +27,37 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/masuk', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
+// PROTOTYPE Gelombang 1, 2 & 3: no auth/session because the mock data is read-only and in-memory.
+// Only expose the throwaway UI outside production.
+if (! app()->environment('production')) {
+    Route::get('/prototype/gelombang-1', fn () => view('prototypes.gelombang-1'))
+        ->withoutMiddleware([
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
+        ])
+        ->name('prototype.gelombang-1');
+
+    Route::get('/prototype/gelombang-2', fn () => view('prototypes.gelombang-2'))
+        ->withoutMiddleware([
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
+        ])
+        ->name('prototype.gelombang-2');
+
+    Route::get('/prototype/gelombang-3', fn () => view('prototypes.gelombang-3'))
+        ->withoutMiddleware([
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
+        ])
+        ->name('prototype.gelombang-3');
+}
+
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', [CommandCenterController::class, 'index'])
         ->middleware(['thc', 'izin:read_dashboard'])
@@ -24,6 +65,37 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
+    Route::get('/projects/{project}', [ProjectController::class, 'show'])->middleware('izin:read_project')->name('projects.show');
+    Route::get('/projects/{project}/timeline', [ProjectTimelineController::class, 'index'])
+        ->middleware('izin:read_project_timeline')
+        ->name('projects.timeline.index');
+    Route::post('/projects/{project}/comments', [ProjectTimelineController::class, 'store'])
+        ->middleware('izin:create_project_comment')
+        ->name('projects.comments.store');
+    Route::patch('/projects/{project}/comments/{timeline}', [ProjectTimelineController::class, 'update'])
+        ->middleware('izin:edit_project_comment')
+        ->name('projects.comments.update');
+    Route::middleware(['thc', 'izin:manage_project_plan'])->group(function (): void {
+        Route::post('/projects/{project}/rab-jasa', [ProjectPlanningController::class, 'storeRabJasa'])->name('projects.rab-jasa.store');
+        Route::put('/projects/{project}/plan', [ProjectPlanningController::class, 'updatePlan'])->name('projects.plan.update');
+        Route::post('/projects/{project}/variation-orders', [ProjectPlanningController::class, 'storeVariationOrder'])->name('projects.variation-orders.store');
+        Route::patch('/projects/{project}/variation-orders/{variationOrder}/approve', [ProjectPlanningController::class, 'approveVariationOrder'])->name('projects.variation-orders.approve');
+    });
+    Route::post('/projects/{project}/progress', [ProjectProgressController::class, 'store'])->middleware('izin:report_project_progress')->name('projects.progress.store');
+    Route::middleware(['thc', 'izin:verify_project_progress'])->group(function (): void {
+        Route::patch('/projects/{project}/progress/{progress}/verify', [ProjectProgressController::class, 'verify'])->name('projects.progress.verify');
+        Route::patch('/projects/{project}/progress/{progress}/reject', [ProjectProgressController::class, 'reject'])->name('projects.progress.reject');
+    });
+    Route::patch('/projects/{project}/step', [ProjectStepController::class, 'update'])->middleware('izin:update_project_step')->name('projects.step.update');
+    Route::post('/projects/{project}/rab-material', [ProjectMaterialController::class, 'store'])
+        ->middleware(['thc', 'izin:manage_project_material'])
+        ->name('projects.rab-material.store');
+    Route::post('/projects/{project}/photos', [ProjectPhotoController::class, 'store'])
+        ->middleware('izin:upload_project_photo')
+        ->name('projects.photos.store');
+    Route::get('/projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'show'])
+        ->middleware('izin:read_project')
+        ->name('projects.photos.show');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->middleware('izin:update_project')->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->middleware('izin:delete_project')->name('projects.destroy');
     Route::post('/keluar', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

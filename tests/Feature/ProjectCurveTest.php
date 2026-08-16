@@ -1,0 +1,236 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Grup;
+use App\Models\Izin;
+use App\Models\Mitra;
+use App\Models\MitraHargaJasa;
+use App\Models\PekerjaanJasa;
+use App\Models\Pks;
+use App\Models\Project;
+use App\Models\ProjectRabJasa;
+use App\Models\ProjectVariationOrder;
+use App\Models\User;
+use App\Queries\ProjectCurveQuery;
+use App\Services\ProjectPlanningService;
+use App\Support\TenantDatabaseContext;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Tests\Concerns\RefreshDatabase;
+use Tests\TestCase;
+
+class ProjectCurveTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_curve_separates_verified_and_pending_and_calculates_spi_threshold(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $rab] = $this->rabFixture($mitra);
+        $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'report_project_progress');
+        $thc = $this->userWithPermissions(null, 'read_project', 'verify_project_progress');
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-08-30', [
+            ['date' => '2026-08-10', 'percent' => 50],
+            ['date' => '2026-08-30', 'percent' => 100],
+        ]));
+
+        $this->actingAs($mitraUser)->post(route('projects.progress.store', $project), [
+            'project_rab_jasa_id' => $rab->id,
+            'actual_date' => '2026-08-10',
+            'qty' => '40',
+        ])->assertRedirect();
+        $verifiedId = $this->asThc(fn (): int => (int) DB::table('project_progresses')->orderBy('id')->value('id'));
+        $this->actingAs($thc)->patch(route('projects.progress.verify', [$project, $verifiedId]))->assertRedirect();
+        $this->actingAs($mitraUser)->post(route('projects.progress.store', $project), [
+            'project_rab_jasa_id' => $rab->id,
+            'actual_date' => '2026-08-12',
+            'qty' => '20',
+        ])->assertRedirect();
+        $this->actingAs($mitraUser)->post(route('projects.progress.store', $project), [
+            'project_rab_jasa_id' => $rab->id,
+            'actual_date' => '2026-08-20',
+            'qty' => '10',
+        ])->assertRedirect();
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate($project->fresh(), CarbonImmutable::parse('2026-08-15')));
+
+        $this->assertSame(1000000.0, $curve['grand_total_rab_jasa']);
+        $this->assertSame(40.0, $curve['verified_percent']);
+        $this->assertSame(20.0, $curve['pending_percent']);
+        $this->assertSame(50.0, $curve['plan_percent']);
+        $this->assertSame(0.8, $curve['spi']);
+        $this->assertSame('red', $curve['spi_status']);
+        $this->assertSame('2026-08-10', $curve['verified_series'][0]['date']);
+        $this->assertSame('2026-08-12', $curve['pending_series'][0]['date']);
+        $this->assertSame([
+            ['date' => '2026-08-10', 'percent' => 40.0],
+            ['date' => '2026-08-12', 'percent' => 60.0],
+        ], $curve['pending_shadow_series']);
+    }
+
+    public function test_revised_baseline_is_used_for_spi_while_original_remains_visible(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $planning = app(ProjectPlanningService::class);
+
+        $this->asThc(fn () => $planning->savePlan($project, $thc, '2026-08-20', [
+            ['date' => '2026-08-10', 'percent' => 70],
+            ['date' => '2026-08-20', 'percent' => 100],
+        ]));
+        $this->asThc(fn () => $planning->savePlan($project, $thc, '2026-08-30', [
+            ['date' => '2026-08-15', 'percent' => 30],
+            ['date' => '2026-08-30', 'percent' => 100],
+        ]));
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate($project->fresh(), CarbonImmutable::parse('2026-08-15')));
+
+        $this->assertSame(30.0, $curve['plan_percent']);
+        $this->assertSame('original', $curve['original_baseline']['kind']);
+        $this->assertSame('revised', $curve['revised_baseline']['kind']);
+        $this->assertSame([
+            ['date' => '2026-08-10', 'percent' => 70.0],
+            ['date' => '2026-08-20', 'percent' => 100.0],
+        ], $curve['original_baseline_series']);
+        $this->assertSame([
+            ['date' => '2026-08-15', 'percent' => 30.0],
+            ['date' => '2026-08-30', 'percent' => 100.0],
+        ], $curve['revised_baseline_series']);
+    }
+
+    public function test_curve_recalculates_grand_total_after_reducing_a_variation_order_rab_line(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $rab] = $this->rabFixture($mitra);
+        $price = $this->asThc(fn (): MitraHargaJasa => MitraHargaJasa::query()->findOrFail($rab->harga_jasa_mitra_id));
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->actingAs($thc)->post(route('projects.variation-orders.store', $project), [
+            'reason' => 'Pekerjaan tambahan',
+            'items' => [['harga_jasa_id' => $price->id, 'quantity_delta' => '3']],
+        ])->assertRedirect();
+        $addition = ProjectVariationOrder::query()->firstOrFail();
+        $this->actingAs($thc)
+            ->patch(route('projects.variation-orders.approve', [$project, $addition]))
+            ->assertRedirect();
+        $addedRab = ProjectRabJasa::query()->where('variation_order_id', $addition->id)->firstOrFail();
+
+        $this->actingAs($thc)->post(route('projects.variation-orders.store', $project), [
+            'reason' => 'Koreksi pekerjaan tambahan',
+            'items' => [['rab_jasa_id' => $addedRab->id, 'quantity_delta' => '-1']],
+        ])->assertRedirect();
+        $reduction = ProjectVariationOrder::query()->latest('id')->firstOrFail();
+        $this->actingAs($thc)
+            ->patch(route('projects.variation-orders.approve', [$project, $reduction]))
+            ->assertRedirect();
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate(
+            $project->fresh(),
+            CarbonImmutable::parse('2026-08-15'),
+        ));
+
+        $this->assertSame(1020000.0, $curve['grand_total_rab_jasa']);
+    }
+
+    public function test_overdue_project_without_revision_flattens_plan_and_extends_axis(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-08-10', [
+            ['date' => '2026-08-01', 'percent' => 40],
+            ['date' => '2026-08-10', 'percent' => 100],
+        ]));
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate($project->fresh(), CarbonImmutable::parse('2026-08-15')));
+
+        $this->assertTrue($curve['overdue']);
+        $this->assertTrue($curve['baseline_flat_after_toc']);
+        $this->assertSame(100.0, $curve['plan_percent']);
+        $this->assertSame('2026-08-15', $curve['x_axis_end']);
+    }
+
+    public function test_spi_is_na_when_cumulative_baseline_is_zero(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate(
+            $project->fresh(),
+            CarbonImmutable::parse('2026-08-15'),
+        ));
+
+        $this->assertSame(0.0, $curve['plan_percent']);
+        $this->assertNull($curve['spi']);
+        $this->assertSame('N/A', $curve['spi_label']);
+        $this->assertSame('na', $curve['spi_status']);
+    }
+
+    /** @return array{Project, ProjectRabJasa} */
+    private function rabFixture(Mitra $mitra): array
+    {
+        $project = $this->projectFor($mitra);
+        $job = $this->asThc(fn (): PekerjaanJasa => PekerjaanJasa::create([
+            'kode' => 'JASA-'.fake()->unique()->numerify('###'),
+            'nama' => 'Pekerjaan Kurva S',
+            'aktif' => true,
+        ]));
+        $pks = $this->asThc(fn (): Pks => Pks::create([
+            'mitra_id' => $mitra->id,
+            'nomor' => 'PKS-'.fake()->unique()->numerify('###'),
+            'tanggal_mulai' => '2026-01-01',
+            'tanggal_berakhir' => '2026-12-31',
+        ]));
+        $price = $this->asThc(fn (): MitraHargaJasa => MitraHargaJasa::create([
+            'mitra_id' => $mitra->id,
+            'pks_id' => $pks->id,
+            'pekerjaan_jasa_id' => $job->id,
+            'harga' => '10000.00',
+            'status' => 'disetujui',
+            'berlaku_mulai' => '2026-01-01',
+        ]));
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $this->actingAs($thc)->post(route('projects.rab-jasa.store', $project), [
+            'harga_jasa_id' => $price->id,
+            'qty' => '100',
+        ])->assertRedirect();
+
+        return [$project, ProjectRabJasa::query()->firstOrFail()];
+    }
+
+    private function projectFor(Mitra $mitra): Project
+    {
+        return $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Kurva S',
+            'mitra_id' => $mitra->id,
+        ]));
+    }
+
+    private function userWithPermissions(?int $mitraId, string ...$permissions): User
+    {
+        $group = Grup::factory()->create();
+        $group->izins()->attach(collect($permissions)->map(
+            fn (string $permission) => Izin::query()->firstOrCreate(
+                ['kode' => $permission],
+                ['nama' => $permission],
+            )->id,
+        )->all());
+
+        return User::factory()->create(['mitra_id' => $mitraId, 'grup_id' => $group->id]);
+    }
+
+    private function asThc(\Closure $callback): mixed
+    {
+        app(TenantDatabaseContext::class)->set(null, true);
+
+        try {
+            return $callback();
+        } finally {
+            app(TenantDatabaseContext::class)->set(null, false);
+        }
+    }
+}

@@ -1,3 +1,4 @@
+<x-layouts.app>
 <main>
     <h1>Project</h1>
 
@@ -8,7 +9,7 @@
     <ul>
         @forelse ($projects as $project)
             <li>
-                <span>{{ $project->id_project }} — {{ $project->nama }}</span>
+                <a href="{{ route('projects.show', $project) }}">{{ $project->id_project }} — {{ $project->nama }}</a>
                 @if ($user->hasIzin('update_project'))
                     <form method="POST" action="{{ route('projects.update', $project) }}">
                         @csrf
@@ -30,3 +31,4 @@
         @endforelse
     </ul>
 </main>
+</x-layouts.app>

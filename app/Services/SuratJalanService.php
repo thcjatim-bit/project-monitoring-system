@@ -8,6 +8,8 @@ use App\Models\MaterialRequest;
 use App\Models\MaterialSn;
 use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
+use App\Models\Project;
+use App\Models\ProjectTimeline;
 use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
@@ -18,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 
 class SuratJalanService
 {
-    /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
+    /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, project_id?:int|null, material_request_id?:int|null, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
     public function issueDirect(User $actor, array $data): SuratJalan
     {
         return DB::transaction(fn (): SuratJalan => $this->issueTransfer($actor, $data));
@@ -57,6 +59,9 @@ class SuratJalanService
             }
 
             $this->updateMaterialRequestStatus($suratJalan);
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_received', [
+                'status' => $suratJalan->status,
+            ]);
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
@@ -108,6 +113,9 @@ class SuratJalanService
                 'received_by' => $suratJalan->received_by ?? $actor->id,
                 'received_at' => $suratJalan->received_at ?? now(),
             ]);
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_resolved', [
+                'resolution' => $resolution,
+            ]);
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
@@ -131,6 +139,7 @@ class SuratJalanService
             }
 
             $suratJalan->update(['status' => 'dibatalkan']);
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_cancelled');
 
             return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
         });
@@ -171,6 +180,8 @@ class SuratJalanService
                 'warehouse_tujuan_id' => $destination->id,
                 'tanggal' => $data['tanggal'],
                 'pengirim' => $data['pengirim'],
+                'project_id' => $original->project_id,
+                'material_request_id' => $original->material_request_id,
                 'sopir' => $data['sopir'] ?? null,
                 'plat_nomor' => $data['plat_nomor'] ?? null,
                 'items' => $items,
@@ -182,6 +193,9 @@ class SuratJalanService
                     $item->update(['qty_diretur' => $this->formatQuantity((float) $item->qty_diretur + (float) $qty)]);
                 }
             }
+            $this->recordProjectEvent($return, $actor, 'surat_jalan_returned', [
+                'returned_from_id' => $original->id,
+            ]);
 
             return $return->fresh(['origin', 'destination', 'returnedFrom', 'items.material', 'items.serialNumber', 'items.drum']);
         });
@@ -236,7 +250,7 @@ class SuratJalanService
         });
     }
 
-    /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
+    /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,project_id?:int|null,material_request_id?:int|null,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
     private function issueTransfer(User $actor, array $data, ?int $returnedFromId = null): SuratJalan
     {
         $origin = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_asal_id']);
@@ -251,6 +265,13 @@ class SuratJalanService
         if ($materialRequest !== null) {
             $this->ensureRequestQuantitiesAvailable($materialRequest, $data['items']);
         }
+        $projectId = $data['project_id'] ?? $materialRequest?->project_id;
+        if ($projectId !== null) {
+            $project = Project::query()->findOrFail($projectId);
+            if ($project->mitra_id !== $mitraId || ($materialRequest?->project_id !== null && $materialRequest->project_id !== $project->id)) {
+                throw ValidationException::withMessages(['project_id' => 'Project tidak cocok dengan Mitra atau Request Material.']);
+            }
+        }
         $suratJalan = SuratJalan::query()->create([
             'nomor' => $this->nextNumber($tanggal),
             'tanggal' => $tanggal->toDateString(),
@@ -258,6 +279,7 @@ class SuratJalanService
             'warehouse_tujuan_id' => $destination->id,
             'mitra_id' => $mitraId,
             'material_request_id' => $materialRequest?->id,
+            'project_id' => $projectId,
             'retur_dari_id' => $returnedFromId,
             'issued_by' => $actor->id,
             'issued_at' => now(),
@@ -273,6 +295,10 @@ class SuratJalanService
             $item = $this->createItem($suratJalan, $material, $origin, $itemData, $mitraId);
             $this->moveToTransit($actor, $suratJalan, $item, $origin, $mitraId);
         }
+
+        $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_issued', [
+            'status' => $suratJalan->status,
+        ]);
 
         return $suratJalan->load(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
     }
@@ -569,6 +595,19 @@ class SuratJalanService
     {
         if ((float) $qty <= 0.0) {
             throw ValidationException::withMessages(['items' => 'Jumlah harus lebih besar dari nol.']);
+        }
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function recordProjectEvent(SuratJalan $suratJalan, User $actor, string $eventKey, array $metadata = []): void
+    {
+        if ($suratJalan->project_id === null) {
+            return;
+        }
+
+        $project = Project::query()->find($suratJalan->project_id);
+        if ($project !== null) {
+            ProjectTimeline::recordSystem($project, $actor, $eventKey, $metadata + ['surat_jalan_id' => $suratJalan->id]);
         }
     }
 
