@@ -23,7 +23,6 @@ class ProjectControlRoomQuery
     /** @return array<string, mixed> */
     public function for(Project $project, CarbonInterface|string|null $asOf = null, ?User $viewer = null): array
     {
-        ProjectStep::initialize($project);
 
         $canReadMaterial = $viewer === null
             || $viewer->hasIzin('read_project_material')
@@ -67,7 +66,7 @@ class ProjectControlRoomQuery
                 'spi' => null,
                 'material_readiness' => $material['readiness_percent'],
             ],
-            'steps' => ProjectStep::query()->where('project_id', $project->id)->orderBy('urutan')->get(),
+            'steps' => $project->steps,
             'timeline' => $timeline,
             'progresses' => $progresses,
             'rabJasas' => $rabJasas,

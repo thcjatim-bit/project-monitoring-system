@@ -36,26 +36,20 @@ class ProjectStepService
             $now = now();
 
             foreach ($steps as $item) {
-                if ($status === 'completed') {
-                    if ($item->urutan <= $target->urutan) {
+                if ($item->urutan < $target->urutan) {
+                    $item->update(['status' => 'completed']);
+                } elseif ($item->urutan > $target->urutan) {
+                    $item->update(['status' => 'pending']);
+                } else {
+                    if ($status === 'completed') {
                         $item->update([
                             'status' => 'completed',
                             'completed_at' => $item->completed_at ?? $now,
                             'completed_by' => $item->completed_by ?? $actor->id,
                         ]);
                     } else {
-                        $item->update(['status' => 'pending', 'completed_at' => null, 'completed_by' => null]);
+                        $item->update(['status' => 'active']);
                     }
-                } elseif ($item->urutan < $target->urutan) {
-                    $item->update([
-                        'status' => 'completed',
-                        'completed_at' => $item->completed_at ?? $now,
-                        'completed_by' => $item->completed_by ?? $actor->id,
-                    ]);
-                } elseif ($item->urutan === $target->urutan) {
-                    $item->update(['status' => 'active', 'completed_at' => null, 'completed_by' => null]);
-                } else {
-                    $item->update(['status' => 'pending', 'completed_at' => null, 'completed_by' => null]);
                 }
             }
 

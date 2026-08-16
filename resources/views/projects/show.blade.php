@@ -455,6 +455,30 @@
                         </li>
                     @endforeach
                 </ol>
+                @if (auth()->user()->hasIzin('update_project_step'))
+                    <form class="control-room__comment-form" method="POST" action="{{ route('projects.step.update', $project) }}">
+                        @csrf
+                        @method('PATCH')
+                        <div class="control-room__comment-options">
+                            <label>Pindah ke Step
+                                <select name="step" required>
+                                    @foreach ($steps as $stepOption)
+                                        <option value="{{ $stepOption->step }}" {{ $stepOption->status === 'active' ? 'selected' : '' }}>
+                                            {{ $stepOption->label() }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label>Status
+                                <select name="status" required>
+                                    <option value="active">Aktif (Sedang dikerjakan)</option>
+                                    <option value="completed">Selesai</option>
+                                </select>
+                            </label>
+                            <button class="control-room__button" type="submit">Ubah Step</button>
+                        </div>
+                    </form>
+                @endif
             </article>
         </section>
     </main>
