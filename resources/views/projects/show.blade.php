@@ -38,9 +38,11 @@
             .control-room__chart { min-height: 260px; overflow: hidden; }
             .control-room__chart svg { display: block; height: 230px; width: 100%; }
             .control-room__chart-grid { stroke: #e8edef; stroke-width: 1; }
-            .control-room__chart-plan { fill: none; stroke: #9daab2; stroke-dasharray: 5 5; stroke-width: 2; }
+            .control-room__chart-plan-original { fill: none; stroke: #9daab2; stroke-dasharray: 5 5; stroke-width: 2; }
+            .control-room__chart-plan-revised { fill: none; stroke: #7758a6; stroke-dasharray: 9 4; stroke-width: 2; }
             .control-room__chart-actual { fill: none; stroke: #087f8c; stroke-linecap: round; stroke-linejoin: round; stroke-width: 4; }
             .control-room__chart-pending { fill: none; stroke: #d79c38; stroke-dasharray: 3 6; stroke-linecap: round; stroke-width: 3; }
+            .control-room__chart-overdue { fill: #fce8e8; opacity: .8; }
             .control-room__progress { grid-column: 1 / -1; }
             .control-room__progress-list { border-top: 1px solid #e8edef; display: grid; gap: 10px; list-style: none; margin: 15px 0 0; padding: 12px 0 0; }
             .control-room__progress-row { align-items: flex-start; background: #f6f8f9; border-left: 3px solid #cbd6dc; border-radius: 0 8px 8px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: space-between; padding: 11px 13px; }
@@ -62,7 +64,8 @@
             .control-room__progress-actions textarea { min-height: 58px; width: 100%; }
             .control-room__legend { color: #687684; display: flex; flex-wrap: wrap; font-size: .74rem; gap: 12px; margin-top: 5px; }
             .control-room__legend span::before { background: currentColor; content: ""; display: inline-block; height: 3px; margin: 0 5px 3px 0; width: 17px; }
-            .control-room__legend .plan { color: #9daab2; }
+            .control-room__legend .plan-original { color: #9daab2; }
+            .control-room__legend .plan-revised { color: #7758a6; }
             .control-room__legend .actual { color: #087f8c; }
             .control-room__legend .pending { color: #d79c38; }
             .control-room__steps, .control-room__materials { grid-column: 1 / -1; }
@@ -161,40 +164,73 @@
         </section>
 
         <section class="control-room__grid" aria-label="Ringkasan Project Control Room">
-            <article class="control-room__panel">
+            <article class="control-room__panel" data-curve-overdue="{{ $curve['overdue'] ? 'true' : 'false' }}">
                 <h2>Kurva S dan SPI</h2>
-                <p>Baseline berlaku: {{ $curve['revised_baseline'] ? 'Revised Baseline' : ($curve['original_baseline'] ? 'Original Baseline' : 'Belum tersedia') }}. Nilai pending tidak masuk Realisasi.</p>
-                <div class="control-room__chart" role="img" aria-label="Kurva S baseline, realisasi verified, dan pending">
+                <p>Baseline berlaku: {{ $curve['active_baseline_kind'] === 'revised' ? 'Revised Baseline' : ($curve['active_baseline_kind'] === 'original' ? 'Original Baseline' : 'Belum tersedia') }}. Nilai pending tidak masuk Realisasi.</p>
+                <div class="control-room__chart" role="img" aria-label="Kurva S Original Baseline, Revised Baseline, realisasi verified, dan pending shadow">
                     @php
-                        $chartDates = collect($curve['baseline_series'])->pluck('date')
+                        $originalBaselineSeries = $curve['original_baseline_series'] ?? [];
+                        $revisedBaselineSeries = $curve['revised_baseline_series'] ?? [];
+                        $chartDates = collect($originalBaselineSeries)->pluck('date')
+                            ->merge(collect($revisedBaselineSeries)->pluck('date'))
                             ->merge(collect($curve['verified_series'])->pluck('date'))
-                            ->merge(collect($curve['pending_series'])->pluck('date'))
+                            ->merge(collect($curve['pending_shadow_series'] ?? [])->pluck('date'))
                             ->unique()->sort()->values();
-                        $chartPoint = function (array $series) use ($chartDates): string {
-                            $values = collect($series)->keyBy('date');
+                        $tocDate = $curve['revised_baseline']['toc'] ?? $curve['original_baseline']['toc'] ?? null;
+                        if ($chartDates->isNotEmpty()) {
+                            $chartDates = $chartDates
+                                ->push($tocDate)
+                                ->push($curve['x_axis_end'] ?? null)
+                                ->filter()
+                                ->unique()
+                                ->sort()
+                                ->values();
+                        }
+                        $xForDate = function (string $date) use ($chartDates): float {
+                            $index = $chartDates->search($date);
                             $lastIndex = max(1, $chartDates->count() - 1);
-                            return $chartDates->map(function (string $date, int $index) use ($values, $lastIndex): ?string {
-                                $point = $values->get($date);
-                                return $point === null ? null : (string) (20 + (600 * $index / $lastIndex)).','. (210 - (1.7 * (float) $point['percent']));
-                            })->filter()->implode(' ');
+                            return 20 + (600 * (int) $index / $lastIndex);
                         };
+                        $chartPoint = function (array $series) use ($xForDate): string {
+                            return collect($series)->map(function (array $point) use ($xForDate): string {
+                                return $xForDate($point['date']).','. (210 - (1.7 * (float) $point['percent']));
+                            })->implode(' ');
+                        };
+                        $overdueStartX = $curve['overdue'] && $tocDate !== null ? $xForDate($tocDate) : null;
+                        $overdueWidth = $overdueStartX === null ? 0 : max(0, 620 - $overdueStartX);
                     @endphp
                     @if ($chartDates->isEmpty())
                         <div class="control-room__state">Belum ada titik baseline atau progres untuk diplot.</div>
                     @else
                         <svg viewBox="0 0 640 230" preserveAspectRatio="none">
+                            @if ($overdueStartX !== null && $overdueWidth > 0)
+                                <rect class="control-room__chart-overdue" data-curve-overdue-area="true" x="{{ $overdueStartX }}" y="20" width="{{ $overdueWidth }}" height="190" />
+                            @endif
                             <line class="control-room__chart-grid" x1="20" y1="40" x2="620" y2="40" />
                             <line class="control-room__chart-grid" x1="20" y1="125" x2="620" y2="125" />
                             <line class="control-room__chart-grid" x1="20" y1="210" x2="620" y2="210" />
-                            <polyline class="control-room__chart-plan" points="{{ $chartPoint($curve['baseline_series']) }}" />
-                            <polyline class="control-room__chart-actual" points="{{ $chartPoint($curve['verified_series']) }}" />
-                            <polyline class="control-room__chart-pending" points="{{ $chartPoint($curve['pending_series']) }}" />
+                            @if ($originalBaselineSeries !== [])
+                                <polyline class="control-room__chart-plan-original" data-curve-series="original" points="{{ $chartPoint($originalBaselineSeries) }}" />
+                            @endif
+                            @if ($revisedBaselineSeries !== [])
+                                <polyline class="control-room__chart-plan-revised" data-curve-series="revised" points="{{ $chartPoint($revisedBaselineSeries) }}" />
+                            @endif
+                            @if ($curve['verified_series'] !== [])
+                                <polyline class="control-room__chart-actual" data-curve-series="verified" points="{{ $chartPoint($curve['verified_series']) }}" />
+                            @endif
+                            @if (($curve['pending_shadow_series'] ?? []) !== [])
+                                <polyline class="control-room__chart-pending" data-curve-series="pending-shadow" points="{{ $chartPoint($curve['pending_shadow_series']) }}" />
+                            @endif
                         </svg>
-                        <div class="control-room__legend"><span class="plan">Baseline</span><span class="actual">Verified</span><span class="pending">Pending shadow</span></div>
+                        <div class="control-room__legend">
+                            @if ($originalBaselineSeries !== [])<span class="plan-original">Original Baseline</span>@endif
+                            @if ($revisedBaselineSeries !== [])<span class="plan-revised">Revised Baseline</span>@endif
+                            <span class="actual">Verified</span><span class="pending">Pending shadow</span>
+                        </div>
                     @endif
                 </div>
                 @if ($curve['overdue'])
-                    <p role="alert">Project melewati TOC; sumbu waktu diperpanjang sampai {{ $curve['x_axis_end'] }}@if ($curve['baseline_flat_after_toc']) dan baseline mendatar di 100%@endif.</p>
+                    <p role="alert">Project melewati TOC; sumbu waktu diperpanjang sampai {{ $curve['x_axis_end'] }}. Periode keterlambatan disorot.@if ($curve['baseline_flat_after_toc']) Baseline mendatar di 100%.@endif</p>
                 @endif
             </article>
             <article class="control-room__panel control-room__progress" id="project-progress">

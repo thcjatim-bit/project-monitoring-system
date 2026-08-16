@@ -7,6 +7,7 @@ use App\Models\Izin;
 use App\Models\Mitra;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -128,6 +129,59 @@ class ProjectControlRoomTest extends TestCase
         $this->actingAs($userA)
             ->get(route('projects.show', $projectB))
             ->assertNotFound();
+    }
+
+    public function test_curve_panel_distinguishes_original_and_revised_baselines(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0046',
+            'nama' => 'Project Baseline Terpisah',
+            'mitra_id' => $mitra->id,
+        ]));
+        $planning = app(ProjectPlanningService::class);
+
+        $this->asThc(fn () => $planning->savePlan($project, $thc, '2026-08-20', [
+            ['date' => '2026-08-10', 'percent' => 70],
+            ['date' => '2026-08-20', 'percent' => 100],
+        ]));
+        $this->asThc(fn () => $planning->savePlan($project, $thc, '2026-08-30', [
+            ['date' => '2026-08-15', 'percent' => 30],
+            ['date' => '2026-08-30', 'percent' => 100],
+        ]));
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project).'?as_of=2026-08-15')
+            ->assertOk()
+            ->assertSee('Original Baseline')
+            ->assertSee('Revised Baseline')
+            ->assertSee('data-curve-series="original"', false)
+            ->assertSee('data-curve-series="revised"', false)
+            ->assertSee('Pending shadow');
+    }
+
+    public function test_curve_panel_highlights_delay_after_original_baseline_toc(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0047',
+            'nama' => 'Project Melewati TOC',
+            'mitra_id' => $mitra->id,
+        ]));
+
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-08-10', [
+            ['date' => '2026-08-01', 'percent' => 40],
+            ['date' => '2026-08-10', 'percent' => 100],
+        ]));
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project).'?as_of=2026-08-15')
+            ->assertOk()
+            ->assertSee('data-curve-overdue="true"', false)
+            ->assertSee('control-room__chart-overdue', false)
+            ->assertSee('Periode keterlambatan', false);
     }
 
     private function userWithPermissions(?int $mitraId, string ...$permissions): User

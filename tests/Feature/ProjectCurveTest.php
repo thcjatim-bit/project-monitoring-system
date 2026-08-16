@@ -47,6 +47,11 @@ class ProjectCurveTest extends TestCase
             'actual_date' => '2026-08-12',
             'qty' => '20',
         ])->assertRedirect();
+        $this->actingAs($mitraUser)->post(route('projects.progress.store', $project), [
+            'project_rab_jasa_id' => $rab->id,
+            'actual_date' => '2026-08-20',
+            'qty' => '10',
+        ])->assertRedirect();
 
         $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate($project->fresh(), CarbonImmutable::parse('2026-08-15')));
 
@@ -58,6 +63,10 @@ class ProjectCurveTest extends TestCase
         $this->assertSame('red', $curve['spi_status']);
         $this->assertSame('2026-08-10', $curve['verified_series'][0]['date']);
         $this->assertSame('2026-08-12', $curve['pending_series'][0]['date']);
+        $this->assertSame([
+            ['date' => '2026-08-10', 'percent' => 40.0],
+            ['date' => '2026-08-12', 'percent' => 60.0],
+        ], $curve['pending_shadow_series']);
     }
 
     public function test_revised_baseline_is_used_for_spi_while_original_remains_visible(): void
@@ -81,6 +90,14 @@ class ProjectCurveTest extends TestCase
         $this->assertSame(30.0, $curve['plan_percent']);
         $this->assertSame('original', $curve['original_baseline']['kind']);
         $this->assertSame('revised', $curve['revised_baseline']['kind']);
+        $this->assertSame([
+            ['date' => '2026-08-10', 'percent' => 70.0],
+            ['date' => '2026-08-20', 'percent' => 100.0],
+        ], $curve['original_baseline_series']);
+        $this->assertSame([
+            ['date' => '2026-08-15', 'percent' => 30.0],
+            ['date' => '2026-08-30', 'percent' => 100.0],
+        ], $curve['revised_baseline_series']);
     }
 
     public function test_curve_recalculates_grand_total_after_reducing_a_variation_order_rab_line(): void
@@ -134,6 +151,22 @@ class ProjectCurveTest extends TestCase
         $this->assertTrue($curve['baseline_flat_after_toc']);
         $this->assertSame(100.0, $curve['plan_percent']);
         $this->assertSame('2026-08-15', $curve['x_axis_end']);
+    }
+
+    public function test_spi_is_na_when_cumulative_baseline_is_zero(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate(
+            $project->fresh(),
+            CarbonImmutable::parse('2026-08-15'),
+        ));
+
+        $this->assertSame(0.0, $curve['plan_percent']);
+        $this->assertNull($curve['spi']);
+        $this->assertSame('N/A', $curve['spi_label']);
+        $this->assertSame('na', $curve['spi_status']);
     }
 
     /** @return array{Project, ProjectRabJasa} */

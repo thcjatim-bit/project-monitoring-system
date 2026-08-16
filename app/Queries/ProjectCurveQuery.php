@@ -41,6 +41,7 @@ class ProjectCurveQuery
             ? ProjectProgress::query()
                 ->where('project_id', $project->id)
                 ->whereIn('status', ['pending', 'verified'])
+                ->whereDate('actual_date', '<=', $asOfDate->toDateString())
                 ->with('rabJasa')
                 ->orderBy('actual_date')
                 ->get()
@@ -83,6 +84,9 @@ class ProjectCurveQuery
         if ($latestProgressDate !== null && CarbonImmutable::parse($latestProgressDate)->gt($xAxisEnd)) {
             $xAxisEnd = CarbonImmutable::parse($latestProgressDate);
         }
+        $flatOriginal = $baselineFlatAfterToc && $active !== null && $active->id === $original?->id;
+        $originalSeries = $this->baselineSeries($original, $xAxisEnd, $flatOriginal);
+        $revisedSeries = $this->baselineSeries($revised, $xAxisEnd, false);
 
         return [
             'as_of' => $asOfDate->toDateString(),
@@ -95,9 +99,13 @@ class ProjectCurveQuery
             'spi_status' => $spiStatus,
             'verified_series' => $this->series($verifiedByDate, $grandTotal),
             'pending_series' => $this->series($pendingByDate, $grandTotal),
-            'baseline_series' => $this->baselineSeries($active, $xAxisEnd, $baselineFlatAfterToc),
+            'pending_shadow_series' => $this->pendingShadowSeries($verifiedByDate, $pendingByDate, $grandTotal),
+            'baseline_series' => $revised !== null ? $revisedSeries : $originalSeries,
+            'original_baseline_series' => $originalSeries,
+            'revised_baseline_series' => $revisedSeries,
             'original_baseline' => $this->baselinePayload($original),
             'revised_baseline' => $this->baselinePayload($revised),
+            'active_baseline_kind' => $active?->kind,
             'overdue' => $overdue,
             'baseline_flat_after_toc' => $baselineFlatAfterToc,
             'x_axis_end' => $xAxisEnd->toDateString(),
@@ -135,6 +143,45 @@ class ProjectCurveQuery
         foreach ($values as $date => $value) {
             $cumulative += $value;
             $series[] = ['date' => $date, 'percent' => $this->percent($cumulative, $total)];
+        }
+
+        return $series;
+    }
+
+    /** @return array<int, array{date:string,percent:float}> */
+    private function pendingShadowSeries(array $verifiedByDate, array $pendingByDate, float $total): array
+    {
+        if ($pendingByDate === []) {
+            return [];
+        }
+
+        $firstPendingDate = array_key_first($pendingByDate);
+        $verifiedThroughAnchor = 0.0;
+        $anchorDate = null;
+        foreach ($verifiedByDate as $date => $value) {
+            if ($date > $firstPendingDate) {
+                break;
+            }
+
+            $verifiedThroughAnchor += $value;
+            $anchorDate = $date;
+        }
+
+        $series = [];
+        if ($anchorDate !== null && $anchorDate < $firstPendingDate) {
+            $series[] = [
+                'date' => $anchorDate,
+                'percent' => $this->percent($verifiedThroughAnchor, $total),
+            ];
+        }
+
+        $pendingCumulative = 0.0;
+        foreach ($pendingByDate as $date => $value) {
+            $pendingCumulative += $value;
+            $series[] = [
+                'date' => $date,
+                'percent' => $this->percent($verifiedThroughAnchor + $pendingCumulative, $total),
+            ];
         }
 
         return $series;
