@@ -27,7 +27,11 @@ class ProjectCurveQuery
             ->with('rabJasa')
             ->get();
         foreach ($adjustments as $adjustment) {
-            if ($adjustment->rabJasa?->variation_order_id === null) {
+            $rabCreatedByVariation = $adjustment->rabJasa?->variation_order_id;
+            $isRabCreationAdjustment = $rabCreatedByVariation !== null
+                && (int) $rabCreatedByVariation === (int) $adjustment->project_variation_order_id;
+
+            if (! $isRabCreationAdjustment) {
                 $grandTotal += (float) $adjustment->quantity_delta * (float) $adjustment->harga_satuan;
             }
         }

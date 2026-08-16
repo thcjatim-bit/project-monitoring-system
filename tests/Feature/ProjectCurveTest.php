@@ -10,6 +10,7 @@ use App\Models\PekerjaanJasa;
 use App\Models\Pks;
 use App\Models\Project;
 use App\Models\ProjectRabJasa;
+use App\Models\ProjectVariationOrder;
 use App\Models\User;
 use App\Queries\ProjectCurveQuery;
 use App\Services\ProjectPlanningService;
@@ -80,6 +81,40 @@ class ProjectCurveTest extends TestCase
         $this->assertSame(30.0, $curve['plan_percent']);
         $this->assertSame('original', $curve['original_baseline']['kind']);
         $this->assertSame('revised', $curve['revised_baseline']['kind']);
+    }
+
+    public function test_curve_recalculates_grand_total_after_reducing_a_variation_order_rab_line(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $rab] = $this->rabFixture($mitra);
+        $price = $this->asThc(fn (): MitraHargaJasa => MitraHargaJasa::query()->findOrFail($rab->harga_jasa_mitra_id));
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->actingAs($thc)->post(route('projects.variation-orders.store', $project), [
+            'reason' => 'Pekerjaan tambahan',
+            'items' => [['harga_jasa_id' => $price->id, 'quantity_delta' => '3']],
+        ])->assertRedirect();
+        $addition = ProjectVariationOrder::query()->firstOrFail();
+        $this->actingAs($thc)
+            ->patch(route('projects.variation-orders.approve', [$project, $addition]))
+            ->assertRedirect();
+        $addedRab = ProjectRabJasa::query()->where('variation_order_id', $addition->id)->firstOrFail();
+
+        $this->actingAs($thc)->post(route('projects.variation-orders.store', $project), [
+            'reason' => 'Koreksi pekerjaan tambahan',
+            'items' => [['rab_jasa_id' => $addedRab->id, 'quantity_delta' => '-1']],
+        ])->assertRedirect();
+        $reduction = ProjectVariationOrder::query()->latest('id')->firstOrFail();
+        $this->actingAs($thc)
+            ->patch(route('projects.variation-orders.approve', [$project, $reduction]))
+            ->assertRedirect();
+
+        $curve = $this->asThc(fn (): array => app(ProjectCurveQuery::class)->calculate(
+            $project->fresh(),
+            CarbonImmutable::parse('2026-08-15'),
+        ));
+
+        $this->assertSame(1020000.0, $curve['grand_total_rab_jasa']);
     }
 
     public function test_overdue_project_without_revision_flattens_plan_and_extends_axis(): void
