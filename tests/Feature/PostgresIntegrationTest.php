@@ -204,6 +204,15 @@ class PostgresIntegrationTest extends TestCase
         );
     }
 
+    public function test_project_timeline_is_append_only_for_the_application_role(): void
+    {
+        $privileges = DB::selectOne(<<<'SQL'
+            select has_table_privilege(current_user, 'public.project_timelines', 'DELETE') as can_delete_timeline
+        SQL);
+
+        $this->assertFalse($privileges->can_delete_timeline);
+    }
+
     public function test_mitra_raw_query_cannot_read_or_write_another_mitras_project_photo(): void
     {
         $mitraA = Mitra::factory()->create();
