@@ -9,6 +9,8 @@ Sistem membutuhkan dokumentasi foto lapangan sebagai bukti pekerjaan. Foto diung
 ## Keputusan
 
 ### 1. Upload dan Kompresi Client-Side
+- **Batas server**: browser memvalidasi ukuran mentah sebelum kompresi, lalu server tetap memvalidasi JPEG yang diterima dengan batas **5120 KB**.
+- **Metadata ukuran**: `original_size` mencatat payload yang diterima setelah kompresi. Ukuran mentah kamera tidak disimpan sebagai metadata terpercaya karena tidak dapat dibuktikan server-side dari browser.
 - **Siapa boleh upload**: Mitra dan THC.
 - **Format**: hanya JPEG.
 - **Batas per unggahan**: maksimal **10 foto**, masing-masing maksimal **5 MB** (ukuran mentah dari kamera HP).
@@ -16,10 +18,12 @@ Sistem membutuhkan dokumentasi foto lapangan sebagai bukti pekerjaan. Foto diung
 - Server menyimpan hasil kompresi ini apa adanya — tidak ada kompresi ulang di sisi server.
 
 ### 2. Sinkronisasi ke Google Drive via rclone
-- **Metode**: `rclone sync` dijalankan sebagai **cron job setiap 1 jam**.
+- **Metode**: scheduled command Laravel `photos:sync` dijalankan setiap **1 jam** melalui scheduler produksi.
+- **Operasi per file**: setiap foto `pending` atau `failed` disalin ke tujuan eksplisit `ProjectID/Step/Tanggal/NamaFile` dengan `rclone copyto --checksum`. Operasi ini tidak menghapus file yang hanya ada di Google Drive.
+- **Mengapa bukan `rclone sync`**: retensi lokal 90 hari berarti file dapat sengaja tidak lagi ada di sumber setelah salinan Drive terverifikasi. `sync` dapat menghapus salinan arsip di Drive agar sama dengan sumber lokal, sehingga metode destruktif itu tidak digunakan.
 - **Autentikasi**: Google **Service Account** (file JSON), tidak perlu login ulang berkala.
 - **Struktur folder di Drive**: `ProjectID / Step / Tanggal` (contoh: `PRJ-2608-0001 / Deployment / 2026-08-12`).
-- **Ketahanan terhadap gangguan**: jika internet kantor putus, rclone pada jadwal berikutnya otomatis mendeteksi file yang belum ter-sync dan mengunggahnya (*catch-up*). Tidak perlu intervensi manual.
+- **Ketahanan terhadap gangguan dan catch-up**: jika penyalinan gagal atau internet kantor putus, status per foto tetap `pending` atau `failed` dan file lokal tidak dihapus. Scheduler pada jam berikutnya mengambil kembali status tersebut dan mencoba ulang, tanpa intervensi manual.
 
 ### 3. Akses Mitra ke Folder Google Drive
 - Satu **Folder Master** di Google Drive dibuat publik **View-Only** ("Anyone with the link can view").
