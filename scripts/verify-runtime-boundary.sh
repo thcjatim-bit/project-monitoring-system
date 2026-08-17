@@ -42,6 +42,7 @@ case "$environment" in
         readonly expected_env="production"
         readonly expected_debug="false"
         readonly expected_url="https://deploythc.web.id"
+        readonly expected_connection="pgsql"
         readonly expected_db="project_monitoring_system_prod"
         readonly expected_host="127.0.0.1"
         readonly expected_port="5433"
@@ -59,6 +60,7 @@ case "$environment" in
         readonly expected_env="testing"
         readonly expected_debug="any"
         readonly expected_url="any"
+        readonly expected_connection="pgsql"
         readonly expected_db="project_monitoring_system_testing"
         readonly expected_host="any"
         readonly expected_port="5432"
@@ -96,27 +98,44 @@ command -v php >/dev/null 2>&1 || refuse "php is required to read the cached con
 
 # Extract only the identity fields, so a password is never carried into the
 # shell or into the evidence output.
-readonly identity="$(php -r '
+#
+# The connection inspected is database.default, not a hardcoded "pgsql": the
+# live check below resolves the default connection too, so pinning this side to
+# pgsql would let a runtime whose DB_CONNECTION points elsewhere pass on the
+# strength of a connection it never opens.
+#
+# Assigned plainly rather than via readonly: declaration builtins report their
+# own status, not the command substitution's, which would make the failure
+# branch below unreachable.
+identity="$(php -r '
 $path = $argv[1];
 $config = require $path;
 if (! is_array($config)) {
     fwrite(STDERR, "cached configuration did not evaluate to an array\n");
     exit(1);
 }
-$pgsql = $config["database"]["connections"]["pgsql"] ?? [];
+$default = $config["database"]["default"] ?? "";
+$connection = $config["database"]["connections"][$default] ?? [];
 $fields = [
     "env" => $config["app"]["env"] ?? "",
     "debug" => ($config["app"]["debug"] ?? false) ? "true" : "false",
     "url" => $config["app"]["url"] ?? "",
-    "db" => $pgsql["database"] ?? "",
-    "host" => $pgsql["host"] ?? "",
-    "port" => (string) ($pgsql["port"] ?? ""),
-    "user" => $pgsql["username"] ?? "",
+    "connection" => $default,
+    "db" => $connection["database"] ?? "",
+    "host" => $connection["host"] ?? "",
+    "port" => (string) ($connection["port"] ?? ""),
+    "user" => $connection["username"] ?? "",
 ];
 foreach ($fields as $key => $value) {
     printf("%s=%s\n", $key, $value);
 }
-' "$config_cache" 2>/dev/null)" || refuse "cached configuration could not be read as PHP"
+' "$config_cache" 2>/dev/null)"
+
+if [[ "$?" -ne 0 ]]; then
+    refuse "cached configuration could not be read as PHP"
+fi
+
+readonly identity
 
 [[ -n "$identity" ]] || refuse "cached configuration yielded no identity fields"
 
@@ -128,6 +147,7 @@ read_field() {
 readonly actual_env="$(read_field env)"
 readonly actual_debug="$(read_field debug)"
 readonly actual_url="$(read_field url)"
+readonly actual_connection="$(read_field connection)"
 readonly actual_db="$(read_field db)"
 readonly actual_host="$(read_field host)"
 readonly actual_port="$(read_field port)"
@@ -157,12 +177,34 @@ check_field() {
 echo "Runtime boundary check: $environment"
 echo "  checkout       $app_dir"
 
-if [[ -d "$app_dir/.git" ]] && command -v git >/dev/null 2>&1; then
-    sha="$(git -C "$app_dir" rev-parse HEAD 2>/dev/null || true)"
-    [[ -n "$sha" ]] && echo "  commit         $sha"
+# The exact SHA and a clean worktree are part of the evidence contract, so an
+# uninspectable checkout is a failure rather than a skipped section. Detection
+# goes through rev-parse instead of testing for a .git directory, because .git
+# is a file in worktree and submodule checkouts and absent in export deploys --
+# all of which would otherwise drop these assertions and still report PASS.
+if ! command -v git >/dev/null 2>&1; then
+    printf '  %-14s %-6s %s\n' "commit" "FAIL" "git is unavailable; exact SHA is not verifiable"
+    failures=$((failures + 1))
+elif ! git -C "$app_dir" rev-parse --git-dir >/dev/null 2>&1; then
+    printf '  %-14s %-6s %s\n' "commit" "FAIL" "checkout is not a git repository; exact SHA is not verifiable"
+    failures=$((failures + 1))
+else
+    sha="$(git -C "$app_dir" rev-parse HEAD 2>/dev/null)"
+    if [[ -z "$sha" ]]; then
+        printf '  %-14s %-6s %s\n' "commit" "FAIL" "HEAD could not be resolved"
+        failures=$((failures + 1))
+    else
+        echo "  commit         $sha"
+    fi
 
-    dirty="$(git -C "$app_dir" status --porcelain 2>/dev/null || true)"
-    if [[ -n "$dirty" ]]; then
+    # Distinguish "clean" from "could not look": git refuses outright on a
+    # checkout it considers dubiously owned, and an empty result there would
+    # otherwise be reported as a clean worktree.
+    dirty="$(git -C "$app_dir" status --porcelain 2>/dev/null)"
+    if [[ "$?" -ne 0 ]]; then
+        printf '  %-14s %-6s %s\n' "worktree" "FAIL" "worktree state was not inspectable"
+        failures=$((failures + 1))
+    elif [[ -n "$dirty" ]]; then
         printf '  %-14s %-6s %s\n' "worktree" "FAIL" "checkout contains uncommitted changes"
         failures=$((failures + 1))
     else
@@ -176,6 +218,7 @@ echo "Cached configuration identity:"
 check_field "app.env" "$expected_env" "$actual_env"
 check_field "app.debug" "$expected_debug" "$actual_debug"
 check_field "app.url" "$expected_url" "$actual_url"
+check_field "db.default" "$expected_connection" "$actual_connection"
 check_field "db.database" "$expected_db" "$actual_db"
 check_field "db.host" "$expected_host" "$actual_host"
 check_field "db.port" "$expected_port" "$actual_port"

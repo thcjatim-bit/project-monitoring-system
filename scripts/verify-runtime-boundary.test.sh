@@ -20,8 +20,13 @@ tests_run=0
 tests_failed=0
 
 # Builds a throwaway app directory containing only what the guard reads.
+#
+# The fixture is a real git repository with everything committed, because the
+# guard treats an uninspectable checkout and a dirty worktree as failures.
+# Pass "no-git" as $8 to exercise the non-repository path, and a connection
+# name as $9 to override database.default.
 make_fixture() {
-    local dir app_env app_debug app_url db_name db_host db_port db_user
+    local dir app_env app_debug app_url db_name db_host db_port db_user vcs connection
     dir="$(mktemp -d)"
     app_env="$1"
     app_debug="$2"
@@ -30,6 +35,8 @@ make_fixture() {
     db_host="$5"
     db_port="$6"
     db_user="$7"
+    vcs="${8:-git}"
+    connection="${9:-pgsql}"
 
     mkdir -p "$dir/bootstrap/cache"
     touch "$dir/artisan"
@@ -49,8 +56,9 @@ make_fixture() {
         ],
     ],
     'database' => [
+        'default' => '$connection',
         'connections' => [
-            'pgsql' => [
+            '$connection' => [
                 'database' => '$db_name',
                 'host' => '$db_host',
                 'port' => '$db_port',
@@ -61,6 +69,18 @@ make_fixture() {
     ],
 ];
 EOF
+
+    if [[ "$vcs" == "git" ]]; then
+        git -C "$dir" init -q
+        # The fixture is throwaway; keep the repo's own line-ending policy from
+        # emitting conversion warnings into the test output.
+        git -C "$dir" config core.autocrlf false
+        git -C "$dir" add -A
+        git -C "$dir" \
+            -c user.email=guard@example.test \
+            -c user.name='Boundary Guard Test' \
+            commit -q -m 'fixture'
+    fi
 
     printf '%s' "$dir"
 }
@@ -159,6 +179,20 @@ expect_status 'production cache is refused for the testing profile' 1 testing \
 
 expect_no_secret_in_output \
     "$(make_fixture "$prod_env" false "$prod_url" "$prod_db" "$prod_host" "$prod_port" "$prod_user")"
+
+# A checkout whose SHA cannot be established must refuse rather than silently
+# drop the commit and worktree assertions.
+expect_status 'non-repository checkout is refused' 1 production \
+    "$(make_fixture "$prod_env" false "$prod_url" "$prod_db" "$prod_host" "$prod_port" "$prod_user" no-git)"
+
+dirty_fixture="$(make_fixture "$prod_env" false "$prod_url" "$prod_db" "$prod_host" "$prod_port" "$prod_user")"
+echo 'stray' > "$dirty_fixture/uncommitted.txt"
+expect_status 'dirty worktree is refused' 1 production "$dirty_fixture"
+
+# database.default must be the connection the assertions actually validated,
+# otherwise a runtime pointing elsewhere would pass on an unused connection.
+expect_status 'non-pgsql default connection is refused' 1 production \
+    "$(make_fixture "$prod_env" false "$prod_url" "$prod_db" "$prod_host" "$prod_port" "$prod_user" git mysql)"
 
 # Fail-closed on missing or unknown inputs rather than defaulting to pass.
 missing_cache_fixture="$(make_fixture "$prod_env" false "$prod_url" "$prod_db" "$prod_host" "$prod_port" "$prod_user")"
