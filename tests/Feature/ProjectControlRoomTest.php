@@ -6,6 +6,7 @@ use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Mitra;
 use App\Models\Project;
+use App\Models\ProjectPhoto;
 use App\Models\User;
 use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
@@ -88,6 +89,53 @@ class ProjectControlRoomTest extends TestCase
             ->assertOk()
             ->assertSee($project->id_project)
             ->assertSee($project->nama);
+    }
+
+    public function test_control_room_renders_photo_empty_state_and_photo_project_step_sync_context(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'read_project', 'upload_project_photo');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0048',
+            'nama' => 'Project Foto Lapangan',
+            'mitra_id' => $mitra->id,
+        ]));
+
+        $this->actingAs($user)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('data-photo-state="empty"', false)
+            ->assertSee('Belum ada Foto Pekerjaan untuk Project ini.');
+
+        $step = $project->steps()->where('step', 'survey')->firstOrFail();
+        $photo = $this->asThc(fn (): ProjectPhoto => ProjectPhoto::create([
+            'mitra_id' => $mitra->id,
+            'project_id' => $project->id,
+            'project_step_id' => $step->id,
+            'uploaded_by' => $user->id,
+            'original_name' => 'survey-lapangan.jpg',
+            'stored_path' => 'project-photos/PRJ-2608-0048/survey/2026-08-17/survey-lapangan.jpg',
+            'mime_type' => 'image/jpeg',
+            'original_size' => 1234,
+            'width' => 1920,
+            'height' => 1080,
+            'capture_date' => '2026-08-17',
+            'sync_status' => 'failed',
+            'sync_error' => 'Drive belum tersedia',
+        ]));
+
+        $this->actingAs($user)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee($project->id_project)
+            ->assertSee('data-photo-project="PRJ-2608-0048"', false)
+            ->assertSee('data-photo-step="survey"', false)
+            ->assertSee('data-photo-sync-status="failed"', false)
+            ->assertSee('survey-lapangan.jpg')
+            ->assertSee('Survey')
+            ->assertSee('Sync: failed')
+            ->assertSee('Drive belum tersedia')
+            ->assertSee(route('projects.photos.show', [$project, $photo->id]), false);
     }
 
     public function test_control_room_renders_contextual_error_without_leaking_other_projects(): void

@@ -2,7 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Mitra;
+use App\Models\Project;
+use App\Models\ProjectPhoto;
 use App\Models\User;
+use App\Support\TenantDatabaseContext;
+use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -196,5 +202,93 @@ class PostgresIntegrationTest extends TestCase
                 ->sortKeys()
                 ->all(),
         );
+    }
+
+    public function test_mitra_raw_query_cannot_read_or_write_another_mitras_project_photo(): void
+    {
+        $mitraA = Mitra::factory()->create();
+        $mitraB = Mitra::factory()->create();
+        $tenantContext = app(TenantDatabaseContext::class);
+
+        $tenantContext->set(null, true);
+
+        try {
+            $uploader = User::factory()->create();
+            $projectA = Project::query()->create([
+                'id_project' => 'PRJ-PHOTO-RLS-A',
+                'nama' => 'Project Photo Mitra A',
+                'mitra_id' => $mitraA->id,
+            ]);
+            $projectB = Project::query()->create([
+                'id_project' => 'PRJ-PHOTO-RLS-B',
+                'nama' => 'Project Photo Mitra B',
+                'mitra_id' => $mitraB->id,
+            ]);
+            $stepA = $projectA->steps()->where('step', 'survey')->firstOrFail();
+            $stepB = $projectB->steps()->where('step', 'survey')->firstOrFail();
+            $photoA = ProjectPhoto::query()->create([
+                'mitra_id' => $mitraA->id,
+                'project_id' => $projectA->id,
+                'project_step_id' => $stepA->id,
+                'uploaded_by' => $uploader->id,
+                'original_name' => 'mitra-a.jpg',
+                'stored_path' => 'project-photos/PRJ-PHOTO-RLS-A/survey/2026-08-17/mitra-a.jpg',
+                'mime_type' => 'image/jpeg',
+                'original_size' => 1024,
+            ]);
+            $photoB = ProjectPhoto::query()->create([
+                'mitra_id' => $mitraB->id,
+                'project_id' => $projectB->id,
+                'project_step_id' => $stepB->id,
+                'uploaded_by' => $uploader->id,
+                'original_name' => 'mitra-b.jpg',
+                'stored_path' => 'project-photos/PRJ-PHOTO-RLS-B/survey/2026-08-17/mitra-b.jpg',
+                'mime_type' => 'image/jpeg',
+                'original_size' => 1024,
+            ]);
+
+            $tenantContext->set($mitraA->id, false);
+
+            $visiblePhotoIds = DB::table('project_photos')
+                ->pluck('id')
+                ->map(static fn (int|string $id): int => (int) $id)
+                ->all();
+
+            $this->assertSame([$photoA->id], $visiblePhotoIds);
+            $this->assertFalse(DB::table('project_photos')->where('id', $photoB->id)->exists());
+
+            $this->assertProjectPhotoRlsViolation(fn () => DB::table('project_photos')->insert([
+                'mitra_id' => $mitraB->id,
+                'project_id' => $projectB->id,
+                'project_step_id' => $stepB->id,
+                'uploaded_by' => $uploader->id,
+                'original_name' => 'cross-tenant-insert.jpg',
+                'stored_path' => 'project-photos/PRJ-PHOTO-RLS-B/survey/2026-08-17/cross-tenant-insert.jpg',
+                'mime_type' => 'image/jpeg',
+                'original_size' => 1024,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+
+            $this->assertProjectPhotoRlsViolation(fn () => DB::table('project_photos')
+                ->where('id', $photoA->id)
+                ->update(['mitra_id' => $mitraB->id]));
+        } finally {
+            $tenantContext->set(null, false);
+        }
+    }
+
+    private function assertProjectPhotoRlsViolation(Closure $operation): void
+    {
+        try {
+            DB::transaction($operation);
+            $this->fail('Expected project_photos RLS to reject the cross-tenant write.');
+        } catch (QueryException $exception) {
+            $this->assertSame('42501', (string) $exception->getCode());
+            $this->assertStringContainsString(
+                'row-level security policy for table "project_photos"',
+                $exception->getMessage(),
+            );
+        }
     }
 }

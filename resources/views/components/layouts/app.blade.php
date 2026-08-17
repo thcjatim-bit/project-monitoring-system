@@ -23,6 +23,7 @@
                 .app-shell__user { display: none; }
             }
         </style>
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
         <livewire:styles />
     </head>
     <body>
