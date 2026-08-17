@@ -42,7 +42,9 @@ class ProjectMaterialReadinessQuery
 
         $quantities = SuratJalanItem::query()
             ->whereIn('surat_jalan_id', $suratJalanIds)
-            ->whereHas('suratJalan', fn ($query) => $query->where('status', '!=', 'dibatalkan'))
+            ->whereHas('suratJalan', fn ($query) => $query
+                ->where('status', '!=', 'dibatalkan')
+                ->whereNull('retur_dari_id'))
             ->select([
                 'material_id',
                 DB::raw('SUM(GREATEST(qty_diterima - qty_diretur, 0)) AS delivered_qty'),

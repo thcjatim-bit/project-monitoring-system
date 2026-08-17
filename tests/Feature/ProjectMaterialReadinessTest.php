@@ -37,7 +37,7 @@ class ProjectMaterialReadinessTest extends TestCase
             ])
             ->assertRedirect(route('projects.show', $project));
 
-        $this->asThc(function () use ($mitra, $material, $project, $thc): void {
+        [$requestId, $suratJalanId] = $this->asThc(function () use ($mitra, $material, $project, $thc): array {
             $origin = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
             $destination = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
             $request = MaterialRequest::query()->create([
@@ -73,6 +73,8 @@ class ProjectMaterialReadinessTest extends TestCase
                 'qty_diterima' => 4,
                 'qty_diretur' => 1,
             ]);
+
+            return [$request->id, $suratJalan->id];
         });
 
         $this->actingAs($thc)
@@ -80,7 +82,77 @@ class ProjectMaterialReadinessTest extends TestCase
             ->assertOk()
             ->assertSee('30.00%')
             ->assertSee('Transit')
-            ->assertSee('Request Material');
+            ->assertSee('Request Material')
+            ->assertSee('href="'.route('material-requests.show', $requestId).'"', false)
+            ->assertSee('href="'.route('warehouse.transfers.print', $suratJalanId).'"', false)
+            ->assertSee('href="'.route('warehouse.transit').'"', false);
+    }
+
+    public function test_control_room_does_not_count_received_return_as_additional_delivered_material(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create();
+        $project = $this->projectFor($mitra);
+        $thc = $this->userWith(null, 'read_project', 'read_project_material', 'manage_project_material');
+
+        $this->actingAs($thc)
+            ->post(route('projects.rab-material.store', $project), [
+                'material_id' => $material->id,
+                'qty' => '10',
+            ])
+            ->assertRedirect(route('projects.show', $project));
+
+        $this->asThc(function () use ($mitra, $material, $project, $thc): void {
+            $origin = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+            $destination = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+            $original = SuratJalan::query()->create([
+                'nomor' => 'SJ-TEST-READINESS-RETURN-ORIGINAL',
+                'tanggal' => '2026-08-16',
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'mitra_id' => $mitra->id,
+                'project_id' => $project->id,
+                'issued_by' => $thc->id,
+                'issued_at' => now(),
+                'status' => 'diterima',
+                'pengirim' => 'THC',
+            ]);
+            SuratJalanItem::query()->create([
+                'surat_jalan_id' => $original->id,
+                'mitra_id' => $mitra->id,
+                'material_id' => $material->id,
+                'qty' => 10,
+                'qty_diterima' => 10,
+                'qty_diretur' => 4,
+            ]);
+
+            $return = SuratJalan::query()->create([
+                'nomor' => 'SJ-TEST-READINESS-RETURN',
+                'tanggal' => '2026-08-16',
+                'warehouse_asal_id' => $destination->id,
+                'warehouse_tujuan_id' => $origin->id,
+                'mitra_id' => $mitra->id,
+                'project_id' => $project->id,
+                'retur_dari_id' => $original->id,
+                'issued_by' => $thc->id,
+                'issued_at' => now(),
+                'status' => 'diterima',
+                'pengirim' => 'Mitra',
+            ]);
+            SuratJalanItem::query()->create([
+                'surat_jalan_id' => $return->id,
+                'mitra_id' => $mitra->id,
+                'material_id' => $material->id,
+                'qty' => 4,
+                'qty_diterima' => 4,
+            ]);
+        });
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('60.00%')
+            ->assertSee('6.000');
     }
 
     public function test_control_room_exposes_an_empty_state_when_rab_material_is_not_defined(): void
@@ -93,6 +165,28 @@ class ProjectMaterialReadinessTest extends TestCase
             ->get(route('projects.show', $project))
             ->assertOk()
             ->assertSee('Kebutuhan RAB Material belum disusun');
+    }
+
+    public function test_control_room_exposes_a_no_delivery_state_when_rab_material_exists_without_receipt(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create();
+        $project = $this->projectFor($mitra);
+        $thc = $this->userWith(null, 'read_project', 'read_project_material', 'manage_project_material');
+
+        $this->actingAs($thc)
+            ->post(route('projects.rab-material.store', $project), [
+                'material_id' => $material->id,
+                'qty' => '10',
+            ])
+            ->assertRedirect(route('projects.show', $project));
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('0.00%')
+            ->assertSee('Belum ada material terkirim untuk Project ini.')
+            ->assertDontSee('Kebutuhan RAB Material belum disusun');
     }
 
     public function test_mitra_cannot_open_another_mitras_project_material_panel_or_create_requirement(): void
