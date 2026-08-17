@@ -1,6 +1,6 @@
 # Runbook — Guard boundary runtime pms-dev / pms-prod
 
-**Konteks tiket**: [Pulihkan dan buktikan runtime production memakai config dan database production (#65)](https://github.com/thcjatim-bit/project-monitoring-system/issues/65)  
+**Konteks tiket**: [Pulihkan dan buktikan runtime production memakai config dan database production (#65)](https://github.com/thcjatim-bit/project-monitoring-system/issues/65)
 **Keputusan yang diterapkan**: [Tentukan boundary runtime pms-dev/pms-prod dan guard cache konfigurasi production (#63)](https://github.com/thcjatim-bit/project-monitoring-system/issues/63)
 
 ## Masalah yang dijaga
@@ -19,6 +19,12 @@ Bahayanya berlaku dua arah. Selama cached config production terpasang di
 checkout bersama, `APP_ENV=testing php artisan …` juga **resolve ke database
 production** — sehingga menjalankan test suite di checkout itu dapat merusak
 data production. Verifikasi ini dibuktikan read-only pada #65.
+
+Untuk host yang sedang authoritative, path tersebut sama dengan `APP_DIR` pada
+`/usr/local/sbin/pms-deploy` dan working directory service production. Jika
+deployment dipindahkan ke root lain, operator wajib mengisi
+`PMS_BOUNDARY_APP_DIR` dengan root yang sama sebelum menjalankan guard; jangan
+mengandalkan default lama dari template deployment.
 
 Separasi checkout/service/cache per environment adalah remediasi sebenarnya dan
 tetap menjadi pekerjaan platform/deployment operator sesuai #63. Guard di sini
@@ -51,10 +57,11 @@ script — bukan menyimpulkan identitas yang diharapkan dari runtime yang sedang
 diaudit:
 
 - checkout ada dan berbentuk aplikasi Laravel;
-- exact SHA dan worktree bersih;
+- exact SHA dan worktree bersih — checkout yang tidak dapat diperiksa (bukan repo git, `git` tidak tersedia, HEAD tidak resolve, atau `status` ditolak karena dubious ownership) dihitung **gagal**, bukan dilewati;
 - config **CACHED** (runtime production tanpa cache tidak punya artifact yang bisa diaudit);
 - `app.env`, `app.debug`, `app.url`;
-- `database.connections.pgsql` → `database`, `host`, `port`, `username`;
+- `database.default` — koneksi yang diperiksa diambil dari sini, bukan `pgsql` yang dipatok, agar runtime yang `DB_CONNECTION`-nya menunjuk ke tempat lain tidak lolos atas dasar koneksi yang tidak pernah dibuka;
+- koneksi default → `database`, `host`, `port`, `username`;
 - tidak ada identifier environment lain pada field identitas di atas;
 - identitas database **live** (`db:show`, yang tidak memuat password) cocok dengan allowlist;
 - `pms-queue.service`, `pms-schedule.timer`, `nginx`, `php8.3-fpm` aktif.
@@ -70,12 +77,13 @@ akan membuat pemindaian seluruh blob merah permanen.
 bash scripts/verify-runtime-boundary.test.sh
 ```
 
-Suite membangun fixture `bootstrap/cache/config.php` sintetis dan menegaskan
-exit status guard — termasuk kasus insiden #65 (cached config testing di
-production), setiap field identitas secara independen, penolakan lintas profile,
-config yang tidak ter-cache, profile tak dikenal, checkout hilang, dan bahwa
-output tidak pernah memuat nilai password. Suite ini offline: tidak menyentuh
-server, database, maupun service.
+18 check. Suite membangun fixture repo git sekali pakai berisi
+`bootstrap/cache/config.php` sintetis dan menegaskan exit status guard —
+termasuk kasus insiden #65 (cached config testing di production), setiap field
+identitas secara independen, penolakan lintas profile, koneksi default bukan
+`pgsql`, checkout bukan repo git, worktree kotor, config yang tidak ter-cache,
+profile tak dikenal, checkout hilang, dan bahwa output tidak pernah memuat nilai
+password. Suite ini offline: tidak menyentuh server, database, maupun service.
 
 ## Belum terpasang di pipeline
 
