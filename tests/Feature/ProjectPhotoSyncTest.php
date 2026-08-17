@@ -57,12 +57,14 @@ class ProjectPhotoSyncTest extends TestCase
 
         $summary = $this->asThc(fn (): array => app(ProjectPhotoSyncService::class)->syncPending());
 
-        $photo->refresh();
         $this->assertSame(['discovered' => 1, 'synced' => 1, 'failed' => 0], $summary);
-        $this->assertSame('synced', $photo->sync_status);
-        $this->assertSame('https://drive.example/evidence-uuid.jpg', $photo->drive_url);
-        $this->assertNotNull($photo->synced_at);
-        $this->assertNull($photo->sync_error);
+        $this->asThc(function () use ($photo): void {
+            $photo->refresh();
+            $this->assertSame('synced', $photo->sync_status);
+            $this->assertSame('https://drive.example/evidence-uuid.jpg', $photo->drive_url);
+            $this->assertNotNull($photo->synced_at);
+            $this->assertNull($photo->sync_error);
+        });
         Storage::disk('local')->assertExists($path);
     }
 
@@ -81,10 +83,12 @@ class ProjectPhotoSyncTest extends TestCase
 
         $summary = $this->asThc(fn (): array => app(ProjectPhotoSyncService::class)->syncPending());
 
-        $photo->refresh();
         $this->assertSame(['discovered' => 1, 'synced' => 0, 'failed' => 1], $summary);
-        $this->assertSame('failed', $photo->sync_status);
-        $this->assertStringContainsString('Drive unavailable', $photo->sync_error);
+        $this->asThc(function () use ($photo): void {
+            $photo->refresh();
+            $this->assertSame('failed', $photo->sync_status);
+            $this->assertStringContainsString('Drive unavailable', $photo->sync_error);
+        });
         Storage::disk('local')->assertExists($path);
     }
 
@@ -114,14 +118,16 @@ class ProjectPhotoSyncTest extends TestCase
         $second = $this->asThc(fn (): array => app(ProjectPhotoSyncService::class)->syncPending());
         $third = $this->asThc(fn (): array => app(ProjectPhotoSyncService::class)->syncPending());
 
-        $photo->refresh();
         $this->assertSame(['discovered' => 1, 'synced' => 0, 'failed' => 1], $first);
         $this->assertSame(['discovered' => 1, 'synced' => 1, 'failed' => 0], $second);
         $this->assertSame(['discovered' => 0, 'synced' => 0, 'failed' => 0], $third);
         $this->assertSame(2, $attempts);
-        $this->assertSame('synced', $photo->sync_status);
-        $this->assertSame('https://drive.example/evidence-uuid.jpg', $photo->drive_url);
-        $this->assertNull($photo->sync_error);
+        $this->asThc(function () use ($photo): void {
+            $photo->refresh();
+            $this->assertSame('synced', $photo->sync_status);
+            $this->assertSame('https://drive.example/evidence-uuid.jpg', $photo->drive_url);
+            $this->assertNull($photo->sync_error);
+        });
     }
 
     private function projectFor(Mitra $mitra, string $idProject): Project
