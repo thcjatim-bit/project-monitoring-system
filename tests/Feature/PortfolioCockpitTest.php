@@ -436,6 +436,217 @@ class PortfolioCockpitTest extends TestCase
         $this->assertStringNotContainsString('PRJ-2608-0021', $activityHtml);
     }
 
+    public function test_decision_queue_surfaces_low_spi_as_a_read_only_project_exception(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitra = Mitra::factory()->create(['nama' => 'Mitra Queue']);
+        $project = $this->projectFor($mitra, 'PRJ-2608-0050', 'Project Queue SPI');
+        $rab = $this->addRabJasa($project, '100');
+        $this->savePlan($project, '2026-08-30');
+        $this->recordProgress($project, $rab, '2026-08-10', '30', 'verified');
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress');
+
+        $response = $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('Decision Queue')
+            ->assertSee('SPI rendah')
+            ->assertSee('Project Queue SPI')
+            ->assertSee('data-decision-category="spi"', false)
+            ->assertSee('href="'.route('projects.show', $project).'"', false);
+
+        $queueStart = strpos($response->getContent(), 'id="portfolio-decision-queue"');
+        $this->assertNotFalse($queueStart);
+        $queueHtml = substr($response->getContent(), $queueStart, strpos($response->getContent(), '</section>', $queueStart) - $queueStart);
+        $this->assertStringNotContainsStringIgnoringCase('method="post"', $queueHtml);
+        $this->assertStringNotContainsStringIgnoringCase('<form', $queueHtml);
+    }
+
+    public function test_decision_queue_lists_material_transit_toc_and_pending_evidence_exceptions(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 12:00:00');
+        $mitra = Mitra::factory()->create(['nama' => 'Mitra Queue Categories']);
+
+        $materialProject = $this->projectFor($mitra, 'PRJ-2608-0051', 'Project Material Queue');
+        $material = Material::factory()->create(['nama' => 'Material Queue']);
+        $this->requireMaterial($materialProject, $material, '10');
+        $this->createTransferFor($materialProject, $material, '2026-08-19 08:00:00', '10', '0');
+
+        $transitProject = $this->projectFor($mitra, 'PRJ-2608-0052', 'Project Transit Queue');
+        $transitMaterial = Material::factory()->create(['nama' => 'Transit Queue']);
+        $this->createTransferFor($transitProject, $transitMaterial, '2026-08-15 08:00:00', '5', '0');
+
+        $tocProject = $this->projectFor($mitra, 'PRJ-2608-0053', 'Project TOC Queue');
+        $this->asThc(fn () => $tocProject->update(['toc' => '2026-08-25']));
+
+        $evidenceProject = $this->projectFor($mitra, 'PRJ-2608-0054', 'Project Evidence Queue');
+        $evidenceRab = $this->addRabJasa($evidenceProject, '100');
+        $this->recordProgress($evidenceProject, $evidenceRab, '2026-08-19', '40', 'pending');
+
+        $thc = $this->userWithPermissions(
+            null,
+            'read_dashboard',
+            'read_project',
+            'read_project_progress',
+            'read_project_material',
+            'operate_warehouse',
+        );
+
+        $response = $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('Transit melewati batas')
+            ->assertSee('Material belum lengkap')
+            ->assertSee('TOC mendekat')
+            ->assertSee('Bukti pekerjaan pending')
+            ->assertSee('Project Material Queue')
+            ->assertSee('Project Transit Queue')
+            ->assertSee('Project TOC Queue')
+            ->assertSee('Project Evidence Queue')
+            ->assertSee('Material Transit tidak dianggap sebagai Material tersedia')
+            ->assertSee('<strong data-kpi="verified-percent">0.00%</strong>', false);
+
+        $queueStart = strpos($response->getContent(), 'id="portfolio-decision-queue"');
+        $queueEnd = strpos($response->getContent(), '</section>', $queueStart);
+        $this->assertNotFalse($queueStart);
+        $this->assertNotFalse($queueEnd);
+        $queueHtml = substr($response->getContent(), $queueStart, $queueEnd - $queueStart);
+        $this->assertStringNotContainsStringIgnoringCase('method="post"', $queueHtml);
+        $this->assertStringNotContainsStringIgnoringCase('<form', $queueHtml);
+    }
+
+    public function test_decision_queue_follows_risk_and_period_filters(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 12:00:00');
+        $mitra = Mitra::factory()->create();
+        $red = $this->projectFor($mitra, 'PRJ-2608-0055', 'Project Queue Merah');
+        $redRab = $this->addRabJasa($red, '100');
+        $this->savePlan($red, '2026-08-30');
+        $this->recordProgress($red, $redRab, '2026-08-19', '30', 'verified');
+        $green = $this->projectFor($mitra, 'PRJ-2608-0056', 'Project Queue Hijau');
+        $greenRab = $this->addRabJasa($green, '100');
+        $this->savePlan($green, '2026-08-30');
+        $this->recordProgress($green, $greenRab, '2026-08-19', '50', 'verified');
+        $this->recordProgress($green, $greenRab, '2026-08-19', '10', 'pending');
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress');
+
+        $response = $this->actingAs($thc)
+            ->get(route('portfolio.index', ['periode' => '2026-08', 'risiko' => 'merah']))
+            ->assertOk();
+        $queueStart = strpos($response->getContent(), 'id="portfolio-decision-queue"');
+        $queueEnd = strpos($response->getContent(), '</section>', $queueStart);
+        $queueHtml = substr($response->getContent(), $queueStart, $queueEnd - $queueStart);
+        $this->assertStringContainsString('Project Queue Merah', $queueHtml);
+        $this->assertStringNotContainsString('Project Queue Hijau', $queueHtml);
+
+        $priorPeriodResponse = $this->actingAs($thc)
+            ->get(route('portfolio.index', ['periode' => '2026-06']))
+            ->assertOk();
+        $priorPeriodContent = $priorPeriodResponse->getContent();
+        $priorPeriodQueueStart = strpos($priorPeriodContent, 'id="portfolio-decision-queue"');
+        $priorPeriodQueueEnd = strpos($priorPeriodContent, '</section>', $priorPeriodQueueStart);
+        $priorPeriodQueueHtml = substr($priorPeriodContent, $priorPeriodQueueStart, $priorPeriodQueueEnd - $priorPeriodQueueStart);
+        $this->assertTrue(
+            str_contains($priorPeriodQueueHtml, 'Tidak ada pengecualian yang perlu ditindaklanjuti untuk filter aktif.'),
+            $priorPeriodQueueHtml,
+        );
+    }
+
+    public function test_decision_queue_uses_the_toc_snapshot_for_the_selected_period(): void
+    {
+        CarbonImmutable::setTestNow('2026-09-20 12:00:00');
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra, 'PRJ-2609-0061', 'Project Queue TOC Snapshot');
+        $thc = $this->userWithPermissions(null, 'manage_project_plan');
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-09-25', [
+            ['date' => '2026-09-01', 'percent' => 0],
+            ['date' => '2026-09-25', 'percent' => 100],
+        ]));
+        $viewer = $this->userWithPermissions(null, 'read_dashboard', 'read_project');
+
+        $this->actingAs($viewer)
+            ->get(route('portfolio.index', ['periode' => '2026-09']))
+            ->assertOk()
+            ->assertSee('TOC mendekat')
+            ->assertSee('Project Queue TOC Snapshot');
+
+        $priorPeriod = $this->actingAs($viewer)
+            ->get(route('portfolio.index', ['periode' => '2026-08']))
+            ->assertOk();
+        $queueStart = strpos($priorPeriod->getContent(), 'id="portfolio-decision-queue"');
+        $queueEnd = strpos($priorPeriod->getContent(), '</section>', $queueStart);
+        $this->assertNotFalse($queueStart);
+        $this->assertNotFalse($queueEnd);
+        $queueHtml = substr($priorPeriod->getContent(), $queueStart, $queueEnd - $queueStart);
+        $this->assertStringNotContainsString('Project Queue TOC Snapshot', $queueHtml);
+    }
+
+    public function test_decision_queue_explains_when_source_permissions_are_missing(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 12:00:00');
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra, 'PRJ-2608-0057', 'Project Queue Terbatas');
+        $rab = $this->addRabJasa($project, '100');
+        $this->savePlan($project, '2026-08-30');
+        $this->recordProgress($project, $rab, '2026-08-19', '30', 'verified');
+        $viewer = $this->userWithPermissions(null, 'read_dashboard');
+
+        $response = $this->actingAs($viewer)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('Decision Queue membutuhkan izin pada sumber Project, Progres jasa, atau Transit.');
+
+        $queueStart = strpos($response->getContent(), 'id="portfolio-decision-queue"');
+        $queueEnd = strpos($response->getContent(), '</section>', $queueStart);
+        $queueHtml = substr($response->getContent(), $queueStart, $queueEnd - $queueStart);
+        $this->assertStringNotContainsString('Project Queue Terbatas', $queueHtml);
+        $this->assertStringNotContainsString('SPI rendah', $queueHtml);
+    }
+
+    public function test_decision_queue_does_not_turn_a_zero_baseline_into_a_spi_exception(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 12:00:00');
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra, 'PRJ-2608-0058', 'Project Queue N/A');
+        $rab = $this->addRabJasa($project, '100');
+        $this->recordProgress($project, $rab, '2026-08-19', '40', 'verified');
+        $viewer = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress');
+
+        $response = $this->actingAs($viewer)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('Tidak ada pengecualian yang perlu ditindaklanjuti untuk filter aktif.');
+        $queueStart = strpos($response->getContent(), 'id="portfolio-decision-queue"');
+        $queueEnd = strpos($response->getContent(), '</section>', $queueStart);
+        $queueHtml = substr($response->getContent(), $queueStart, $queueEnd - $queueStart);
+        $this->assertStringNotContainsString('Project Queue N/A', $queueHtml);
+        $this->assertStringNotContainsString('SPI rendah', $queueHtml);
+    }
+
+    public function test_mitra_decision_queue_isolated_from_other_mitras(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 12:00:00');
+        $mitraA = Mitra::factory()->create(['nama' => 'Mitra Queue A']);
+        $mitraB = Mitra::factory()->create(['nama' => 'Mitra Queue B']);
+        foreach ([[$mitraA, 'PRJ-2608-0059', 'Project Queue A'], [$mitraB, 'PRJ-2608-0060', 'Project Queue B']] as [$mitra, $idProject, $name]) {
+            $project = $this->projectFor($mitra, $idProject, $name);
+            $rab = $this->addRabJasa($project, '100');
+            $this->savePlan($project, '2026-08-30');
+            $this->recordProgress($project, $rab, '2026-08-19', '30', 'verified');
+        }
+        $viewer = $this->userWithPermissions($mitraA->id, 'read_dashboard', 'read_project', 'read_project_progress');
+
+        $response = $this->actingAs($viewer)
+            ->get(route('portfolio.index'))
+            ->assertOk();
+        $queueStart = strpos($response->getContent(), 'id="portfolio-decision-queue"');
+        $queueEnd = strpos($response->getContent(), '</section>', $queueStart);
+        $queueHtml = substr($response->getContent(), $queueStart, $queueEnd - $queueStart);
+        $this->assertStringContainsString('Project Queue A', $queueHtml);
+        $this->assertStringNotContainsString('Project Queue B', $queueHtml);
+        $this->assertStringNotContainsString('Mitra Queue B', $queueHtml);
+    }
+
     public function test_risk_filter_narrows_the_portfolio_to_projects_beyond_the_spi_threshold(): void
     {
         CarbonImmutable::setTestNow('2026-08-15 09:00:00');
@@ -605,20 +816,25 @@ class PortfolioCockpitTest extends TestCase
 
     private function deliverMaterial(Project $project, Material $material, string $qty, string $received): void
     {
+        $this->createTransferFor($project, $material, '2026-08-12 08:00:00', $qty, $received);
+    }
+
+    private function createTransferFor(Project $project, Material $material, string $issuedAt, string $qty, string $received): void
+    {
         $issuer = $this->userWithPermissions(null, 'operate_warehouse');
 
-        $this->asThc(function () use ($project, $material, $qty, $received, $issuer): void {
+        $this->asThc(function () use ($project, $material, $issuedAt, $qty, $received, $issuer): void {
             $origin = Warehouse::factory()->create(['mitra_id' => $project->mitra_id]);
             $destination = Warehouse::factory()->create(['mitra_id' => $project->mitra_id]);
             $suratJalan = SuratJalan::query()->create([
-                'nomor' => 'SJ-'.fake()->unique()->numerify('#####'),
-                'tanggal' => '2026-08-12',
+                'nomor' => 'SJ-'.CarbonImmutable::parse($issuedAt)->format('ym').'-'.fake()->unique()->numerify('####'),
+                'tanggal' => substr($issuedAt, 0, 10),
                 'warehouse_asal_id' => $origin->id,
                 'warehouse_tujuan_id' => $destination->id,
                 'mitra_id' => $project->mitra_id,
                 'project_id' => $project->id,
                 'issued_by' => $issuer->id,
-                'issued_at' => '2026-08-12 08:00:00',
+                'issued_at' => $issuedAt,
                 'status' => 'terbit',
                 'pengirim' => 'THC',
             ]);

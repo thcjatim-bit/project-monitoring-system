@@ -78,6 +78,17 @@
         .portfolio__activity-meta { color: #526071; display: flex; flex-wrap: wrap; font-size: .78rem; gap: 6px 12px; }
         .portfolio__activity-item p { margin: 6px 0 0; }
         .portfolio__activity-item small { color: #526071; display: block; margin-top: 5px; }
+        .portfolio__queue-list { display: grid; gap: 10px; list-style: none; margin: 16px 0 0; padding: 0; }
+        .portfolio__queue-item { background: #f8fafc; border-left: 4px solid #d97706; padding: 13px 15px; }
+        .portfolio__queue-item[data-decision-risk="tinggi"] { border-left-color: #dc2626; }
+        .portfolio__queue-item h3 { font-size: 1rem; margin: 8px 0 0; }
+        .portfolio__queue-item p { margin: 6px 0 0; }
+        .portfolio__queue-item small { color: #526071; display: block; margin-top: 7px; }
+        .portfolio__queue-badges { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+        .portfolio__queue-badge { border-radius: 999px; display: inline-block; font-size: .74rem; font-weight: 800; padding: 4px 8px; }
+        .portfolio__queue-badge--category { background: #e0f2fe; color: #075985; }
+        .portfolio__queue-badge--risk { background: #fef3c7; color: #92400e; }
+        .portfolio__queue-badge--risk-high { background: #fee2e2; color: #991b1b; }
         @media (max-width: 680px) {
             .portfolio { padding: 24px 14px 36px; }
             .portfolio__kpis { grid-template-columns: 1fr; }
@@ -254,6 +265,46 @@
                         @endif
                     </div>
                 </div>
+            @endif
+        </section>
+
+        <section class="portfolio__panel" id="portfolio-decision-queue" aria-labelledby="portfolio-decision-queue-title" data-decision-queue>
+            <div class="portfolio__section-head">
+                <div>
+                    <h2 id="portfolio-decision-queue-title">Decision Queue</h2>
+                    <p class="portfolio__panel-note">Pengecualian lintas Project yang membutuhkan keputusan. Queue hanya membaca dan membuka sumber yang authorized.</p>
+                </div>
+                <span class="portfolio__updated">{{ $decisionQueue->count() }} item</span>
+            </div>
+
+            @if ($portfolioError)
+                <div class="portfolio__state portfolio__state--error" role="alert">{{ $portfolioError }}</div>
+            @elseif (! $decisionQueueAvailable)
+                <div class="portfolio__state portfolio__state--empty">Decision Queue membutuhkan izin pada sumber Project, Progres jasa, atau Transit.</div>
+            @elseif ($decisionQueue->isEmpty())
+                <div class="portfolio__state portfolio__state--empty">Tidak ada pengecualian yang perlu ditindaklanjuti untuk filter aktif.</div>
+            @else
+                <ol class="portfolio__queue-list">
+                    @foreach ($decisionQueue as $item)
+                        <li class="portfolio__queue-item" data-decision-category="{{ $item['category'] }}" data-decision-risk="{{ $item['risk'] }}">
+                            <div class="portfolio__queue-badges">
+                                <span class="portfolio__queue-badge portfolio__queue-badge--category">{{ $item['category_label'] }}</span>
+                                <span class="portfolio__queue-badge {{ $item['risk'] === 'tinggi' ? 'portfolio__queue-badge--risk-high' : 'portfolio__queue-badge--risk' }}">{{ $item['risk_label'] }}</span>
+                            </div>
+                            <h3>{{ $item['title'] }}</h3>
+                            <p>
+                                @if ($item['source_url'])
+                                    <a href="{{ $item['source_url'] }}"><strong>{{ $item['id_project'] }}</strong> · {{ $item['project_name'] }}</a>
+                                @else
+                                    <strong>{{ $item['id_project'] }}</strong> · {{ $item['project_name'] }}
+                                @endif
+                                · {{ $item['mitra'] }}
+                            </p>
+                            <p>{{ $item['description'] }}</p>
+                            <small>Diperbarui {{ $item['updated_at']->format('d M Y H:i') }} · Sumber: {{ $item['source_label'] }}</small>
+                        </li>
+                    @endforeach
+                </ol>
             @endif
         </section>
 

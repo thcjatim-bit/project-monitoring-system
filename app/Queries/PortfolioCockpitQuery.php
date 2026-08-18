@@ -73,6 +73,7 @@ class PortfolioCockpitQuery
     public function __construct(
         private ProjectCurveQuery $curveQuery,
         private ProjectMaterialReadinessQuery $materialQuery,
+        private PortfolioDecisionQueueQuery $decisionQueueQuery,
     ) {}
 
     /**
@@ -128,6 +129,7 @@ class PortfolioCockpitQuery
             statusDistribution: $this->statusDistribution($metrics, $canReadProgress),
             projectStatusDistribution: $this->projectStatusDistribution($metrics),
             activity: $canReadTimeline ? $this->activity($metrics, $filters, $viewer) : collect(),
+            decisionQueue: $this->decisionQueueQuery->for($viewer, $activeMetrics, $filters),
             generatedAt: $now,
             portfolioError: null,
         );
@@ -163,6 +165,7 @@ class PortfolioCockpitQuery
             statusDistribution: $this->emptyStatusDistribution(),
             projectStatusDistribution: $this->emptyProjectStatusDistribution(),
             activity: collect(),
+            decisionQueue: collect(),
             generatedAt: $now,
             portfolioError: 'Portfolio Cockpit belum dapat dimuat. Coba lagi atau buka modul sumbernya.',
         );
@@ -231,6 +234,7 @@ class PortfolioCockpitQuery
         array $statusDistribution,
         array $projectStatusDistribution,
         Collection $activity,
+        Collection $decisionQueue,
         CarbonImmutable $generatedAt,
         ?string $portfolioError,
     ): array {
@@ -248,6 +252,8 @@ class PortfolioCockpitQuery
             'statusDistribution' => $statusDistribution,
             'projectStatusDistribution' => $projectStatusDistribution,
             'activity' => $activity,
+            'decisionQueue' => $decisionQueue,
+            'decisionQueueAvailable' => $viewer->hasIzin('read_project') || $viewer->hasIzin('operate_warehouse'),
             'projectsUrl' => $viewer->hasIzin('read_project') ? route('projects.index') : null,
             'generatedAt' => $generatedAt,
             'portfolioError' => $portfolioError,

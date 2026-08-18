@@ -50,7 +50,7 @@ User THC yang memiliki `read_dashboard` dapat melihat kesehatan seluruh Project 
 - Filter eksplisit untuk cakupan Project, Mitra, periode, dan status risiko.
 - Tren realisasi jasa portofolio terhadap target kumulatif, dengan penjelasan periode dan waktu pembaruan data.
 - Health matrix lintas Project yang menampilkan minimal ID Project, nama, Mitra, progress jasa terverifikasi, SPI, kesiapan material, dan status risiko.
-- Decision queue untuk pengecualian seperti SPI rendah, Transit melewati batas, material belum lengkap, TOC yang mendekat, dan bukti pekerjaan yang menunggu verifikasi.
+- Decision queue untuk pengecualian seperti SPI rendah, Transit melewati batas, material belum lengkap, TOC yang mendekat (dalam 30 hari kalender), dan bukti pekerjaan yang menunggu verifikasi.
 - Tautan dari setiap KPI, baris health matrix, dan decision queue ke halaman sumber yang memiliki authorization serta aturan transaksinya.
 - Distribusi status Project dan linimasa aktivitas terbaru lintas Project.
 - Export ringkasan berdasarkan filter aktif, menggunakan read model yang sama dengan Portfolio Cockpit.

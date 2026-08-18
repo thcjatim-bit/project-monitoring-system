@@ -35,6 +35,7 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Linimasa Gabungan** — Satu riwayat aktivitas project yang mencampur log sistem otomatis (surat jalan, pindah step) dan komentar diskusi antar user.
 - **Komentar Internal** — Tipe komentar di linimasa yang hanya bisa dibaca oleh user THC, tersembunyi dari Mitra. Tidak boleh dihapus, hanya boleh diedit.
 - **Portfolio Cockpit** — halaman baca lintas Project yang menjawab "apa yang perlu dibaca atau diputuskan sekarang?" dari tingkat portofolio. Terbuka untuk User THC maupun User Mitra yang punya izin `read_dashboard`, dengan cakupan data mengikuti isolasi mitra. Read-only: menautkan ke modul pemilik data dan tidak pernah jadi jalur mutasi. Bukan pengganti Project Control Room (halaman detail satu Project).
+- **Decision Queue** — bagian baca dari Portfolio Cockpit yang mengelompokkan pengecualian lintas Project menurut kategori dan status risiko, menampilkan konteks, waktu pembaruan, alasan, serta tautan authorized ke modul pemilik data. Tidak memiliki jalur mutasi.
 - **Status risiko** — penanda kesehatan satu Project di Portfolio Cockpit, memakai warna SPI ADR-0010 (`hijau`/`kuning`/`merah`, atau `N/A` saat kumulatif baseline masih 0%). Project berstatus kuning atau merah dihitung sebagai **Project perlu perhatian**.
 
 ## Gudang & material
