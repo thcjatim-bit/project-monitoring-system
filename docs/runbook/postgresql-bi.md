@@ -12,7 +12,9 @@ missing or unsafe.
 
 - Schema: `bi`.
 - Login role: `pms_bi_reader` (`LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`,
-  `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, no memberships).
+  `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, no memberships). Its role
+  defaults are `app.is_thc=off` and `app.mitra_id=-1`, so a connection
+  without an explicit checkout context fails closed.
 - View owner: `pms_bi_view_owner` (`NOLOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`),
   never supplied to a BI tool and never an owner of a `public` base table.
 - The reader receives `USAGE` on `bi` and explicit `SELECT` only on the nine
@@ -31,7 +33,14 @@ query, including after pool reuse:
 ```sql
 SELECT set_config('app.is_thc', 'on', false);
 SELECT set_config('app.mitra_id', '', false);
+SELECT current_user,
+       current_setting('app.is_thc', true) AS is_thc,
+       current_setting('app.mitra_id', true) AS mitra_id;
 ```
+
+The pool adapter must discard the connection unless the verification result is
+exactly `pms_bi_reader`, `on`, and the empty string. This overwrite-and-verify
+step is required again whenever a pooled connection is checked out.
 
 The views require THC context and an empty Mitra context. Missing or invalid
 context returns zero rows. GUC values are only a fail-closed query context;

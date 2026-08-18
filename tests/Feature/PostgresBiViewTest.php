@@ -26,7 +26,7 @@ class PostgresBiViewTest extends TestCase
         $views = DB::select(<<<'SQL'
             SELECT c.relname,
                    COALESCE('security_barrier=true' = ANY (c.reloptions), false) AS security_barrier,
-                   COALESCE('security_invoker=false' = ANY (c.reloptions), false) AS security_definer_semantics
+                   COALESCE('security_invoker=false' = ANY (c.reloptions), false) AS security_invoker_disabled
             FROM pg_class AS c
             JOIN pg_namespace AS n ON n.oid = c.relnamespace
             WHERE n.nspname = 'bi' AND c.relkind = 'v'
@@ -47,7 +47,7 @@ class PostgresBiViewTest extends TestCase
 
         foreach ($views as $view) {
             $this->assertTrue((bool) $view->security_barrier, $view->relname);
-            $this->assertTrue((bool) $view->security_definer_semantics, $view->relname);
+            $this->assertTrue((bool) $view->security_invoker_disabled, $view->relname);
         }
     }
 
@@ -172,6 +172,16 @@ class PostgresBiViewTest extends TestCase
         $this->assertFalse($owner->rolbypassrls);
         $this->assertFalse($owner->rolcanlogin);
 
+        $owner_memberships = DB::selectOne(<<<'SQL'
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_auth_members AS membership
+                JOIN pg_roles AS member ON member.oid = membership.member
+                WHERE member.rolname = 'pms_bi_view_owner'
+            ) AS has_membership
+        SQL);
+        $this->assertFalse($owner_memberships->has_membership);
+
         $owner_base_relations = DB::selectOne(<<<'SQL'
             SELECT EXISTS (
                 SELECT 1
@@ -184,6 +194,34 @@ class PostgresBiViewTest extends TestCase
             ) AS owns_base_relation
         SQL);
         $this->assertFalse($owner_base_relations->owns_base_relation);
+
+        $tenant_relations = DB::select(<<<'SQL'
+            SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+            FROM pg_class AS c
+            JOIN pg_namespace AS n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relkind IN ('r', 'p')
+              AND c.relname IN (
+                  'projects', 'project_steps', 'project_baselines', 'project_baseline_days',
+                  'project_progresses', 'project_rab_jasas', 'project_variation_orders',
+                  'project_variation_order_items', 'warehouses', 'material_stoks',
+                  'material_transaksis', 'surat_jalans', 'surat_jalan_items',
+                  'material_requests', 'material_request_items', 'project_rekons',
+                  'project_rekon_items', 'pks', 'mitra_harga_jasas'
+              )
+            ORDER BY c.relname
+        SQL);
+        $this->assertSame([
+            'material_request_items', 'material_requests', 'material_stoks', 'material_transaksis',
+            'mitra_harga_jasas', 'pks', 'project_baseline_days', 'project_baselines',
+            'project_progresses', 'project_rab_jasas', 'project_rekon_items', 'project_rekons',
+            'project_steps', 'project_variation_order_items', 'project_variation_orders', 'projects',
+            'surat_jalan_items', 'surat_jalans', 'warehouses',
+        ], array_map(static fn (object $relation): string => $relation->relname, $tenant_relations));
+        foreach ($tenant_relations as $relation) {
+            $this->assertTrue((bool) $relation->relrowsecurity, $relation->relname);
+            $this->assertTrue((bool) $relation->relforcerowsecurity, $relation->relname);
+        }
 
         $schema_privileges = DB::selectOne(<<<'SQL'
             SELECT has_schema_privilege('pms_bi_reader', 'bi', 'USAGE') AS can_usage,
@@ -285,9 +323,25 @@ class PostgresBiViewTest extends TestCase
         ]);
 
         $bi = DB::connection('bi_testing');
-        $bi->select("select set_config('app.mitra_id', '', false)");
+        $bi->statement('reset app.is_thc');
+        $bi->statement('reset app.mitra_id');
+        $this->assertCount(0, $bi->table('bi.v_projects')->get());
+
         $bi->select("select set_config('app.is_thc', 'on', false)");
+        $bi->statement('reset app.mitra_id');
+        $this->assertCount(0, $bi->table('bi.v_projects')->get());
+
+        $bi->select("select set_config('app.mitra_id', '', false)");
         $bi->select("select set_config('app.reporting_as_of', '2026-08-18', false)");
+
+        $identity = $bi->selectOne(<<<'SQL'
+            SELECT current_user,
+                   current_setting('app.is_thc', true) AS is_thc,
+                   current_setting('app.mitra_id', true) AS mitra_id
+        SQL);
+        $this->assertSame('pms_bi_reader', $identity->current_user);
+        $this->assertSame('on', $identity->is_thc);
+        $this->assertSame('', $identity->mitra_id);
 
         $projects = $bi->table('bi.v_projects')->orderBy('id_project')->get();
         $this->assertSame(['PRJ-BI-0001', 'PRJ-BI-0002'], $projects->pluck('id_project')->all());
@@ -330,11 +384,35 @@ class PostgresBiViewTest extends TestCase
         } catch (QueryException $exception) {
             $this->assertSame('42501', (string) $exception->getCode());
         }
+
+        foreach ([
+            ['insert into public.material_transaksis (id) values (0)', ['42501']],
+            ['update public.material_transaksis set reason = reason where false', ['42501']],
+            ['delete from bi.v_projects where false', ['42501', '55000']],
+        ] as $statement) {
+            try {
+                $bi->statement($statement[0]);
+                $this->fail('The BI reader must not mutate raw tables or curated views.');
+            } catch (QueryException $exception) {
+                $this->assertContains((string) $exception->getCode(), $statement[1], $statement[0]);
+            }
+        }
     }
 
     public function test_inventory_and_request_views_keep_their_domain_grain(): void
     {
         $fixture = $this->createInventoryFixture();
+
+        $historical = $this->biReader('2026-08-18')
+            ->table('bi.v_request_material')
+            ->where('material_request_id', $fixture['request_id'])
+            ->first();
+        $this->assertNotNull($historical);
+        $this->assertSame('0.000', (string) $historical->qty_diterima);
+        $this->assertSame('0.000', (string) $historical->qty_diretur);
+        $this->assertSame('5.000', (string) $historical->qty_transit);
+        $this->assertSame('5.000', (string) $historical->qty_sisa);
+
         $bi = $this->biReader('2026-08-19');
 
         $stocks = $bi->table('bi.v_stok')
@@ -578,9 +656,12 @@ class PostgresBiViewTest extends TestCase
             'pending',
             'pending_shadow',
             'verified',
-        ], $series->pluck('series_kind')->all());
+        ], $series->pluck('series_kind')->unique()->values()->all());
         $this->assertSame('20.00', (string) $series->firstWhere('series_kind', 'verified')->cumulative_percent);
-        $this->assertSame('30.00', (string) $series->firstWhere('series_kind', 'pending_shadow')->cumulative_percent);
+        $pendingShadowSeries = $series->where('series_kind', 'pending_shadow')->values();
+        $this->assertCount(2, $pendingShadowSeries);
+        $this->assertSame('20.00', (string) $pendingShadowSeries->first()->cumulative_percent);
+        $this->assertSame('30.00', (string) $pendingShadowSeries->last()->cumulative_percent);
 
         $rekons = $bi->table('bi.v_rekon_material')
             ->where('project_id', $fixture['project_id'])
@@ -753,7 +834,7 @@ class PostgresBiViewTest extends TestCase
             'status' => 'diterima',
             'pengirim' => 'BI Fixture',
             'received_by' => $actorId,
-            'received_at' => $timestamp,
+            'received_at' => '2026-08-19 10:00:00',
             'created_at' => $timestamp,
             'updated_at' => $timestamp,
         ]);
@@ -764,6 +845,32 @@ class PostgresBiViewTest extends TestCase
             'qty' => '4.000',
             'qty_diterima' => '4.000',
             'qty_diretur' => '1.000',
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+        $returnShipmentId = (int) $writer->table('surat_jalans')->insertGetId([
+            'nomor' => 'SJ-BI-RET-'.$suffix,
+            'tanggal' => '2026-08-19',
+            'warehouse_asal_id' => $destinationWarehouseId,
+            'warehouse_tujuan_id' => $warehouseId,
+            'mitra_id' => $mitraId,
+            'material_request_id' => $requestId,
+            'project_id' => $projectId,
+            'retur_dari_id' => $receivedShipmentId,
+            'issued_by' => $actorId,
+            'issued_at' => $timestamp,
+            'status' => 'terbit',
+            'pengirim' => 'BI Fixture Return',
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+        $writer->table('surat_jalan_items')->insert([
+            'surat_jalan_id' => $returnShipmentId,
+            'mitra_id' => $mitraId,
+            'material_id' => $materialId,
+            'qty' => '1.000',
+            'qty_diterima' => '0.000',
+            'qty_diretur' => '0.000',
             'created_at' => $timestamp,
             'updated_at' => $timestamp,
         ]);

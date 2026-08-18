@@ -27,8 +27,8 @@ return new class extends Migration
         DB::unprepared(<<<'SQL'
             DO $bi_preflight$
             BEGIN
-                IF to_regclass('public.project_rekons') IS NULL
-                   OR to_regclass('public.project_rekon_items') IS NULL THEN
+                IF pg_catalog.to_regclass('public.project_rekons') IS NULL
+                   OR pg_catalog.to_regclass('public.project_rekon_items') IS NULL THEN
                     RAISE EXCEPTION 'BI views require the Rekon Material source from issue #62';
                 END IF;
 
@@ -52,9 +52,21 @@ return new class extends Migration
                     SELECT 1
                     FROM pg_roles
                     WHERE rolname = 'pms_bi_view_owner'
-                      AND (rolsuper OR rolbypassrls OR rolcanlogin)
+                      AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication OR rolcanlogin)
                 ) THEN
-                    RAISE EXCEPTION 'Role pms_bi_view_owner must be NOLOGIN, NOSUPERUSER, and NOBYPASSRLS';
+                    RAISE EXCEPTION 'Role pms_bi_view_owner has unsafe attributes';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM pg_roles
+                    WHERE rolname = 'pms_bi_reader'
+                      AND (
+                          NOT ('app.is_thc=off' = ANY (COALESCE(rolconfig, ARRAY[]::text[])))
+                          OR NOT ('app.mitra_id=-1' = ANY (COALESCE(rolconfig, ARRAY[]::text[])))
+                      )
+                ) THEN
+                    RAISE EXCEPTION 'Role pms_bi_reader must have fail-closed context defaults';
                 END IF;
 
                 IF EXISTS (
@@ -66,7 +78,35 @@ return new class extends Migration
                     RAISE EXCEPTION 'Role pms_bi_reader must not inherit or SET ROLE to another role';
                 END IF;
 
-                IF NOT pg_has_role(current_user, 'pms_bi_view_owner', 'SET') THEN
+                IF EXISTS (
+                    SELECT 1
+                    FROM pg_auth_members AS membership
+                    JOIN pg_roles AS member ON member.oid = membership.member
+                    WHERE member.rolname = 'pms_bi_view_owner'
+                ) THEN
+                    RAISE EXCEPTION 'Role pms_bi_view_owner must not inherit another role';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM pg_class AS relation
+                    JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+                    WHERE namespace.nspname = 'public'
+                      AND relation.relkind IN ('r', 'p')
+                      AND relation.relname = ANY (ARRAY[
+                          'projects', 'project_steps', 'project_baselines', 'project_baseline_days',
+                          'project_progresses', 'project_rab_jasas', 'project_variation_orders',
+                          'project_variation_order_items', 'warehouses', 'material_stoks',
+                          'material_transaksis', 'surat_jalans', 'surat_jalan_items',
+                          'material_requests', 'material_request_items', 'project_rekons',
+                          'project_rekon_items', 'pks', 'mitra_harga_jasas'
+                      ]::name[])
+                      AND (NOT relation.relrowsecurity OR NOT relation.relforcerowsecurity)
+                ) THEN
+                    RAISE EXCEPTION 'Every tenant base relation used by BI views must have ENABLE and FORCE RLS';
+                END IF;
+
+                IF NOT pg_catalog.pg_has_role(current_user, 'pms_bi_view_owner', 'SET') THEN
                     RAISE EXCEPTION 'Migration role must be allowed to SET ROLE pms_bi_view_owner';
                 END IF;
 
@@ -110,7 +150,6 @@ return new class extends Migration
                 public.surat_jalan_items,
                 public.material_requests,
                 public.material_request_items,
-                public.pemakaian_materials,
                 public.project_rekons,
                 public.project_rekon_items,
                 public.pks,
@@ -179,7 +218,6 @@ return new class extends Migration
                 public.surat_jalan_items,
                 public.material_requests,
                 public.material_request_items,
-                public.pemakaian_materials,
                 public.project_rekons,
                 public.project_rekon_items,
                 public.pks,
@@ -198,10 +236,10 @@ return new class extends Migration
                 CREATE VIEW bi.v_projects
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
                 )
@@ -247,8 +285,8 @@ return new class extends Migration
                 CREATE VIEW bi.v_project_steps
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed
                 )
                 SELECT step.id::bigint AS project_step_id,
                        project.id::bigint AS project_id,
@@ -269,8 +307,8 @@ return new class extends Migration
                 CREATE VIEW bi.v_stok
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed
                 )
                 SELECT stock.id::bigint AS stock_id,
                        stock.lokasi_tipe::text AS location_type,
@@ -314,10 +352,10 @@ return new class extends Migration
                 CREATE VIEW bi.v_transaksi_material
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
                 )
@@ -357,27 +395,66 @@ return new class extends Migration
                 CREATE VIEW bi.v_request_material
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
-                ), deliveries AS (
-                    SELECT surat_jalan.material_request_id,
+                ), return_quantities AS (
+                    SELECT return_document.retur_dari_id AS original_surat_jalan_id,
+                           return_item.material_id,
+                           pg_catalog.SUM(GREATEST(return_item.qty, 0)) AS qty_diretur
+                    FROM public.surat_jalans AS return_document
+                    JOIN public.surat_jalan_items AS return_item
+                      ON return_item.surat_jalan_id = return_document.id
+                    CROSS JOIN context
+                    WHERE return_document.retur_dari_id IS NOT NULL
+                      AND return_document.status <> 'dibatalkan'
+                      AND return_document.tanggal <= context.reporting_as_of
+                    GROUP BY return_document.retur_dari_id, return_item.material_id
+                ), delivery_facts AS (
+                    SELECT surat_jalan.id AS surat_jalan_id,
+                           surat_jalan.material_request_id,
                            surat_jalan_item.material_id,
-                           SUM(GREATEST(surat_jalan_item.qty_diterima - surat_jalan_item.qty_diretur, 0)) AS qty_diterima,
-                           SUM(GREATEST(surat_jalan_item.qty_diretur, 0)) AS qty_diretur,
-                           SUM(GREATEST(surat_jalan_item.qty - surat_jalan_item.qty_diterima, 0)) AS qty_transit
+                           surat_jalan_item.qty,
+                           surat_jalan_item.qty_diterima,
+                           COALESCE(return_quantities.qty_diretur, 0) AS qty_diretur,
+                           (
+                               (
+                                   surat_jalan.received_at IS NOT NULL
+                                   AND ((surat_jalan.received_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')::date <= context.reporting_as_of
+                               )
+                               OR (
+                                   surat_jalan.received_at IS NULL
+                                   AND surat_jalan.status = 'diterima'
+                               )
+                               OR (
+                                   surat_jalan.received_at IS NULL
+                                   AND surat_jalan.status = 'terbit'
+                                   AND surat_jalan_item.qty_diterima > 0
+                                   AND ((surat_jalan_item.updated_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')::date <= context.reporting_as_of
+                               )
+                           ) AS received_as_of
                     FROM public.surat_jalans AS surat_jalan
                     JOIN public.surat_jalan_items AS surat_jalan_item
                       ON surat_jalan_item.surat_jalan_id = surat_jalan.id
+                    LEFT JOIN return_quantities
+                      ON return_quantities.original_surat_jalan_id = surat_jalan.id
+                     AND return_quantities.material_id = surat_jalan_item.material_id
                     CROSS JOIN context
                     WHERE surat_jalan.material_request_id IS NOT NULL
                       AND surat_jalan.status <> 'dibatalkan'
                       AND surat_jalan.retur_dari_id IS NULL
                       AND surat_jalan.tanggal <= context.reporting_as_of
-                    GROUP BY surat_jalan.material_request_id, surat_jalan_item.material_id
+                ), deliveries AS (
+                    SELECT material_request_id,
+                           material_id,
+                           pg_catalog.SUM(GREATEST(CASE WHEN received_as_of THEN qty_diterima ELSE 0 END - qty_diretur, 0)) AS qty_diterima,
+                           pg_catalog.SUM(LEAST(CASE WHEN received_as_of THEN qty_diterima ELSE 0 END, qty_diretur)) AS qty_diretur,
+                           pg_catalog.SUM(CASE WHEN received_as_of THEN GREATEST(qty - qty_diterima, 0) ELSE GREATEST(qty, 0) END) AS qty_transit
+                    FROM delivery_facts
+                    GROUP BY material_request_id, material_id
                 )
                 SELECT request_item.id::bigint AS request_item_id,
                        request.id::bigint AS material_request_id,
@@ -423,10 +500,10 @@ return new class extends Migration
                 CREATE VIEW bi.v_harga_jasa_mitra
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
                 )
@@ -477,10 +554,10 @@ return new class extends Migration
                 CREATE VIEW bi.v_rekon_material
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
                 )
@@ -553,10 +630,10 @@ return new class extends Migration
                 CREATE VIEW bi.v_kurva_s
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
                 ), project_facts AS (
@@ -569,10 +646,10 @@ return new class extends Migration
                            context.reporting_as_of,
                            GREATEST(
                                0::numeric,
-                               ROUND(
-                                   COALESCE((SELECT SUM(rab.total_nilai) FROM public.project_rab_jasas AS rab WHERE rab.project_id = project.id), 0)
+                               pg_catalog.ROUND(
+                                   COALESCE((SELECT pg_catalog.SUM(rab.total_nilai) FROM public.project_rab_jasas AS rab WHERE rab.project_id = project.id), 0)
                                    + COALESCE((
-                                       SELECT SUM(
+                                       SELECT pg_catalog.SUM(
                                            CASE
                                                WHEN created_rab.id IS NULL THEN variation_item.quantity_delta * variation_item.harga_satuan
                                                ELSE 0
@@ -591,7 +668,7 @@ return new class extends Migration
                                )
                            )::numeric(20, 2) AS grand_total_rab_jasa,
                            COALESCE((
-                               SELECT SUM(progress.qty * rab.harga_satuan)
+                               SELECT pg_catalog.SUM(progress.qty * rab.harga_satuan)
                                FROM public.project_progresses AS progress
                                JOIN public.project_rab_jasas AS rab ON rab.id = progress.project_rab_jasa_id
                                WHERE progress.project_id = project.id
@@ -599,7 +676,7 @@ return new class extends Migration
                                  AND progress.actual_date <= context.reporting_as_of
                            ), 0)::numeric(20, 2) AS verified_value,
                            COALESCE((
-                               SELECT SUM(progress.qty * rab.harga_satuan)
+                               SELECT pg_catalog.SUM(progress.qty * rab.harga_satuan)
                                FROM public.project_progresses AS progress
                                JOIN public.project_rab_jasas AS rab ON rab.id = progress.project_rab_jasa_id
                                WHERE progress.project_id = project.id
@@ -642,18 +719,38 @@ return new class extends Migration
                         LIMIT 1
                     ) AS plan_day ON true
                     WHERE context.allowed
-                ), percentages AS (
+                ), shadow_values AS (
                     SELECT project_facts.*,
+                           (
+                               COALESCE((
+                                   SELECT pg_catalog.SUM(progress.qty * rab.harga_satuan)
+                                   FROM public.project_progresses AS progress
+                                   JOIN public.project_rab_jasas AS rab ON rab.id = progress.project_rab_jasa_id
+                                   WHERE progress.project_id = project_facts.project_id
+                                     AND progress.status = 'verified'
+                                     AND progress.actual_date <= project_facts.reporting_as_of
+                                     AND progress.actual_date <= COALESCE((
+                                         SELECT pg_catalog.MIN(pending.actual_date)
+                                         FROM public.project_progresses AS pending
+                                         WHERE pending.project_id = project_facts.project_id
+                                           AND pending.status = 'pending'
+                                           AND pending.actual_date <= project_facts.reporting_as_of
+                                     ), DATE '0001-01-01')
+                               ), 0) + project_facts.pending_value
+                           )::numeric(20, 2) AS pending_shadow_value
+                    FROM project_facts
+                ), percentages AS (
+                    SELECT shadow_values.*,
                            CASE
-                               WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, ROUND(verified_value / grand_total_rab_jasa * 100, 2))
+                               WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, pg_catalog.ROUND(verified_value / grand_total_rab_jasa * 100, 2))
                                ELSE 0::numeric
                            END AS verified_percent,
                            CASE
-                               WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, ROUND(pending_value / grand_total_rab_jasa * 100, 2))
+                               WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, pg_catalog.ROUND(pending_value / grand_total_rab_jasa * 100, 2))
                                ELSE 0::numeric
                            END AS pending_percent,
                            CASE
-                               WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, ROUND((verified_value + pending_value) / grand_total_rab_jasa * 100, 2))
+                               WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, pg_catalog.ROUND(pending_shadow_value / grand_total_rab_jasa * 100, 2))
                                ELSE 0::numeric
                            END AS pending_shadow_percent,
                            CASE
@@ -671,7 +768,7 @@ return new class extends Migration
                                AND revised_baseline_kind IS NULL
                                AND reporting_as_of > original_baseline_toc
                            ) AS baseline_flat_after_toc
-                    FROM project_facts
+                    FROM shadow_values
                 )
                 SELECT project_id::bigint,
                        id_project::text,
@@ -685,10 +782,10 @@ return new class extends Migration
                        verified_percent::numeric(8, 2),
                        pending_value::numeric(20, 2),
                        pending_percent::numeric(8, 2),
-                       (verified_value + pending_value)::numeric(20, 2) AS pending_shadow_value,
+                       pending_shadow_value::numeric(20, 2),
                        pending_shadow_percent::numeric(8, 2),
                        plan_percent::numeric(8, 2),
-                       CASE WHEN plan_percent > 0 THEN ROUND(verified_percent / plan_percent, 4) END::numeric(12, 4) AS spi,
+                       CASE WHEN plan_percent > 0 THEN pg_catalog.ROUND(verified_percent / plan_percent, 4) END::numeric(12, 4) AS spi,
                        CASE
                            WHEN plan_percent = 0 THEN 'na'
                            WHEN verified_percent / plan_percent >= 1 THEN 'green'
@@ -713,10 +810,10 @@ return new class extends Migration
                 CREATE VIEW bi.v_kurva_s_series
                 WITH (security_barrier = true, security_invoker = false) AS
                 WITH context AS (
-                    SELECT current_setting('app.is_thc', true) = 'on'
-                               AND NULLIF(current_setting('app.mitra_id', true), '') IS NULL AS allowed,
+                    SELECT pg_catalog.current_setting('app.is_thc', true) = 'on'
+                               AND pg_catalog.current_setting('app.mitra_id', true) = '' AS allowed,
                            COALESCE(
-                               NULLIF(current_setting('app.reporting_as_of', true), '')::date,
+                               NULLIF(pg_catalog.current_setting('app.reporting_as_of', true), '')::date,
                                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date
                            ) AS reporting_as_of
                 ), projects_visible AS (
@@ -752,10 +849,10 @@ return new class extends Migration
                            visible.reporting_as_of,
                            GREATEST(
                                0::numeric,
-                               ROUND(
-                                   COALESCE((SELECT SUM(rab.total_nilai) FROM public.project_rab_jasas AS rab WHERE rab.project_id = visible.project_id), 0)
+                               pg_catalog.ROUND(
+                                   COALESCE((SELECT pg_catalog.SUM(rab.total_nilai) FROM public.project_rab_jasas AS rab WHERE rab.project_id = visible.project_id), 0)
                                    + COALESCE((
-                                       SELECT SUM(
+                                       SELECT pg_catalog.SUM(
                                            CASE
                                                WHEN created_rab.id IS NULL THEN variation_item.quantity_delta * variation_item.harga_satuan
                                                ELSE 0
@@ -780,7 +877,7 @@ return new class extends Migration
                            total.mitra_id,
                            total.reporting_as_of,
                            progress.actual_date AS series_date,
-                           SUM(progress.qty * rab.harga_satuan)::numeric(20, 2) AS series_value
+                           pg_catalog.SUM(progress.qty * rab.harga_satuan)::numeric(20, 2) AS series_value
                     FROM grand_totals AS total
                     JOIN public.project_progresses AS progress ON progress.project_id = total.project_id
                     JOIN public.project_rab_jasas AS rab ON rab.id = progress.project_rab_jasa_id
@@ -792,7 +889,7 @@ return new class extends Migration
                            total.mitra_id,
                            total.reporting_as_of,
                            progress.actual_date AS series_date,
-                           SUM(progress.qty * rab.harga_satuan)::numeric(20, 2) AS series_value
+                           pg_catalog.SUM(progress.qty * rab.harga_satuan)::numeric(20, 2) AS series_value
                     FROM grand_totals AS total
                     JOIN public.project_progresses AS progress ON progress.project_id = total.project_id
                     JOIN public.project_rab_jasas AS rab ON rab.id = progress.project_rab_jasa_id
@@ -800,11 +897,11 @@ return new class extends Migration
                     GROUP BY total.project_id, total.id_project, total.mitra_id, total.reporting_as_of, progress.actual_date
                 ), verified_cumulative AS (
                     SELECT daily.*,
-                           SUM(daily.series_value) OVER (PARTITION BY daily.project_id ORDER BY daily.series_date) AS cumulative_value
+                           pg_catalog.SUM(daily.series_value) OVER (PARTITION BY daily.project_id ORDER BY daily.series_date) AS cumulative_value
                     FROM verified_daily AS daily
                 ), pending_cumulative AS (
                     SELECT daily.*,
-                           SUM(daily.series_value) OVER (PARTITION BY daily.project_id ORDER BY daily.series_date) AS cumulative_value
+                           pg_catalog.SUM(daily.series_value) OVER (PARTITION BY daily.project_id ORDER BY daily.series_date) AS cumulative_value
                     FROM pending_daily AS daily
                 ), original_days AS (
                     SELECT total.project_id,
@@ -852,7 +949,7 @@ return new class extends Migration
                            pending.id_project,
                            pending.mitra_id,
                            pending.reporting_as_of,
-                           MIN(pending.series_date) AS first_pending_date
+                           pg_catalog.MIN(pending.series_date) AS first_pending_date
                     FROM pending_daily AS pending
                     GROUP BY pending.project_id, pending.id_project, pending.mitra_id, pending.reporting_as_of
                 ), pending_shadow_verified_anchor AS (
@@ -867,6 +964,18 @@ return new class extends Migration
                     JOIN verified_cumulative AS verified ON verified.project_id = anchor.project_id
                     WHERE verified.series_date < anchor.first_pending_date
                     ORDER BY anchor.project_id, verified.series_date DESC
+                ), pending_shadow_anchor_series AS (
+                    SELECT anchor.project_id,
+                           anchor.id_project,
+                           anchor.mitra_id,
+                           anchor.reporting_as_of,
+                           'pending_shadow'::text AS series_kind,
+                           anchor.series_date,
+                           NULL::numeric AS series_value,
+                           anchor.cumulative_value,
+                           total.grand_total_rab_jasa
+                    FROM pending_shadow_verified_anchor AS anchor
+                    JOIN grand_totals AS total ON total.project_id = anchor.project_id
                 ), pending_shadow_daily AS (
                     SELECT pending.project_id,
                            pending.id_project,
@@ -875,7 +984,7 @@ return new class extends Migration
                            'pending_shadow'::text AS series_kind,
                            pending.series_date,
                            pending.series_value,
-                           (COALESCE(anchor.cumulative_value, 0) + SUM(pending.series_value) OVER (
+                           (COALESCE(anchor.cumulative_value, 0) + pg_catalog.SUM(pending.series_value) OVER (
                                PARTITION BY pending.project_id ORDER BY pending.series_date
                            ))::numeric(20, 2) AS cumulative_value,
                            total.grand_total_rab_jasa
@@ -883,9 +992,8 @@ return new class extends Migration
                     JOIN grand_totals AS total ON total.project_id = pending.project_id
                     LEFT JOIN pending_shadow_verified_anchor AS anchor ON anchor.project_id = pending.project_id
                 ), all_series AS (
-                    SELECT project_id, id_project, mitra_id, reporting_as_of, series_kind, series_date, series_value, cumulative_value, cumulative_percent, grand_total_rab_jasa
+                    SELECT project_id, id_project, mitra_id, reporting_as_of, series_kind, series_date, series_value, cumulative_value, cumulative_percent, NULL::numeric AS grand_total_rab_jasa
                     FROM original_days
-                    CROSS JOIN LATERAL (SELECT NULL::numeric AS grand_total_rab_jasa) AS unused
                     UNION ALL
                     SELECT project_id, id_project, mitra_id, reporting_as_of, series_kind, series_date, series_value, cumulative_value, cumulative_percent, NULL::numeric
                     FROM revised_days
@@ -906,6 +1014,9 @@ return new class extends Migration
                     JOIN grand_totals AS total ON total.project_id = pending.project_id
                     UNION ALL
                     SELECT project_id, id_project, mitra_id, reporting_as_of, series_kind, series_date, series_value, cumulative_value, NULL::numeric, grand_total_rab_jasa
+                    FROM pending_shadow_anchor_series
+                    UNION ALL
+                    SELECT project_id, id_project, mitra_id, reporting_as_of, series_kind, series_date, series_value, cumulative_value, NULL::numeric, grand_total_rab_jasa
                     FROM pending_shadow_daily
                 )
                 SELECT project_id::bigint,
@@ -918,7 +1029,7 @@ return new class extends Migration
                        cumulative_value::numeric(20, 2),
                        CASE
                            WHEN cumulative_percent IS NOT NULL THEN cumulative_percent
-                           WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, ROUND(cumulative_value / grand_total_rab_jasa * 100, 2))
+                           WHEN grand_total_rab_jasa > 0 THEN LEAST(100::numeric, pg_catalog.ROUND(cumulative_value / grand_total_rab_jasa * 100, 2))
                            ELSE 0::numeric
                        END::numeric(8, 2) AS cumulative_percent,
                        CURRENT_TIMESTAMP AS read_at
