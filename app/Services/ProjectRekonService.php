@@ -10,15 +10,14 @@ use App\Models\ProjectRekon;
 use App\Models\ProjectRekonItem;
 use App\Models\ProjectTimeline;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ProjectRekonService
 {
     private const EPSILON = 0.0005;
 
-    /** @return ProjectRekon */
     public function open(Project $project, User $actor, string $source = 'manual'): ProjectRekon
     {
         $this->ensureSource($source);
