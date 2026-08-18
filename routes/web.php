@@ -6,6 +6,7 @@ use App\Http\Controllers\CommandCenterController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
+use App\Http\Controllers\PortfolioCockpitController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMaterialController;
 use App\Http\Controllers\ProjectPhotoController;
@@ -62,6 +63,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', [CommandCenterController::class, 'index'])
         ->middleware(['thc', 'izin:read_dashboard'])
         ->name('dashboard');
+    Route::get('/portfolio', [PortfolioCockpitController::class, 'index'])
+        ->middleware('izin:read_dashboard')
+        ->name('portfolio.index');
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');

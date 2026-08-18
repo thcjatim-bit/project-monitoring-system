@@ -31,11 +31,14 @@
             @php
                 $authenticatedUser = auth()->user();
                 $canViewDashboard = $authenticatedUser->mitra_id === null && $authenticatedUser->hasIzin('read_dashboard');
+                $canViewPortfolio = $authenticatedUser->hasIzin('read_dashboard');
                 $canViewProjects = $authenticatedUser->hasIzin('read_project');
             @endphp
             <header class="app-shell__bar">
                 @if ($canViewDashboard)
                     <a class="app-shell__brand" href="{{ route('dashboard') }}">PMS <span>THC</span></a>
+                @elseif ($canViewPortfolio)
+                    <a class="app-shell__brand" href="{{ route('portfolio.index') }}">PMS <span>THC</span></a>
                 @elseif ($canViewProjects)
                     <a class="app-shell__brand" href="{{ route('projects.index') }}">PMS <span>THC</span></a>
                 @else
@@ -44,6 +47,9 @@
                 <nav class="app-shell__nav" aria-label="Navigasi utama">
                     @if ($canViewDashboard)
                         <a href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>Dashboard</a>
+                    @endif
+                    @if ($canViewPortfolio)
+                        <a href="{{ route('portfolio.index') }}" @if (request()->routeIs('portfolio.*')) aria-current="page" @endif>Portfolio</a>
                     @endif
                     @if ($canViewProjects)
                         <a href="{{ route('projects.index') }}" @if (request()->routeIs('projects.*')) aria-current="page" @endif>Project</a>
