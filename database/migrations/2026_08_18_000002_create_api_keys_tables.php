@@ -22,11 +22,14 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('last_used_at')->nullable();
             $table->timestamps();
+            $table->index(['mitra_id', 'expires_at', 'revoked_at']);
+        });
+
+        Schema::table('api_keys', function (Blueprint $table): void {
             $table->foreign('rotated_from_id')
                 ->references('id')
                 ->on('api_keys')
                 ->nullOnDelete();
-            $table->index(['mitra_id', 'expires_at', 'revoked_at']);
         });
 
         Schema::create('api_key_audits', function (Blueprint $table): void {
