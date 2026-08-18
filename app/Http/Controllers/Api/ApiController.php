@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 abstract class ApiController extends Controller
 {
@@ -25,6 +26,10 @@ abstract class ApiController extends Controller
             return ApiResponse::error($request, $exception->errorCode, $exception->status, $exception->getMessage(), $exception->details);
         } catch (ValidationException $exception) {
             return ApiResponse::error($request, 'invalid_parameter', 422, 'Parameter API tidak valid.', $exception->errors());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return ApiResponse::error($request, 'internal_error', 500, 'Terjadi kesalahan internal.');
         }
     }
 

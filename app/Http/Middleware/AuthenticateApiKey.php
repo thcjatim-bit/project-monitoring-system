@@ -48,6 +48,9 @@ class AuthenticateApiKey
 
         $apiKey = ApiKey::query()->with('mitra')->where('key_hash', hash('sha256', $token))->first();
         if ($apiKey === null || ! $apiKey->isActive()) {
+            if ($apiKey !== null && $apiKey->mitra_id !== null && $apiKey->mitra?->aktif !== true && $apiKey->revoked_at === null) {
+                $apiKey->forceFill(['revoked_at' => now()])->save();
+            }
             $this->rateLimiter->hit($this->failureKey($request), 60);
             $this->apiKeyService->audit(null, 'authentication_failed', null, [
                 'reason' => $apiKey === null ? 'invalid' : $this->inactiveReason($apiKey),
@@ -60,6 +63,10 @@ class AuthenticateApiKey
             $this->apiKeyService->audit($apiKey, 'permission_denied', null, ['permission' => 'read_api'], ApiResponse::requestId($request));
 
             return ApiResponse::error($request, 'api_permission_denied', 403, 'API Key tidak memiliki izin read_api.');
+        }
+
+        if (! $this->acceptsJson($request)) {
+            return ApiResponse::error($request, 'not_acceptable', 406, 'API hanya menyediakan media type application/json.');
         }
 
         if ($this->rateLimited($request, $apiKey)) {
@@ -137,6 +144,13 @@ class AuthenticateApiKey
         }
 
         return 'inactive_mitra';
+    }
+
+    private function acceptsJson(Request $request): bool
+    {
+        $accept = trim((string) $request->headers->get('Accept', ''));
+
+        return $accept === '' || str_contains($accept, 'application/json') || str_contains($accept, '*/*');
     }
 
     private function fail(Request $request, string $reason, int $status, string $message): Response

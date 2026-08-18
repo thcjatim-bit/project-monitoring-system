@@ -246,6 +246,26 @@ class ApiKeyRestApiTest extends TestCase
         $this->assertSame('off', (string) $settings->is_thc);
     }
 
+    public function test_key_for_an_inactive_mitra_is_revoked_and_does_not_return_after_reactivation(): void
+    {
+        $mitra = $this->inThc(fn (): Mitra => Mitra::factory()->create(['kode' => 'MTR-API-INACTIVE']));
+        [$plaintext, $apiKey] = $this->credential($mitra->id);
+        $mitra->update(['aktif' => false]);
+
+        $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects')
+            ->assertUnauthorized()
+            ->assertJsonPath('errors.0.code', 'api_key_invalid');
+
+        $this->assertNotNull($apiKey->fresh()->revoked_at);
+        $mitra->update(['aktif' => true]);
+
+        $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects')
+            ->assertUnauthorized()
+            ->assertJsonPath('errors.0.code', 'api_key_invalid');
+    }
+
     /** @return array{string,ApiKey,User} */
     private function credential(?int $mitraId = null): array
     {
