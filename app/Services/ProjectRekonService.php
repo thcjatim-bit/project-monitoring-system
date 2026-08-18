@@ -364,7 +364,7 @@ class ProjectRekonService
 
     private function moveProjectToWarehouse(ProjectRekon $rekon, ProjectRekonItem $item, float $qty, User $actor): void
     {
-        $this->record($rekon, $item, 'project', $item->project_rekon_id, -$qty, 'rekon_kembali', $actor);
+        $this->record($rekon, $item, 'project', $rekon->project_id, -$qty, 'rekon_kembali', $actor);
         $this->record($rekon, $item, 'warehouse', $item->warehouse_id, $qty, 'rekon_kembali', $actor);
         $this->setIdentityWarehouse($item);
     }
@@ -372,20 +372,20 @@ class ProjectRekonService
     private function moveWarehouseToProject(ProjectRekon $rekon, ProjectRekonItem $item, float $qty, User $actor): void
     {
         $this->record($rekon, $item, 'warehouse', $item->warehouse_id, -$qty, 'rekon_kembali', $actor);
-        $this->record($rekon, $item, 'project', $item->project_rekon_id, $qty, 'rekon_kembali', $actor);
+        $this->record($rekon, $item, 'project', $rekon->project_id, $qty, 'rekon_kembali', $actor);
         $this->setIdentityProject($item);
     }
 
     private function moveProjectToLoss(ProjectRekon $rekon, ProjectRekonItem $item, float $qty, User $actor): void
     {
         $category = $item->kategori_hilang_rusak ?? 'hilang';
-        $this->record($rekon, $item, 'project', $item->project_rekon_id, -$qty, 'rekon_'.$category, $actor);
+        $this->record($rekon, $item, 'project', $rekon->project_id, -$qty, 'rekon_'.$category, $actor);
         $this->setIdentityLoss($item, $category);
     }
 
     private function moveLossToProject(ProjectRekon $rekon, ProjectRekonItem $item, float $qty, User $actor, ?string $category): void
     {
-        $this->record($rekon, $item, 'project', $item->project_rekon_id, $qty, 'rekon_'.($category ?? 'hilang'), $actor);
+        $this->record($rekon, $item, 'project', $rekon->project_id, $qty, 'rekon_'.($category ?? 'hilang'), $actor);
         $this->setIdentityProject($item);
     }
 
