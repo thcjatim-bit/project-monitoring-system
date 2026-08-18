@@ -1,6 +1,6 @@
 # Runbook — Guard boundary runtime pms-dev / pms-prod
 
-**Konteks tiket**: [Pulihkan dan buktikan runtime production memakai config dan database production (#65)](https://github.com/thcjatim-bit/project-monitoring-system/issues/65)  
+**Konteks tiket**: [Pulihkan dan buktikan runtime production memakai config dan database production (#65)](https://github.com/thcjatim-bit/project-monitoring-system/issues/65)
 **Keputusan yang diterapkan**: [Tentukan boundary runtime pms-dev/pms-prod dan guard cache konfigurasi production (#63)](https://github.com/thcjatim-bit/project-monitoring-system/issues/63)
 
 ## Masalah yang dijaga
@@ -19,6 +19,12 @@ Bahayanya berlaku dua arah. Selama cached config production terpasang di
 checkout bersama, `APP_ENV=testing php artisan …` juga **resolve ke database
 production** — sehingga menjalankan test suite di checkout itu dapat merusak
 data production. Verifikasi ini dibuktikan read-only pada #65.
+
+Untuk host yang sedang authoritative, path tersebut sama dengan `APP_DIR` pada
+`/usr/local/sbin/pms-deploy` dan working directory service production. Jika
+deployment dipindahkan ke root lain, operator wajib mengisi
+`PMS_BOUNDARY_APP_DIR` dengan root yang sama sebelum menjalankan guard; jangan
+mengandalkan default lama dari template deployment.
 
 Separasi checkout/service/cache per environment adalah remediasi sebenarnya dan
 tetap menjadi pekerjaan platform/deployment operator sesuai #63. Guard di sini

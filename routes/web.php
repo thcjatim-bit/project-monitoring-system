@@ -6,11 +6,14 @@ use App\Http\Controllers\CommandCenterController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
+use App\Http\Controllers\MaterialUsageController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMaterialController;
+use App\Http\Controllers\ProjectMaterialInstallationController;
 use App\Http\Controllers\ProjectPhotoController;
 use App\Http\Controllers\ProjectPlanningController;
 use App\Http\Controllers\ProjectProgressController;
+use App\Http\Controllers\ProjectRekonController;
 use App\Http\Controllers\ProjectStepController;
 use App\Http\Controllers\ProjectTimelineController;
 use App\Http\Controllers\SuratJalanController;
@@ -82,11 +85,27 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/projects/{project}/variation-orders/{variationOrder}/approve', [ProjectPlanningController::class, 'approveVariationOrder'])->name('projects.variation-orders.approve');
     });
     Route::post('/projects/{project}/progress', [ProjectProgressController::class, 'store'])->middleware('izin:report_project_progress')->name('projects.progress.store');
+    Route::post('/projects/{project}/material-installations', [ProjectMaterialInstallationController::class, 'store'])
+        ->middleware('izin:report_project_progress')
+        ->name('projects.material-installations.store');
     Route::middleware(['thc', 'izin:verify_project_progress'])->group(function (): void {
         Route::patch('/projects/{project}/progress/{progress}/verify', [ProjectProgressController::class, 'verify'])->name('projects.progress.verify');
         Route::patch('/projects/{project}/progress/{progress}/reject', [ProjectProgressController::class, 'reject'])->name('projects.progress.reject');
     });
     Route::patch('/projects/{project}/step', [ProjectStepController::class, 'update'])->middleware('izin:update_project_step')->name('projects.step.update');
+    Route::get('/projects/{project}/rekons', [ProjectRekonController::class, 'index'])
+        ->middleware('izin:read_material_rekon')
+        ->name('projects.rekons.index');
+    Route::middleware(['thc', 'izin:create_material_rekon'])->group(function (): void {
+        Route::post('/projects/{project}/rekons', [ProjectRekonController::class, 'store'])->name('projects.rekons.store');
+    });
+    Route::middleware(['thc', 'izin:edit_material_rekon'])->group(function (): void {
+        Route::patch('/project-rekons/{projectRekon}', [ProjectRekonController::class, 'update'])->name('project-rekons.update');
+    });
+    Route::middleware(['thc', 'izin:approve_material_rekon'])->group(function (): void {
+        Route::patch('/project-rekons/{projectRekon}/approve', [ProjectRekonController::class, 'approve'])->name('project-rekons.approve');
+        Route::patch('/project-rekons/{projectRekon}/reject', [ProjectRekonController::class, 'reject'])->name('project-rekons.reject');
+    });
     Route::post('/projects/{project}/rab-material', [ProjectMaterialController::class, 'store'])
         ->middleware(['thc', 'izin:manage_project_material'])
         ->name('projects.rab-material.store');
@@ -159,5 +178,18 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware(['thc', 'izin:approve_material_request'])->group(function (): void {
         Route::patch('/material-requests/{materialRequest}/approve', [MaterialRequestController::class, 'approve'])->name('material-requests.approve');
         Route::patch('/material-requests/{materialRequest}/reject', [MaterialRequestController::class, 'reject'])->name('material-requests.reject');
+    });
+    Route::get('/material-usages', [MaterialUsageController::class, 'index'])
+        ->middleware('izin:read_material_usage')
+        ->name('material-usages.index');
+    Route::post('/projects/{project}/pemakaian-material', [MaterialUsageController::class, 'store'])
+        ->middleware('izin:create_material_usage')
+        ->name('projects.material-usages.store');
+    Route::patch('/material-usages/{pemakaianMaterial}/cancel', [MaterialUsageController::class, 'cancel'])
+        ->middleware('izin:create_material_usage')
+        ->name('material-usages.cancel');
+    Route::middleware(['thc', 'izin:approve_material_usage'])->group(function (): void {
+        Route::patch('/material-usages/{pemakaianMaterial}/approve', [MaterialUsageController::class, 'approve'])->name('material-usages.approve');
+        Route::patch('/material-usages/{pemakaianMaterial}/reject', [MaterialUsageController::class, 'reject'])->name('material-usages.reject');
     });
 });
