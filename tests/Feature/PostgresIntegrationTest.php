@@ -237,6 +237,43 @@ class PostgresIntegrationTest extends TestCase
         $this->assertFalse($privileges->can_delete_rekon_item);
     }
 
+    public function test_api_key_security_tables_are_non_tenant_and_append_only_where_required(): void
+    {
+        $tables = DB::table('pg_class as c')
+            ->join('pg_namespace as n', 'n.oid', '=', 'c.relnamespace')
+            ->where('n.nspname', 'public')
+            ->whereIn('c.relname', ['api_keys', 'api_key_audits'])
+            ->where('c.relkind', 'r')
+            ->select(['c.relname', 'c.relrowsecurity', 'c.relforcerowsecurity'])
+            ->orderBy('c.relname')
+            ->get()
+            ->keyBy('relname');
+
+        $this->assertSame(['api_key_audits', 'api_keys'], $tables->keys()->all());
+        foreach ($tables as $table) {
+            $this->assertFalse($table->relrowsecurity);
+            $this->assertFalse($table->relforcerowsecurity);
+        }
+
+        $privileges = DB::selectOne(<<<'SQL'
+            select has_table_privilege(current_user, 'public.api_keys', 'SELECT') as can_read_keys,
+                   has_table_privilege(current_user, 'public.api_keys', 'INSERT') as can_insert_keys,
+                   has_table_privilege(current_user, 'public.api_keys', 'UPDATE') as can_update_keys,
+                   has_table_privilege(current_user, 'public.api_keys', 'DELETE') as can_delete_keys,
+                   has_table_privilege(current_user, 'public.api_key_audits', 'INSERT') as can_insert_audits,
+                   has_table_privilege(current_user, 'public.api_key_audits', 'UPDATE') as can_update_audits,
+                   has_table_privilege(current_user, 'public.api_key_audits', 'DELETE') as can_delete_audits
+        SQL);
+
+        $this->assertTrue($privileges->can_read_keys);
+        $this->assertTrue($privileges->can_insert_keys);
+        $this->assertTrue($privileges->can_update_keys);
+        $this->assertFalse($privileges->can_delete_keys);
+        $this->assertTrue($privileges->can_insert_audits);
+        $this->assertFalse($privileges->can_update_audits);
+        $this->assertFalse($privileges->can_delete_audits);
+    }
+
     public function test_mitra_raw_query_cannot_read_or_write_another_mitras_project_photo(): void
     {
         $mitraA = Mitra::factory()->create();

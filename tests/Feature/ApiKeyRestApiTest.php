@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\ApiKeyService;
 use App\Support\TenantDatabaseContext;
 use Closure;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -230,6 +231,19 @@ class ApiKeyRestApiTest extends TestCase
         ] as $uri) {
             $this->withHeaders($headers)->getJson($uri)->assertOk()->assertJsonStructure(['data', 'meta', 'links']);
         }
+    }
+
+    public function test_api_request_resets_database_tenant_context_after_completion(): void
+    {
+        [$plaintext] = $this->credential();
+
+        $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects')
+            ->assertOk();
+
+        $settings = DB::selectOne("select current_setting('app.mitra_id', true) as mitra_id, current_setting('app.is_thc', true) as is_thc");
+        $this->assertSame('', (string) $settings->mitra_id);
+        $this->assertSame('off', (string) $settings->is_thc);
     }
 
     /** @return array{string,ApiKey,User} */
