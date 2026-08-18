@@ -129,7 +129,7 @@ class ApiKeyRestApiTest extends TestCase
     public function test_api_read_surface_uses_versioned_envelope_signed_cursor_and_rejects_writes(): void
     {
         $mitra = $this->inThc(fn (): Mitra => Mitra::factory()->create(['kode' => 'MTR-API-C']));
-        $project = $this->project($mitra, 'PRJ-API-C');
+        $project = $this->inThc(fn (): Project => $this->project($mitra, 'PRJ-API-C'));
         [$plaintext] = $this->credential();
 
         $this->withHeader('Authorization', 'Bearer '.$plaintext)
@@ -198,14 +198,14 @@ class ApiKeyRestApiTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$plaintext)
             ->getJson('/api/v1/portfolio')
             ->assertOk()
-            ->assertSeeText('Public project update')
-            ->assertDontSeeText('SECRET INTERNAL COMMENT');
+            ->assertJsonFragment(['body' => 'Public project update'])
+            ->assertJsonMissing(['body' => 'SECRET INTERNAL COMMENT']);
 
         $this->withHeader('Authorization', 'Bearer '.$plaintext)
             ->getJson('/api/v1/projects/'.$project->id_project.'?include=photo_links')
             ->assertOk()
-            ->assertSeeText('https://drive.example/folder/evidence')
-            ->assertDontSeeText('private/server/path/evidence.jpg');
+            ->assertJsonPath('data.photo_links.0.url', 'https://drive.example/folder/evidence')
+            ->assertJsonMissing(['url' => 'private/server/path/evidence.jpg']);
 
         $this->assertSame($mitra->id, $project->mitra_id);
         $this->assertNotNull($actor->id);
