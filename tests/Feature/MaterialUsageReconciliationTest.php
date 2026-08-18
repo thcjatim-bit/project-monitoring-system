@@ -189,6 +189,13 @@ class MaterialUsageReconciliationTest extends TestCase
                 'lokasi_tipe' => 'project',
                 'qty_delta' => '-6.000',
             ]);
+
+            try {
+                DB::transaction(fn () => DB::table('project_rekons')->where('id', $rekon->id)->update(['catatan' => 'tamper']));
+                $this->fail('Expected decided Rekon Material to be append-only.');
+            } catch (QueryException $exception) {
+                $this->assertSame('P0001', (string) $exception->getCode());
+            }
         });
     }
 

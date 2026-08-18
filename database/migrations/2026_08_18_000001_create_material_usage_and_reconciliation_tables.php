@@ -225,6 +225,53 @@ return new class extends Migration
             GRANT SELECT, INSERT, UPDATE ON project_rekon_sequences TO pms_app;
             REVOKE DELETE ON pemakaian_materials, project_rekons, project_rekon_items, project_rekon_sequences FROM pms_app;
 
+            CREATE OR REPLACE FUNCTION prevent_decided_material_usage_mutation() RETURNS trigger AS $fn$
+            BEGIN
+                IF TG_OP = 'DELETE' OR OLD.status <> 'diajukan' THEN
+                    RAISE EXCEPTION 'Pemakaian Material yang sudah diputuskan bersifat append-only';
+                END IF;
+                RETURN NEW;
+            END;
+            $fn$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+            CREATE TRIGGER pemakaian_material_append_only
+                BEFORE UPDATE OR DELETE ON pemakaian_materials
+                FOR EACH ROW EXECUTE FUNCTION prevent_decided_material_usage_mutation();
+
+            CREATE OR REPLACE FUNCTION prevent_decided_project_rekon_mutation() RETURNS trigger AS $fn$
+            BEGIN
+                RAISE EXCEPTION 'Rekon Material yang sudah dibuat bersifat append-only';
+            END;
+            $fn$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+            CREATE TRIGGER project_rekon_append_only
+                BEFORE DELETE ON project_rekons
+                FOR EACH ROW EXECUTE FUNCTION prevent_decided_project_rekon_mutation();
+            CREATE TRIGGER project_rekon_decided_update_only
+                BEFORE UPDATE ON project_rekons
+                FOR EACH ROW
+                WHEN (OLD.status <> 'diajukan')
+                EXECUTE FUNCTION prevent_decided_project_rekon_mutation();
+
+            CREATE OR REPLACE FUNCTION prevent_project_rekon_item_mutation() RETURNS trigger AS $fn$
+            DECLARE rekon_status text;
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    RAISE EXCEPTION 'Baris Rekon Material bersifat append-only';
+                END IF;
+                IF TG_OP = 'INSERT' THEN
+                    SELECT status INTO rekon_status FROM project_rekons WHERE id = NEW.project_rekon_id;
+                ELSE
+                    SELECT status INTO rekon_status FROM project_rekons WHERE id = OLD.project_rekon_id;
+                END IF;
+                IF rekon_status IS DISTINCT FROM 'diajukan' THEN
+                    RAISE EXCEPTION 'Baris Rekon Material yang sudah diputuskan bersifat append-only';
+                END IF;
+                RETURN NEW;
+            END;
+            $fn$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+            CREATE TRIGGER project_rekon_item_append_only
+                BEFORE INSERT OR UPDATE OR DELETE ON project_rekon_items
+                FOR EACH ROW EXECUTE FUNCTION prevent_project_rekon_item_mutation();
+
             CREATE OR REPLACE FUNCTION validate_material_transaction_identity() RETURNS trigger AS $fn$
             DECLARE material_type text;
             BEGIN
@@ -298,6 +345,13 @@ return new class extends Migration
     {
         if (DB::getDriverName() === 'pgsql') {
             DB::unprepared(<<<'SQL'
+                DROP TRIGGER IF EXISTS project_rekon_item_append_only ON project_rekon_items;
+                DROP TRIGGER IF EXISTS project_rekon_decided_update_only ON project_rekons;
+                DROP TRIGGER IF EXISTS project_rekon_append_only ON project_rekons;
+                DROP TRIGGER IF EXISTS pemakaian_material_append_only ON pemakaian_materials;
+                DROP FUNCTION IF EXISTS prevent_project_rekon_item_mutation();
+                DROP FUNCTION IF EXISTS prevent_decided_project_rekon_mutation();
+                DROP FUNCTION IF EXISTS prevent_decided_material_usage_mutation();
                 DROP POLICY IF EXISTS project_rekon_item_tenant_isolation ON project_rekon_items;
                 DROP POLICY IF EXISTS project_rekon_tenant_isolation ON project_rekons;
                 DROP POLICY IF EXISTS pemakaian_material_tenant_isolation ON pemakaian_materials;
