@@ -48,7 +48,7 @@ class MaterialUsageReconciliationTest extends TestCase
                 'qty' => '4',
                 'catatan' => 'Pemakaian untuk deployment',
             ])
-            ->assertRedirect()
+            ->assertRedirect(route('material-usages.index'))
             ->assertSessionDoesntHaveErrors();
 
         $usageId = $this->asThc(fn (): int => (int) DB::table('pemakaian_materials')->value('id'));
