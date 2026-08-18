@@ -426,14 +426,14 @@ class MaterialUsageReconciliationTest extends TestCase
             $this->assertSame([(int) $rekonA->id], DB::table('project_rekons')->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all());
 
             try {
-                DB::table('pemakaian_materials')->where('id', $usageA->id)->update(['mitra_id' => $mitraB->id]);
+                DB::transaction(fn () => DB::table('pemakaian_materials')->where('id', $usageA->id)->update(['mitra_id' => $mitraB->id]));
                 $this->fail('Expected tenant RLS to reject a cross-tenant usage update.');
             } catch (QueryException $exception) {
                 $this->assertSame('42501', (string) $exception->getCode());
             }
 
             try {
-                DB::table('project_rekons')->where('id', $rekonA->id)->update(['mitra_id' => $mitraB->id]);
+                DB::transaction(fn () => DB::table('project_rekons')->where('id', $rekonA->id)->update(['mitra_id' => $mitraB->id]));
                 $this->fail('Expected tenant RLS to reject a cross-tenant Rekon update.');
             } catch (QueryException $exception) {
                 $this->assertSame('42501', (string) $exception->getCode());
