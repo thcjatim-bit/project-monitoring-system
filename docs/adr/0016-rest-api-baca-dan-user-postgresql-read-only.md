@@ -3,6 +3,8 @@
 **Status**: Diterima — 2026-08-13
 **Konteks tiket**: [#10 Rancangan REST API baca dan user PostgreSQL read-only](https://github.com/thcjatim-bit/project-monitoring-system/issues/10)
 
+Keputusan owner public edge API diperbarui oleh [#64 — Tentukan owner reverse proxy dan certificate automation API publik Gelombang 3](https://github.com/thcjatim-bit/project-monitoring-system/issues/64) pada 2026-08-17. Pembaruan ini menggantikan pilihan reverse proxy pada poin jaringan; kontrak API key, RLS, data yang dikecualikan, dan secret handling tetap berlaku.
+
 ## Konteks
 
 Belum ada sistem konsumen konkret hari ini, tapi peta (#1) minta dua permukaan baca disiapkan agar integrasi masa depan tidak terhambat: REST API (konsumen internal THC — dashboard, bot WA, tool lain) dan user PostgreSQL read-only (BI internal, mis. Metabase/Superset). Keduanya harus tunduk pola isolasi mitra yang sama dengan ADR-0001, dan tidak boleh membocorkan data yang memang tidak untuk keluar sistem.
@@ -21,7 +23,7 @@ Belum ada sistem konsumen konkret hari ini, tapi peta (#1) minta dua permukaan b
 
 4. **Data terkecuali mutlak**, terlepas dari scope key: password hash, Komentar Internal, file lampiran PKS mentah, dan binary foto. Foto pekerjaan diwakili sebagai link ke Folder Master Google Drive (lihat ADR-0012), API tidak pernah re-serve file dari disk server.
 
-5. **Jaringan**. REST API dibuka lewat domain FreeDDNS + reverse proxy Caddy (Let's Encrypt HTTP-01) di server, dengan port-forward 80/443 di MikroTik. Ini jalur terpisah dari rencana Cloudflare Tunnel untuk aplikasi utama (ADR-0009) — ADR-0009 tidak berubah maupun digantikan. User PostgreSQL read-only tetap LAN-only permanen; tidak ada port-forward 5432 ke internet dalam skenario apa pun.
+5. **Jaringan dan public edge API**. REST API tersedia pada `https://api.deploythc.web.id` melalui Nginx + Certbot. Nginx adalah satu-satunya public edge dan listener TCP 80/443: port 80 dipertahankan untuk ACME HTTP-01 melalui webroot dan redirect HTTP ke HTTPS, sedangkan port 443 melayani API HTTPS. Certbot menjadi owner issuance dan renewal pada jalur yang disetujui. Platform/Network Owner bertanggung jawab atas DNS A/AAAA, forwarding MikroTik TCP 80/443, konfigurasi edge, renewal, dan eskalasi kegagalan. Upstream Laravel/PHP-FPM tetap privat. Header `X-Forwarded-*` dari client tidak dipercaya; edge menulis nilai canonical dan aplikasi hanya mempercayai proxy serta hostname yang di-allowlist. Caddy tidak dipasang dan bukan owner kedua. Jalur API ini tetap terpisah dari boundary ingress aplikasi utama dan tidak membuka jalur Cloudflare Tunnel atau PostgreSQL ke internet. User PostgreSQL read-only tetap LAN-only permanen; tidak ada NAT, firewall rule, atau port-forward TCP 5432 ke WAN dalam skenario apa pun.
 
 6. **Grant PostgreSQL read-only**. Role read-only cuma di-`GRANT SELECT` ke view kurasi per domain (`v_projects`, `v_kurva_s`, `v_stok`, `v_rekon_material`, dst), tidak pernah ke tabel mentah. Tabel buku transaksi append-only (`material_transaksis`, lihat ADR-0003) dan tabel Komentar Internal tidak ter-grant sama sekali ke role ini — pertahanan berlapis meski jaringannya sudah LAN-only.
 
@@ -30,9 +32,17 @@ Belum ada sistem konsumen konkret hari ini, tapi peta (#1) minta dua permukaan b
 - Middleware yang men-set `app.mitra_id`/`app.is_thc` dari ADR-0001 diperluas: sumber identitas bisa dari sesi login **atau** dari API key yang divalidasi, keduanya bermuara ke `set_config` yang sama.
 - Panel THC butuh UI baru: buat/cabut API key, pilih `mitra_id` (opsional), lihat key sekali saat dibuat.
 - Perlu view SQL kurasi per domain sebelum role read-only bisa dipakai BI tool; menambah domain baru ke ekspor berarti menambah view, bukan buka akses ke tabel mentah.
-- Server butuh Caddy berjalan berdampingan dengan rencana Cloudflare Tunnel (ADR-0009) — dua jalur masuk berbeda untuk dua permukaan berbeda (app utama vs API), didokumentasikan agar tidak dikira duplikasi yang harus disatukan.
+- Server membutuhkan Nginx sebagai edge API bersama PHP-FPM; Certbot mengelola sertifikat melalui webroot dan renewal. Tidak ada Caddy atau owner sertifikat kedua. Dua permukaan aplikasi utama dan API tetap diperlakukan sebagai boundary ingress terpisah dan tidak boleh disatukan dengan mengubah jalur Cloudflare Tunnel secara diam-diam.
 
 ## Alternatif yang ditolak
 
 - **Kredensial Postgres langsung untuk mitra** — ditolak: mitra bisa jalankan query bebas (walau dibatasi RLS/view), permukaan serangan lebih luas daripada REST API yang kontrak responsnya dikendalikan aplikasi.
 - **Numpang Cloudflare Tunnel yang sama dengan app utama untuk API** — ditolak untuk sekarang: konsumen API murni internal, LAN+FreeDDNS cukup dan tidak menambah beban ke tunnel yang direncanakan untuk app utama; bisa disatukan nanti tanpa mengubah model data.
+- **Caddy sebagai public edge API** — ditolak oleh keputusan #64: Nginx adalah listener publik tunggal dan Certbot adalah owner certificate automation. Caddy-specific topology pada riset #61 menjadi catatan historis; safeguard HTTP-01, forwarded headers, Bearer transport, redaction, `/up`, dan PostgreSQL LAN-only tetap dipakai.
+
+## Referensi keputusan
+
+- [#64 — Tentukan owner reverse proxy dan certificate automation API publik Gelombang 3](https://github.com/thcjatim-bit/project-monitoring-system/issues/64) adalah keputusan authoritative untuk Nginx, Certbot, `api.deploythc.web.id`, listener 80/443, forwarded-header boundary, dan evidence sebelum API dibuka.
+- [#61 — Riset kontrak reverse proxy API, TLS, dan secret exposure](https://github.com/thcjatim-bit/project-monitoring-system/issues/61) tetap menjadi sumber safeguard operasional; pilihan Caddy di dalam riset tersebut tidak lagi authoritative setelah #64.
+- [ADR-0017](0017-cara-scan-qr-dan-https-domain.md) konsisten pada penggunaan domain dan Certbot, sementara detail public API berada di ADR ini dan #64.
+- [#54 — Wayfinder: Kesiapan REST API baca dan PostgreSQL BI Gelombang 3](https://github.com/thcjatim-bit/project-monitoring-system/issues/54) adalah map handoff; ADR ini tidak mengimplementasikan server, database, credential, network, atau deployment.
