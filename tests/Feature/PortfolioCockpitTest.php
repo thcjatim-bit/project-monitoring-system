@@ -874,7 +874,7 @@ class PortfolioCockpitTest extends TestCase
                 'risiko' => 'merah',
             ]))
             ->assertOk()
-            ->assertSee('href="'.$exportUrl.'"', false);
+            ->assertSee('href="'.e($exportUrl).'"', false);
     }
 
     private function projectFor(Mitra $mitra, string $idProject, string $nama, string $status = 'aktif'): Project
