@@ -402,7 +402,7 @@ class ProjectRekonService
             'jenis_transaksi' => $transactionType,
             'lokasi_tipe' => $locationType,
             'lokasi_id' => $locationId,
-            'qty_delta' => $this->formatQuantity($qty),
+            'qty_delta' => $this->formatDelta($qty),
             'reason' => 'Rekon Material '.$rekon->nomor,
             'actor_id' => $actor->id,
         ]);
@@ -429,19 +429,20 @@ class ProjectRekonService
 
     private function setIdentityProject(ProjectRekonItem $item): void
     {
+        $projectId = $item->rekon()->value('project_id');
         if ($item->material_sn_id !== null) {
             MaterialSn::query()->whereKey($item->material_sn_id)->update([
                 'lokasi_tipe' => 'project',
-                'lokasi_id' => $item->project_rekon_id,
-                'project_id' => $item->rekon()->value('project_id'),
+                'lokasi_id' => $projectId,
+                'project_id' => $projectId,
                 'status' => 'keluar',
             ]);
         }
         if ($item->drum_id !== null) {
             Drum::query()->whereKey($item->drum_id)->update([
                 'lokasi_tipe' => 'project',
-                'lokasi_id' => $item->project_rekon_id,
-                'project_id' => $item->rekon()->value('project_id'),
+                'lokasi_id' => $projectId,
+                'project_id' => $projectId,
             ]);
         }
     }
@@ -540,5 +541,10 @@ class ProjectRekonService
         }
 
         return number_format((float) $qty, 3, '.', '');
+    }
+
+    private function formatDelta(float $qty): string
+    {
+        return number_format($qty, 3, '.', '');
     }
 }
