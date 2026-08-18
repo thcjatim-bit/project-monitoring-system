@@ -215,7 +215,22 @@ components:
       type: object
       required: [data, meta, links]
       properties:
-        data: {}
+        data:
+          description: Resource-specific read projection; collection resources return an array.
+          oneOf:
+            - $ref: '#/components/schemas/Portfolio'
+            - $ref: '#/components/schemas/Curve'
+            - $ref: '#/components/schemas/Project'
+            - type: array
+              items:
+                oneOf:
+                  - $ref: '#/components/schemas/Project'
+                  - $ref: '#/components/schemas/DecisionQueueItem'
+                  - $ref: '#/components/schemas/Stock'
+                  - $ref: '#/components/schemas/MaterialRequest'
+                  - $ref: '#/components/schemas/MaterialTransaction'
+                  - $ref: '#/components/schemas/Reconciliation'
+                  - $ref: '#/components/schemas/ServicePrice'
         meta:
           $ref: '#/components/schemas/Meta'
         links:
@@ -272,13 +287,218 @@ components:
         id_project: { type: string }
         name: { type: string }
         mitra:
-          type: object
-          properties:
-            code: { type: string, description: Mitra.kode }
-            name: { type: string }
+          $ref: '#/components/schemas/MitraReference'
         status_project: { type: string, enum: [aktif, selesai] }
         toc: { type: string, format: date, nullable: true }
+        verified_percent: { type: number }
+        pending_percent: { type: number }
+        spi: { type: number, nullable: true }
+        spi_status: { type: string, enum: [healthy, watch, critical, na] }
         risk_status: { type: string, enum: [healthy, watch, critical, na] }
         risk_reasons:
           type: array
           items: { type: string }
+        material_readiness_percent: { type: number, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/Step' }
+        curve: { $ref: '#/components/schemas/Curve' }
+        material_readiness: { $ref: '#/components/schemas/MaterialReadiness' }
+        material_requests:
+          type: array
+          items: { $ref: '#/components/schemas/MaterialRequest' }
+        material_transactions:
+          type: array
+          items: { $ref: '#/components/schemas/MaterialTransaction' }
+        service_prices:
+          type: array
+          items: { $ref: '#/components/schemas/ServicePrice' }
+        photo_links:
+          type: array
+          items: { $ref: '#/components/schemas/PhotoLink' }
+    MitraReference:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, description: Mitra.kode }
+        name: { type: string }
+    Step:
+      type: object
+      required: [step, label, urutan, status]
+      properties:
+        step: { type: string }
+        label: { type: string }
+        urutan: { type: integer }
+        status: { type: string }
+        completed_at: { type: string, format: date-time, nullable: true }
+    Curve:
+      type: object
+      required: [as_of, verified_percent, pending_percent, spi, spi_status]
+      properties:
+        as_of: { type: string, format: date }
+        grand_total_rab_jasa: { type: string, description: Decimal monetary value }
+        verified_percent: { type: number }
+        pending_percent: { type: number }
+        plan_percent: { type: number }
+        spi: { type: number, nullable: true }
+        spi_status: { type: string, enum: [healthy, watch, critical, na] }
+        verified_series: { type: array, items: { $ref: '#/components/schemas/SeriesPoint' } }
+        pending_series: { type: array, items: { $ref: '#/components/schemas/SeriesPoint' } }
+        pending_shadow_series: { type: array, items: { $ref: '#/components/schemas/SeriesPoint' } }
+        baseline_series: { type: array, items: { $ref: '#/components/schemas/SeriesPoint' } }
+        original_baseline_series: { type: array, items: { $ref: '#/components/schemas/SeriesPoint' } }
+        revised_baseline_series: { type: array, items: { $ref: '#/components/schemas/SeriesPoint' } }
+        original_baseline: { $ref: '#/components/schemas/Baseline', nullable: true }
+        revised_baseline: { $ref: '#/components/schemas/Baseline', nullable: true }
+        active_baseline_kind: { type: string, nullable: true }
+        overdue: { type: boolean }
+        baseline_flat_after_toc: { type: boolean }
+        x_axis_end: { type: string, format: date }
+    Baseline:
+      type: object
+      required: [kind, version, toc]
+      properties:
+        kind: { type: string, enum: [original, revised] }
+        version: { type: integer }
+        toc: { type: string, format: date }
+    SeriesPoint:
+      type: object
+      required: [date, percent]
+      properties:
+        date: { type: string, format: date }
+        percent: { type: number }
+    MaterialReference:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        unit: { type: string, nullable: true }
+    WarehouseReference:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+    Stock:
+      type: object
+      properties:
+        warehouse: { $ref: '#/components/schemas/WarehouseReference' }
+        material: { $ref: '#/components/schemas/MaterialReference' }
+        mitra: { $ref: '#/components/schemas/MitraReference' }
+        location_type: { type: string }
+        project: { $ref: '#/components/schemas/ProjectReference' }
+        quantity: { type: string, description: Decimal quantity }
+        updated_at: { type: string, format: date-time, nullable: true }
+    ProjectReference:
+      type: object
+      required: [id_project, name, mitra]
+      properties:
+        id_project: { type: string }
+        name: { type: string }
+        mitra: { $ref: '#/components/schemas/MitraReference' }
+    MaterialReadiness:
+      type: object
+      properties:
+        required: { type: string }
+        delivered: { type: string }
+        transit: { type: string }
+        available: { type: string }
+        readiness_percent: { type: number, nullable: true }
+        state: { type: string }
+        items: { type: array, items: { type: object } }
+    MaterialRequest:
+      type: object
+      properties:
+        project: { $ref: '#/components/schemas/ProjectReference' }
+        mitra: { $ref: '#/components/schemas/MitraReference' }
+        status: { type: string }
+        items: { type: array, items: { type: object } }
+        created_at: { type: string, format: date-time, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+    MaterialTransaction:
+      type: object
+      properties:
+        project: { $ref: '#/components/schemas/ProjectReference' }
+        warehouse: { $ref: '#/components/schemas/WarehouseReference' }
+        material: { $ref: '#/components/schemas/MaterialReference' }
+        transaction_type: { type: string }
+        location_type: { type: string }
+        quantity_delta: { type: string, description: Decimal quantity delta }
+        reason: { type: string }
+        occurred_at: { type: string, format: date-time, nullable: true }
+    Reconciliation:
+      type: object
+      properties:
+        project: { $ref: '#/components/schemas/ProjectReference' }
+        mitra: { $ref: '#/components/schemas/MitraReference' }
+        number: { type: string }
+        source: { type: string, enum: [manual, go_live] }
+        status: { type: string }
+        corrects: { type: string, nullable: true }
+        is_active: { type: boolean }
+        approved_at: { type: string, format: date-time, nullable: true }
+        items: { type: array, items: { type: object } }
+    ServicePrice:
+      type: object
+      properties:
+        mitra: { $ref: '#/components/schemas/MitraReference' }
+        pks_number: { type: string, nullable: true }
+        service:
+          type: object
+          nullable: true
+          properties:
+            code: { type: string }
+            name: { type: string }
+        price: { type: string, description: Decimal monetary value }
+        status: { type: string }
+        valid_from: { type: string, format: date }
+        decided_at: { type: string, format: date-time, nullable: true }
+    PhotoLink:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+        step: { type: string, nullable: true }
+        capture_date: { type: string, format: date, nullable: true }
+    RiskDistribution:
+      type: object
+      properties:
+        status: { type: string, enum: [healthy, watch, critical, na] }
+        count: { type: integer }
+        percent: { type: number }
+    Trend:
+      type: object
+      properties:
+        as_of: { type: string, format: date }
+        points: { type: array, items: { type: object } }
+    DecisionQueueItem:
+      type: object
+      properties:
+        category: { type: string }
+        risk_status: { type: string, enum: [healthy, watch, critical, na] }
+        title: { type: string }
+        reason: { type: string }
+        project: { $ref: '#/components/schemas/ProjectReference' }
+        updated_at: { type: string, format: date-time, nullable: true }
+    Activity:
+      type: object
+      properties:
+        project: { $ref: '#/components/schemas/ProjectReference' }
+        type: { type: string }
+        event_key: { type: string, nullable: true }
+        body: { type: string, nullable: true }
+        actor: { type: string, nullable: true }
+        occurred_at: { type: string, format: date-time, nullable: true }
+    Portfolio:
+      type: object
+      properties:
+        kpis: { type: object }
+        trend: { $ref: '#/components/schemas/Trend' }
+        status_distribution: { type: array, items: { $ref: '#/components/schemas/RiskDistribution' } }
+        project_status_distribution: { type: array, items: { type: object } }
+        health_matrix: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        activity: { type: array, items: { $ref: '#/components/schemas/Activity' } }
+        decision_queue: { type: array, items: { $ref: '#/components/schemas/DecisionQueueItem' } }
+        project_count: { type: integer }

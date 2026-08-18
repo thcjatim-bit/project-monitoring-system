@@ -13,7 +13,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->string('name');
             $table->char('key_hash', 64)->unique();
-            $table->foreignId('mitra_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('mitra_id')->nullable()->constrained()->restrictOnDelete();
             $table->json('permissions');
             $table->timestamp('expires_at');
             $table->timestamp('revoked_at')->nullable();

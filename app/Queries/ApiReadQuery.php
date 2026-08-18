@@ -23,17 +23,9 @@ use Illuminate\Support\Collection;
 
 class ApiReadQuery
 {
-    private const RISK_TO_SPI = [
-        'healthy' => 'green',
-        'watch' => 'yellow',
-        'critical' => 'red',
-        'na' => 'na',
-    ];
-
     public function __construct(
         private ProjectCurveQuery $curveQuery,
         private ProjectMaterialReadinessQuery $materialQuery,
-        private ProjectRekonQuery $rekonQuery,
     ) {}
 
     /** @return Collection<int,array<string,mixed>> */
@@ -356,7 +348,7 @@ class ApiReadQuery
             'verified_percent' => (float) $curve['verified_percent'],
             'pending_percent' => (float) $curve['pending_percent'],
             'spi' => $curve['spi'] === null ? null : (float) $curve['spi'],
-            'spi_status' => (string) $curve['spi_status'],
+            'spi_status' => $this->riskStatus($curve['spi_status']),
             'risk_status' => $this->riskStatus($curve['spi_status']),
             'risk_reasons' => $this->riskReasons($curve),
             'material_readiness_percent' => $material === null ? null : (float) $material['readiness_percent'],
