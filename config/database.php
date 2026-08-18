@@ -112,6 +112,21 @@ return [
             'sslmode' => env('DB_MIGRATOR_SSLMODE', env('DB_SSLMODE', 'prefer')),
         ],
 
+        'bi_testing' => [
+            'driver' => 'pgsql',
+            'url' => env('DB_BI_URL'),
+            'host' => env('DB_BI_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_BI_PORT', env('DB_PORT', '5432')),
+            'database' => env('DB_BI_DATABASE', env('DB_DATABASE', 'laravel')),
+            'username' => env('DB_BI_USERNAME', 'pms_bi_reader'),
+            'password' => env('DB_BI_PASSWORD'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public,bi',
+            'sslmode' => env('DB_BI_SSLMODE', env('DB_SSLMODE', 'prefer')),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

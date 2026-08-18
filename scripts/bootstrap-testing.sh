@@ -6,6 +6,8 @@ readonly testing_database="project_monitoring_system_testing"
 readonly testing_container="pms-dev-postgres-testing"
 readonly app_role="pms_app"
 readonly migrator_role="pms_migrator"
+readonly bi_reader_role="pms_bi_reader"
+readonly bi_view_owner_role="pms_bi_view_owner"
 
 if [[ "${APP_ENV:-testing}" == "production" ]]; then
     echo "Refusing to bootstrap testing database with APP_ENV=production." >&2
@@ -50,8 +52,9 @@ fi
 
 readonly app_password="${PMS_APP_PASSWORD:-$(openssl rand -hex 32)}"
 readonly migrator_password="${PMS_MIGRATOR_PASSWORD:-$(openssl rand -hex 32)}"
+readonly bi_reader_password="${PMS_BI_READER_PASSWORD:-$(openssl rand -hex 32)}"
 
-if [[ ! "$app_password" =~ ^[A-Za-z0-9]+$ || ! "$migrator_password" =~ ^[A-Za-z0-9]+$ ]]; then
+if [[ ! "$app_password" =~ ^[A-Za-z0-9]+$ || ! "$migrator_password" =~ ^[A-Za-z0-9]+$ || ! "$bi_reader_password" =~ ^[A-Za-z0-9]+$ ]]; then
     echo "Refusing: supplied role credentials contain unsafe characters." >&2
     exit 1
 fi
@@ -83,13 +86,24 @@ run_admin_sql "
         ELSE
             ALTER ROLE $migrator_role LOGIN PASSWORD '$migrator_password';
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$bi_reader_role') THEN
+            CREATE ROLE $bi_reader_role LOGIN PASSWORD '$bi_reader_password';
+        ELSE
+            ALTER ROLE $bi_reader_role LOGIN PASSWORD '$bi_reader_password';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$bi_view_owner_role') THEN
+            CREATE ROLE $bi_view_owner_role NOLOGIN;
+        END IF;
     END
     \$bootstrap\$;
     ALTER ROLE $app_role NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
     ALTER ROLE $migrator_role NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    ALTER ROLE $bi_reader_role LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    ALTER ROLE $bi_view_owner_role NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
     CREATE DATABASE $testing_database OWNER $migrator_role;
     REVOKE ALL ON DATABASE $testing_database FROM PUBLIC;
-    GRANT CONNECT ON DATABASE $testing_database TO $app_role, $migrator_role;
+    GRANT CONNECT ON DATABASE $testing_database TO $app_role, $migrator_role, $bi_reader_role;
+    GRANT $bi_view_owner_role TO $migrator_role;
 "
 
 umask 077
@@ -107,6 +121,11 @@ DB_MIGRATOR_DATABASE=$testing_database
 DB_MIGRATOR_USERNAME=$migrator_role
 DB_MIGRATOR_PASSWORD=$migrator_password
 DB_SSLMODE=prefer
+DB_BI_HOST=$database_host
+DB_BI_PORT=5432
+DB_BI_DATABASE=$testing_database
+DB_BI_USERNAME=$bi_reader_role
+DB_BI_PASSWORD=$bi_reader_password
 EOF
 
 APP_ENV=testing php artisan config:clear >/dev/null
@@ -114,7 +133,7 @@ APP_ENV=testing php artisan migrate:fresh --database=migrator --seed --force
 
 run_admin_sql "
     SELECT rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication, rolcanlogin
-    FROM pg_roles WHERE rolname IN ('$app_role', '$migrator_role') ORDER BY rolname;
+    FROM pg_roles WHERE rolname IN ('$app_role', '$migrator_role', '$bi_reader_role', '$bi_view_owner_role') ORDER BY rolname;
 "
 
 identity="$(run_app_sql "SELECT concat_ws('|', current_database(), current_user);")"
