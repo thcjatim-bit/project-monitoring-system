@@ -48,6 +48,14 @@
                                 <label>hilang/rusak
                                     <input name="items[{{ $item->id }}][hilang_rusak]" value="{{ $item->hilang_rusak }}" type="number" step="0.001" min="0">
                                 </label>
+                                <label>Kategori
+                                    <select name="items[{{ $item->id }}][kategori_hilang_rusak]">
+                                        <option value="">—</option>
+                                        @foreach (['hilang', 'rusak', 'waste_wajar'] as $category)
+                                            <option value="{{ $category }}" @selected($item->kategori_hilang_rusak === $category)>{{ $category }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
                                 <input type="hidden" name="items[{{ $item->id }}][keluar_gudang]" value="{{ $item->keluar_gudang }}">
                                 <input type="hidden" name="items[{{ $item->id }}][terpasang]" value="{{ $item->terpasang }}">
                                 <input type="hidden" name="items[{{ $item->id }}][sisa_project]" value="{{ $item->sisa_project }}">

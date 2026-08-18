@@ -352,6 +352,65 @@ return new class extends Migration
                 DROP FUNCTION IF EXISTS prevent_project_rekon_item_mutation();
                 DROP FUNCTION IF EXISTS prevent_decided_project_rekon_mutation();
                 DROP FUNCTION IF EXISTS prevent_decided_material_usage_mutation();
+
+                CREATE OR REPLACE FUNCTION validate_material_transaction_identity() RETURNS trigger AS $fn$
+                DECLARE material_type text;
+                BEGIN
+                    SELECT jenis INTO material_type FROM materials WHERE id = NEW.material_id;
+                    IF material_type IS NULL THEN
+                        RAISE EXCEPTION 'Material tidak ditemukan';
+                    END IF;
+                    IF material_type = 'biasa' AND (NEW.material_sn_id IS NOT NULL OR NEW.drum_id IS NOT NULL) THEN
+                        RAISE EXCEPTION 'Material biasa tidak boleh memiliki identitas SN atau drum';
+                    END IF;
+                    IF material_type = 'ber_sn' AND (
+                        NEW.material_sn_id IS NULL OR NEW.drum_id IS NOT NULL OR abs(NEW.qty_delta) <> 1
+                    ) THEN
+                        RAISE EXCEPTION 'Material ber-SN wajib memiliki satu identitas SN dengan qty 1';
+                    END IF;
+                    IF material_type = 'drum_kabel' AND (NEW.drum_id IS NULL OR NEW.material_sn_id IS NOT NULL) THEN
+                        RAISE EXCEPTION 'Material drum kabel wajib memiliki identitas drum';
+                    END IF;
+                    IF material_type = 'drum_kabel' AND NEW.jenis_transaksi NOT IN (
+                        'drum_receive', 'drum_issue', 'drum_split', 'transfer', 'receipt',
+                        'hilang_dalam_perjalanan', 'koreksi'
+                    ) THEN
+                        RAISE EXCEPTION 'Transaksi drum kabel memiliki jenis transaksi yang tidak valid';
+                    END IF;
+                    IF NEW.material_sn_id IS NOT NULL AND NOT EXISTS (
+                        SELECT 1 FROM material_sns WHERE id = NEW.material_sn_id AND material_id = NEW.material_id
+                    ) THEN
+                        RAISE EXCEPTION 'Identitas SN tidak cocok dengan material';
+                    END IF;
+                    IF NEW.drum_id IS NOT NULL AND NOT EXISTS (
+                        SELECT 1 FROM drums WHERE id = NEW.drum_id AND material_id = NEW.material_id
+                    ) THEN
+                        RAISE EXCEPTION 'Identitas drum tidak cocok dengan material';
+                    END IF;
+                    IF NEW.lokasi_id IS NULL THEN
+                        NEW.lokasi_id = NEW.warehouse_id;
+                    END IF;
+                    RETURN NEW;
+                END;
+                $fn$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+                CREATE OR REPLACE FUNCTION apply_drum_transaction() RETURNS trigger AS $fn$
+                BEGIN
+                    IF NEW.drum_id IS NOT NULL AND NEW.jenis_transaksi IN (
+                        'drum_issue', 'drum_split', 'hilang_dalam_perjalanan'
+                    ) AND NEW.qty_delta < 0 THEN
+                        UPDATE drums
+                        SET sisa = sisa + NEW.qty_delta, updated_at = NOW()
+                        WHERE id = NEW.drum_id;
+                        IF NOT FOUND THEN
+                            RAISE EXCEPTION 'Drum tidak ditemukan';
+                        END IF;
+                    END IF;
+                    RETURN NEW;
+                END;
+                $fn$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+                GRANT SELECT, INSERT ON material_transaksis TO pms_app;
+
                 DROP POLICY IF EXISTS project_rekon_item_tenant_isolation ON project_rekon_items;
                 DROP POLICY IF EXISTS project_rekon_tenant_isolation ON project_rekons;
                 DROP POLICY IF EXISTS pemakaian_material_tenant_isolation ON pemakaian_materials;
