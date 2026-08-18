@@ -132,7 +132,6 @@ class MaterialUsageService
                 ->where('material_id', $material->id)
                 ->where('lokasi_tipe', 'warehouse')
                 ->where('lokasi_id', $warehouse->id)
-                ->lockForUpdate()
                 ->first();
             if ($stock === null || (float) $stock->qty + 0.0005 < (float) $qty) {
                 throw ValidationException::withMessages(['qty' => 'Saldo material tidak mencukupi saat approval.']);
