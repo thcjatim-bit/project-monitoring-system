@@ -768,6 +768,9 @@ class PortfolioCockpitTest extends TestCase
         $this->savePlan($projectA, '2026-08-30');
         $this->recordProgress($projectA, $rabA, '2026-08-10', '40', 'verified');
         $this->recordProgress($projectA, $rabA, '2026-08-12', '20', 'pending');
+        $material = Material::factory()->create();
+        $this->requireMaterial($projectA, $material, '10');
+        $this->deliverMaterial($projectA, $material, qty: '10', received: '4');
         $projectB = $this->projectFor($mitraB, 'PRJ-2608-0023', 'Project Export Beta');
         $this->addRabJasa($projectB, '50');
 
@@ -793,6 +796,8 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('Tren realisasi jasa')
             ->assertSee('40.00%')
             ->assertSee('20.00%')
+            ->assertSee('SPI 0.80')
+            ->assertSee('Transit tidak dihitung sebagai tersedia')
             ->assertDontSee('Project Export Beta')
             ->assertDontSee('Mitra Beta')
             ->assertDontSee('Rahasia export internal');
@@ -849,6 +854,27 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('Portfolio Cockpit belum dapat dimuat. Coba lagi atau buka modul sumbernya.')
             ->assertSee('Mitra Export Error')
             ->assertSee('Juli 2026');
+    }
+
+    public function test_portfolio_page_export_link_preserves_the_active_filters(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitra = Mitra::factory()->create(['nama' => 'Mitra Filter Link']);
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project_progress');
+        $exportUrl = route('portfolio.export', [
+            'mitra' => $mitra->id,
+            'periode' => '2026-08',
+            'risiko' => 'merah',
+        ]);
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.index', [
+                'mitra' => $mitra->id,
+                'periode' => '2026-08',
+                'risiko' => 'merah',
+            ]))
+            ->assertOk()
+            ->assertSee('href="'.$exportUrl.'"', false);
     }
 
     private function projectFor(Mitra $mitra, string $idProject, string $nama, string $status = 'aktif'): Project
