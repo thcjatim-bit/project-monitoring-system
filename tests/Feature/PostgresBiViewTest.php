@@ -21,6 +21,41 @@ class PostgresBiViewTest extends TestCase
         parent::setUp();
     }
 
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        if (extension_loaded('pdo_pgsql')) {
+            $writer = DB::connection('migrator');
+            $writer->select("select set_config('app.is_thc', 'on', false)");
+            $writer->select("select set_config('app.mitra_id', '', false)");
+            $writer->unprepared(<<<'SQL'
+                TRUNCATE project_rekon_items, project_rekons, material_transaksis;
+                DELETE FROM project_baseline_days
+                WHERE project_baseline_id IN (SELECT id FROM project_baselines WHERE project_id IN (SELECT id FROM projects WHERE id_project LIKE 'PRJ-BI-%'));
+                DELETE FROM project_baselines WHERE project_id IN (SELECT id FROM projects WHERE id_project LIKE 'PRJ-BI-%');
+                DELETE FROM project_progresses WHERE project_id IN (SELECT id FROM projects WHERE id_project LIKE 'PRJ-BI-%');
+                DELETE FROM project_rab_jasas WHERE project_id IN (SELECT id FROM projects WHERE id_project LIKE 'PRJ-BI-%');
+                DELETE FROM material_transaksis WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
+                DELETE FROM mitra_harga_jasas WHERE pks_id IN (SELECT id FROM pks WHERE nomor LIKE 'PKS-BI-%');
+                DELETE FROM pks WHERE nomor LIKE 'PKS-BI-%';
+                DELETE FROM pekerjaan_jasas WHERE kode LIKE 'JOB-%';
+                DELETE FROM surat_jalan_items WHERE surat_jalan_id IN (SELECT id FROM surat_jalans WHERE nomor LIKE 'SJ-BI-%');
+                DELETE FROM surat_jalans WHERE nomor LIKE 'SJ-BI-%';
+                DELETE FROM material_request_items WHERE material_request_id IN (SELECT id FROM material_requests WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%'));
+                DELETE FROM material_requests WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
+                DELETE FROM material_stoks WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
+                DELETE FROM warehouses WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
+                DELETE FROM projects WHERE id_project LIKE 'PRJ-BI-%';
+                DELETE FROM users WHERE email LIKE 'bi-%@example.test';
+                DELETE FROM materials WHERE kode LIKE 'MAT-%';
+                DELETE FROM units WHERE kode LIKE 'U-%';
+                DELETE FROM mitras WHERE kode LIKE 'BI-%';
+            SQL);
+            $writer->disconnect();
+        }
+    }
+
     public function test_bi_publishes_the_allowlisted_views_with_security_options(): void
     {
         $views = DB::select(<<<'SQL'
