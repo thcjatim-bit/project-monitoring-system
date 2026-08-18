@@ -114,11 +114,19 @@ class ApiReadQuery
         $stocks = MaterialStok::query()
             ->with(['warehouse.mitra', 'material.unit', 'mitra'])
             ->when($filter->periodFrom !== null, fn (Builder $query) => $query->whereDate('updated_at', '>=', $filter->periodFrom->toDateString()))
+            ->when($filter->periodTo !== null, fn (Builder $query) => $query->whereDate('updated_at', '<=', $filter->periodTo->toDateString()))
             ->whereDate('updated_at', '<=', $filter->reportingAsOf->toDateString())
             ->when(! $principal->isThc(), function (Builder $query) use ($principal): void {
                 $query->where(function (Builder $query) use ($principal): void {
                     $query->where('mitra_id', $principal->mitraId())
                         ->orWhereHas('warehouse', fn (Builder $warehouse) => $warehouse->where('mitra_id', $principal->mitraId()));
+                });
+            })
+            ->when($filter->mitras !== [], function (Builder $query) use ($filter): void {
+                $mitraIds = $this->mitraIds($filter->mitras);
+                $query->where(function (Builder $query) use ($mitraIds): void {
+                    $query->whereIn('mitra_id', $mitraIds)
+                        ->orWhereHas('warehouse', fn (Builder $warehouse) => $warehouse->whereIn('mitra_id', $mitraIds));
                 });
             })
             ->orderBy('id')

@@ -8,6 +8,7 @@ use App\Models\Mitra;
 use App\Models\User;
 use App\Support\ApiKeyCredential;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +30,7 @@ class ApiKeyService
         ?int $mitraId = null,
         int $expiresInDays = self::DEFAULT_EXPIRY_DAYS,
         array $permissions = ['read_api'],
+        ?CarbonInterface $expiresAt = null,
     ): ApiKeyCredential {
         $this->ensureManager($actor);
         $this->ensureExpiryDays($expiresInDays);
@@ -45,7 +47,7 @@ class ApiKeyService
             'key_hash' => hash('sha256', $plaintext),
             'mitra_id' => $mitraId,
             'permissions' => array_values(array_unique($permissions)),
-            'expires_at' => now()->addDays($expiresInDays),
+            'expires_at' => $expiresAt ?? now()->addDays($expiresInDays),
             'created_by' => $actor->id,
         ]);
 
@@ -93,8 +95,10 @@ class ApiKeyService
                 mitraId: $apiKey->mitra_id,
                 expiresInDays: $remainingDays,
                 permissions: $apiKey->permissions ?? [],
+                expiresAt: $apiKey->expires_at,
             );
 
+            $credential->apiKey->forceFill(['rotated_from_id' => $apiKey->getKey()])->save();
             $apiKey->forceFill(['grace_until' => now()->addHours(self::ROTATION_GRACE_HOURS)])->save();
             $this->audit($apiKey, 'rotated', $actor, [
                 'new_key_id' => $credential->apiKey->getKey(),

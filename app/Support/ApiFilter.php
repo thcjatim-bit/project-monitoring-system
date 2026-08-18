@@ -77,6 +77,10 @@ final readonly class ApiFilter
         if (filter_var($pageSize, FILTER_VALIDATE_INT) === false || (int) $pageSize < 1 || (int) $pageSize > 200) {
             throw new ApiException('invalid_parameter', 422, 'page[size] harus berada di antara 1 dan 200.');
         }
+        $cursor = $rawPage['cursor'] ?? null;
+        if ($cursor !== null && ! is_string($cursor)) {
+            throw new ApiException('invalid_parameter', 422, 'page[cursor] harus berupa string.');
+        }
 
         $includes = self::list($query['include'] ?? null, 'include');
         self::validateValues($includes, [
@@ -93,7 +97,7 @@ final readonly class ApiFilter
             projectStatuses: $projectStatuses,
             reportingAsOf: $reportingAsOf,
             pageSize: (int) $pageSize,
-            cursor: isset($rawPage['cursor']) ? (string) $rawPage['cursor'] : null,
+            cursor: $cursor,
             includes: $includes,
         );
     }

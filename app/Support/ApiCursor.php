@@ -30,11 +30,11 @@ final class ApiCursor
         $decoded = base64_decode(strtr($body, '-_', '+/').'===', true);
         $payload = is_string($decoded) ? json_decode($decoded, true) : null;
         if (! is_array($payload)
-            || $payload['version'] !== 1
-            || $payload['endpoint'] !== $endpoint
-            || $payload['filter'] !== $filter->fingerprint()
-            || $payload['scope'] !== $principal->scopeKey()
-            || ! is_int($payload['offset'])
+            || ($payload['version'] ?? null) !== 1
+            || ($payload['endpoint'] ?? null) !== $endpoint
+            || ($payload['filter'] ?? null) !== $filter->fingerprint()
+            || ($payload['scope'] ?? null) !== $principal->scopeKey()
+            || ! is_int($payload['offset'] ?? null)
             || $payload['offset'] < 0) {
             throw new ApiException('invalid_parameter', 422, 'Cursor API tidak sesuai dengan endpoint atau filter.');
         }

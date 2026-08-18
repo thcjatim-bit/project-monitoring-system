@@ -46,6 +46,11 @@ x-read-responses: &readResponses
     content:
       application/json:
         schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  '406':
+    description: Requested media type is not supported.
+    content:
+      application/json:
+        schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   '422':
     description: Invalid parameter or filter.
     content:
@@ -277,61 +282,3 @@ components:
         risk_reasons:
           type: array
           items: { type: string }
-
-x-extensions:
-  collectionParameters:
-    - $ref: '#/components/parameters/FilterProject'
-    - $ref: '#/components/parameters/FilterMitra'
-    - $ref: '#/components/parameters/FilterPeriodFrom'
-    - $ref: '#/components/parameters/FilterPeriodTo'
-    - $ref: '#/components/parameters/FilterRisk'
-    - $ref: '#/components/parameters/FilterProjectStatus'
-    - $ref: '#/components/parameters/ReportingAsOf'
-    - $ref: '#/components/parameters/PageSize'
-    - $ref: '#/components/parameters/PageCursor'
-  readResponses:
-    '200':
-      description: Successful read projection.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/SuccessEnvelope' }
-    '401':
-      description: Missing, invalid, expired, or revoked API key.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '403':
-      description: Permission or scope denial.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '404':
-      description: Resource is absent or outside a scoped key.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '405':
-      description: Write method rejected; API is read-only.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '422':
-      description: Invalid parameter or filter.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '429':
-      description: Rate limit exceeded.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '500':
-      description: Redacted internal error.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    '503':
-      description: Available source dependency temporarily unavailable.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorEnvelope' }

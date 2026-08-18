@@ -266,6 +266,57 @@ class ApiKeyRestApiTest extends TestCase
             ->assertJsonPath('errors.0.code', 'api_key_invalid');
     }
 
+    public function test_rotation_links_keys_keeps_old_key_during_grace_and_expires_it_afterward(): void
+    {
+        [$plaintext, $apiKey, $actor] = $this->credential();
+
+        $response = $this->actingAs($actor)
+            ->post(route('admin.api-keys.rotate', $apiKey));
+
+        $response->assertOk();
+        $rotatedPlaintext = (string) $response->viewData('plaintext');
+        $rotated = ApiKey::query()->where('key_hash', hash('sha256', $rotatedPlaintext))->firstOrFail();
+
+        $this->assertSame($apiKey->getKey(), $rotated->rotated_from_id);
+        $this->assertNotNull($apiKey->fresh()->grace_until);
+
+        $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects')
+            ->assertOk();
+        $this->withHeader('Authorization', 'Bearer '.$rotatedPlaintext)
+            ->getJson('/api/v1/projects')
+            ->assertOk();
+
+        $this->travel(25)->hours();
+
+        $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects')
+            ->assertUnauthorized()
+            ->assertJsonPath('errors.0.code', 'api_key_invalid');
+
+        $this->assertNotNull($apiKey->fresh()->revoked_at);
+        $this->withHeader('Authorization', 'Bearer '.$rotatedPlaintext)
+            ->getJson('/api/v1/projects')
+            ->assertOk();
+    }
+
+    public function test_api_rejects_non_json_and_signed_cursors_with_missing_payload_fields(): void
+    {
+        [$plaintext] = $this->credential();
+        $body = rtrim(strtr(base64_encode((string) json_encode(['version' => 1])), '+/', '-_'), '=');
+        $cursor = $body.'.'.hash_hmac('sha256', $body, (string) config('app.key'));
+
+        $this->withHeaders(['Authorization' => 'Bearer '.$plaintext, 'Accept' => 'text/html'])
+            ->get('/api/v1/projects')
+            ->assertStatus(406)
+            ->assertJsonPath('errors.0.code', 'not_acceptable');
+
+        $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects?page[cursor]='.$cursor)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.0.code', 'invalid_parameter');
+    }
+
     /** @return array{string,ApiKey,User} */
     private function credential(?int $mitraId = null): array
     {
