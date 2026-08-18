@@ -52,6 +52,7 @@ class MaterialUsageReconciliationTest extends TestCase
             ->assertSessionDoesntHaveErrors();
 
         $usageId = $this->asThc(fn (): int => (int) DB::table('pemakaian_materials')->value('id'));
+        fwrite(STDERR, json_encode(DB::selectOne("select current_user, current_setting('app.is_thc', true) as is_thc, current_setting('app.mitra_id', true) as mitra_id, count(*) as usage_count from pemakaian_materials"), JSON_THROW_ON_ERROR).PHP_EOL);
         $this->assertDatabaseHas('pemakaian_materials', [
             'id' => $usageId,
             'status' => 'diajukan',
