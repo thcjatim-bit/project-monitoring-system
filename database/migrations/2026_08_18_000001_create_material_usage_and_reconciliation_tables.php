@@ -327,6 +327,30 @@ return new class extends Migration
                 ALTER TABLE drums DROP CONSTRAINT IF EXISTS drums_location_valid;
                 ALTER TABLE drums
                     ADD CONSTRAINT drums_location_valid CHECK (lokasi_tipe IN ('warehouse', 'project', 'terpasang', 'transit'));
+                DROP POLICY IF EXISTS material_sn_tenant_isolation ON material_sns;
+                CREATE POLICY material_sn_tenant_isolation ON material_sns
+                    USING (current_setting('app.is_thc', true) = 'on' OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    ))
+                    WITH CHECK (current_setting('app.is_thc', true) = 'on' OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    ));
+                DROP POLICY IF EXISTS drum_tenant_isolation ON drums;
+                CREATE POLICY drum_tenant_isolation ON drums
+                    USING (current_setting('app.is_thc', true) = 'on' OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    ))
+                    WITH CHECK (current_setting('app.is_thc', true) = 'on' OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    ));
             SQL);
         }
 

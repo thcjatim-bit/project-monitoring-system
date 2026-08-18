@@ -22,6 +22,9 @@ class ProjectRekonService
     public function open(Project $project, User $actor, string $source = 'manual'): ProjectRekon
     {
         $this->ensureSource($source);
+        if ($source !== 'manual') {
+            throw ValidationException::withMessages(['source' => 'Rekon GO Live hanya dapat dibuka oleh lifecycle Step Project.']);
+        }
         if ($source === 'manual' && $actor->mitra_id !== null) {
             throw ValidationException::withMessages(['status' => 'Rekon Material manual hanya dapat dibuka oleh user THC.']);
         }
@@ -107,8 +110,8 @@ class ProjectRekonService
                 throw ValidationException::withMessages(['status' => 'Rekon Material sudah diputuskan.']);
             }
             $project = Project::query()->lockForUpdate()->findOrFail($rekon->project_id);
-            $items = ProjectRekonItem::query()->where('project_rekon_id', $rekon->id)->lockForUpdate()->get();
-            $source = $rekon->koreksi_dari_id === null ? null : ProjectRekon::query()->with('items')->findOrFail($rekon->koreksi_dari_id);
+            $items = ProjectRekonItem::query()->with('material')->where('project_rekon_id', $rekon->id)->lockForUpdate()->get();
+            $source = $rekon->koreksi_dari_id === null ? null : ProjectRekon::query()->with('items.material')->findOrFail($rekon->koreksi_dari_id);
 
             if ($source !== null) {
                 $active = $this->activeApproved($project);
@@ -326,6 +329,13 @@ class ProjectRekonService
             }
             if (($item->material_sn_id !== null || $item->drum_id !== null) && abs($sisa - 1.0) > self::EPSILON && $item->material_sn_id !== null) {
                 throw ValidationException::withMessages(['items' => 'Material ber-SN hanya dapat direkonsiliasi satu unit.']);
+            }
+            if ($item->material_sn_id !== null && $sisa > self::EPSILON
+                && abs($returned - $sisa) > self::EPSILON && abs($lost - $sisa) > self::EPSILON) {
+                throw ValidationException::withMessages(['items' => 'Material ber-SN harus seluruhnya dikembalikan atau dicatat sebagai hilang/rusak.']);
+            }
+            if ($item->drum_id !== null && $returned > self::EPSILON && $lost > self::EPSILON) {
+                throw ValidationException::withMessages(['items' => 'Sisa satu Drum tidak boleh dibagi antara pengembalian dan hilang/rusak.']);
             }
         }
 
