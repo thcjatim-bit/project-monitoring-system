@@ -46,6 +46,8 @@ class AccessControlSeeder extends Seeder
             'create_material_rekon' => 'Membuka Rekon Material',
             'edit_material_rekon' => 'Mengubah Draft Rekon Material',
             'approve_material_rekon' => 'Memutuskan Rekon Material',
+            'manage_api_keys' => 'Mengelola API Key',
+            'read_api' => 'Membaca REST API',
         ])->mapWithKeys(fn (string $nama, string $kode) => [
             $kode => Izin::query()->firstOrCreate(['kode' => $kode], ['nama' => $nama]),
         ]);

@@ -39,6 +39,11 @@ class MaterialTransaksi extends Model
         return $this->belongsTo(Material::class);
     }
 
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id');
