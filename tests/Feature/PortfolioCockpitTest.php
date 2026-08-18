@@ -735,6 +735,122 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('Filter aktif');
     }
 
+    public function test_user_with_read_dashboard_can_download_the_portfolio_excel_export(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $thc = $this->userWithPermissions(null, 'read_dashboard');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.export'))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->assertHeader('Content-Disposition', 'attachment; filename=portfolio-cockpit-2026-08.xls')
+            ->assertSee('Portfolio Cockpit')
+            ->assertSee('Worksheet ss:Name="Ringkasan"', false);
+    }
+
+    public function test_user_without_read_dashboard_cannot_download_the_portfolio_excel_export(): void
+    {
+        $thc = $this->userWithPermissions(null, 'read_project');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.export'))
+            ->assertForbidden();
+    }
+
+    public function test_export_uses_the_active_read_model_filters_and_excludes_internal_comments(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitraA = Mitra::factory()->create(['nama' => 'Mitra Alpha']);
+        $mitraB = Mitra::factory()->create(['nama' => 'Mitra Beta']);
+        $projectA = $this->projectFor($mitraA, 'PRJ-2608-0022', 'Project Export Alpha');
+        $rabA = $this->addRabJasa($projectA, '100');
+        $this->savePlan($projectA, '2026-08-30');
+        $this->recordProgress($projectA, $rabA, '2026-08-10', '40', 'verified');
+        $this->recordProgress($projectA, $rabA, '2026-08-12', '20', 'pending');
+        $projectB = $this->projectFor($mitraB, 'PRJ-2608-0023', 'Project Export Beta');
+        $this->addRabJasa($projectB, '50');
+
+        $this->asThc(function () use ($projectA): void {
+            ProjectTimeline::query()->create([
+                'mitra_id' => $projectA->mitra_id,
+                'project_id' => $projectA->id,
+                'type' => 'internal_note',
+                'event_key' => 'internal_note_created',
+                'body' => 'Rahasia export internal',
+            ]);
+        });
+
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress', 'read_project_material');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.export', ['mitra' => $mitraA->id, 'periode' => '2026-08']))
+            ->assertOk()
+            ->assertSee('Mitra Alpha')
+            ->assertSee('Project Export Alpha')
+            ->assertSee('Health Matrix')
+            ->assertSee('Decision Queue')
+            ->assertSee('Tren realisasi jasa')
+            ->assertSee('40.00%')
+            ->assertSee('20.00%')
+            ->assertDontSee('Project Export Beta')
+            ->assertDontSee('Mitra Beta')
+            ->assertDontSee('Rahasia export internal');
+    }
+
+    public function test_mitra_export_isolated_and_redacts_progress_without_progress_permission(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitraA = Mitra::factory()->create(['nama' => 'Mitra Export A']);
+        $mitraB = Mitra::factory()->create(['nama' => 'Mitra Export B']);
+        $projectA = $this->projectFor($mitraA, 'PRJ-2608-0024', 'Project Tenant A');
+        $rabA = $this->addRabJasa($projectA, '100');
+        $this->recordProgress($projectA, $rabA, '2026-08-10', '40', 'verified');
+        $projectB = $this->projectFor($mitraB, 'PRJ-2608-0025', 'Project Tenant B');
+        $this->addRabJasa($projectB, '100');
+        $mitraUser = $this->userWithPermissions($mitraA->id, 'read_dashboard', 'read_project');
+
+        $this->actingAs($mitraUser)
+            ->get(route('portfolio.export'))
+            ->assertOk()
+            ->assertSee('Project Tenant A')
+            ->assertSee('Mitra Export A')
+            ->assertSee('Terbatas')
+            ->assertDontSee('Project Tenant B')
+            ->assertDontSee('Mitra Export B')
+            ->assertDontSee('40.00%');
+    }
+
+    public function test_empty_export_keeps_filter_context_and_explains_the_empty_result(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $thc = $this->userWithPermissions(null, 'read_dashboard');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.export', ['project' => 999999, 'periode' => '2026-07']))
+            ->assertOk()
+            ->assertSee('Project #999999')
+            ->assertSee('Juli 2026')
+            ->assertSee('Tidak ada Project aktif yang cocok dengan filter yang sedang berlaku.');
+    }
+
+    public function test_export_error_keeps_filter_context_in_a_downloadable_error_workbook(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitra = Mitra::factory()->create(['nama' => 'Mitra Export Error']);
+        $thc = $this->userWithPermissions(null, 'read_dashboard');
+        $this->partialMock(PortfolioCockpitQuery::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('for')->andThrow(new RuntimeException('read model unavailable'));
+        });
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.export', ['mitra' => $mitra->id, 'periode' => '2026-07']))
+            ->assertStatus(503)
+            ->assertSee('Portfolio Cockpit belum dapat dimuat. Coba lagi atau buka modul sumbernya.')
+            ->assertSee('Mitra #'.$mitra->id)
+            ->assertSee('Juli 2026');
+    }
+
     private function projectFor(Mitra $mitra, string $idProject, string $nama, string $status = 'aktif'): Project
     {
         return $this->asThc(fn (): Project => Project::query()->create([

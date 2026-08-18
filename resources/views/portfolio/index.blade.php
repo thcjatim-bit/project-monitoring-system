@@ -156,6 +156,7 @@
                 <div class="portfolio__filter-actions">
                     <button type="submit">Terapkan filter</button>
                     <a href="{{ route('portfolio.index') }}">Reset filter</a>
+                    <a href="{{ route('portfolio.export', array_filter(['project' => $filters['project'], 'mitra' => $filters['mitra'], 'periode' => $filters['periode'], 'risiko' => $filters['risiko'] !== 'semua' ? $filters['risiko'] : null], static fn (mixed $value): bool => $value !== null)) }}">Unduh Excel</a>
                 </div>
             </form>
 

@@ -66,6 +66,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/portfolio', [PortfolioCockpitController::class, 'index'])
         ->middleware('izin:read_dashboard')
         ->name('portfolio.index');
+    Route::get('/portfolio/export', [PortfolioCockpitController::class, 'export'])
+        ->middleware('izin:read_dashboard')
+        ->name('portfolio.export');
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
