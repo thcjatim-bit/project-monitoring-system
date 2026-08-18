@@ -52,47 +52,50 @@ class MaterialUsageReconciliationTest extends TestCase
             ->assertSessionDoesntHaveErrors();
 
         $usageId = $this->asThc(fn (): int => (int) DB::table('pemakaian_materials')->value('id'));
-        fwrite(STDERR, json_encode(DB::selectOne("select current_user, current_setting('app.is_thc', true) as is_thc, current_setting('app.mitra_id', true) as mitra_id, count(*) as usage_count from pemakaian_materials"), JSON_THROW_ON_ERROR).PHP_EOL);
-        $this->assertDatabaseHas('pemakaian_materials', [
-            'id' => $usageId,
-            'status' => 'diajukan',
-            'mitra_id' => $mitra->id,
-            'project_id' => $project->id,
-            'qty' => '4.000',
-        ]);
-        $this->assertDatabaseCount('material_transaksis', 1);
-        $this->assertDatabaseHas('material_stoks', [
-            'warehouse_id' => $warehouse->id,
-            'material_id' => $material->id,
-            'lokasi_tipe' => 'warehouse',
-            'lokasi_id' => $warehouse->id,
-            'qty' => '10.000',
-        ]);
+        $this->asThc(function () use ($usageId, $mitra, $project, $warehouse, $material): void {
+            $this->assertDatabaseHas('pemakaian_materials', [
+                'id' => $usageId,
+                'status' => 'diajukan',
+                'mitra_id' => $mitra->id,
+                'project_id' => $project->id,
+                'qty' => '4.000',
+            ]);
+            $this->assertDatabaseCount('material_transaksis', 1);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'warehouse',
+                'lokasi_id' => $warehouse->id,
+                'qty' => '10.000',
+            ]);
+        });
 
         $this->actingAs($thc)
             ->patch(route('material-usages.approve', $usageId))
             ->assertRedirect();
 
-        $this->assertDatabaseHas('pemakaian_materials', [
-            'id' => $usageId,
-            'status' => 'disetujui',
-            'decided_by' => $thc->id,
-        ]);
-        $this->assertDatabaseCount('material_transaksis', 3);
-        $this->assertDatabaseHas('material_stoks', [
-            'warehouse_id' => $warehouse->id,
-            'material_id' => $material->id,
-            'lokasi_tipe' => 'warehouse',
-            'lokasi_id' => $warehouse->id,
-            'qty' => '6.000',
-        ]);
-        $this->assertDatabaseHas('material_stoks', [
-            'warehouse_id' => $warehouse->id,
-            'material_id' => $material->id,
-            'lokasi_tipe' => 'project',
-            'lokasi_id' => $project->id,
-            'qty' => '4.000',
-        ]);
+        $this->asThc(function () use ($usageId, $thc, $warehouse, $material, $project): void {
+            $this->assertDatabaseHas('pemakaian_materials', [
+                'id' => $usageId,
+                'status' => 'disetujui',
+                'decided_by' => $thc->id,
+            ]);
+            $this->assertDatabaseCount('material_transaksis', 3);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'warehouse',
+                'lokasi_id' => $warehouse->id,
+                'qty' => '6.000',
+            ]);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'project',
+                'lokasi_id' => $project->id,
+                'qty' => '4.000',
+            ]);
+        });
     }
 
     private function userWithPermissions(?int $mitraId, string ...$permissions): User
