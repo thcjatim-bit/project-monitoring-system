@@ -758,6 +758,37 @@ class PortfolioCockpitTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_portfolio_export_is_a_valid_four_sheet_spreadsheetml_workbook(): void
+    {
+        $thc = $this->userWithPermissions(null, 'read_dashboard');
+        $response = $this->actingAs($thc)->get(route('portfolio.export'));
+        $document = new \DOMDocument;
+
+        $this->assertTrue($document->loadXML($response->getContent()));
+        $worksheets = $document->getElementsByTagNameNS(
+            'urn:schemas-microsoft-com:office:spreadsheet',
+            'Worksheet',
+        );
+
+        $this->assertCount(4, $worksheets);
+        $this->assertSame('Ringkasan', $worksheets->item(0)->getAttributeNS(
+            'urn:schemas-microsoft-com:office:spreadsheet',
+            'Name',
+        ));
+        $this->assertSame('Health Matrix', $worksheets->item(1)->getAttributeNS(
+            'urn:schemas-microsoft-com:office:spreadsheet',
+            'Name',
+        ));
+        $this->assertSame('Decision Queue', $worksheets->item(2)->getAttributeNS(
+            'urn:schemas-microsoft-com:office:spreadsheet',
+            'Name',
+        ));
+        $this->assertSame('Tren', $worksheets->item(3)->getAttributeNS(
+            'urn:schemas-microsoft-com:office:spreadsheet',
+            'Name',
+        ));
+    }
+
     public function test_export_uses_the_active_read_model_filters_and_excludes_internal_comments(): void
     {
         CarbonImmutable::setTestNow('2026-08-15 09:00:00');
