@@ -21,6 +21,8 @@ class MaterialTransaksi extends Model
         'project_id',
         'mitra_id',
         'surat_jalan_id',
+        'pemakaian_material_id',
+        'project_rekon_item_id',
         'koreksi_dari_id',
         'reason',
         'catatan',
@@ -50,6 +52,16 @@ class MaterialTransaksi extends Model
     public function correctionSource(): BelongsTo
     {
         return $this->belongsTo(self::class, 'koreksi_dari_id');
+    }
+
+    public function pemakaianMaterial(): BelongsTo
+    {
+        return $this->belongsTo(PemakaianMaterial::class);
+    }
+
+    public function projectRekonItem(): BelongsTo
+    {
+        return $this->belongsTo(ProjectRekonItem::class);
     }
 
     public function serialNumber(): BelongsTo

@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class ProjectStepService
 {
+    public function __construct(private ProjectRekonService $projectRekonService) {}
+
     public function move(Project $project, User $actor, string $stepKey, string $status = 'active'): ProjectStep
     {
         if (! isset(ProjectStep::STEPS[$stepKey])) {
@@ -77,6 +79,10 @@ class ProjectStepService
                 'to' => $stepKey,
                 'status' => $status,
             ]);
+
+            if ($stepKey === 'go_live' && $status === 'completed') {
+                $this->projectRekonService->openForGoLive($project, $actor);
+            }
 
             return $target->fresh();
         });
