@@ -150,12 +150,7 @@ return new class extends Migration
             CREATE POLICY material_sn_tenant_isolation ON material_sns
                 USING (
                     current_setting('app.is_thc', true) = 'on'
-                    OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses
-                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    )
+                    OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
                     OR project_id IN (
                         SELECT id FROM projects
                         WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
@@ -163,12 +158,7 @@ return new class extends Migration
                 )
                 WITH CHECK (
                     current_setting('app.is_thc', true) = 'on'
-                    OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses
-                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    )
+                    OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
                     OR project_id IN (
                         SELECT id FROM projects
                         WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
@@ -179,12 +169,7 @@ return new class extends Migration
             CREATE POLICY drum_tenant_isolation ON drums
                 USING (
                     current_setting('app.is_thc', true) = 'on'
-                    OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses
-                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    )
+                    OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
                     OR project_id IN (
                         SELECT id FROM projects
                         WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
@@ -192,12 +177,7 @@ return new class extends Migration
                 )
                 WITH CHECK (
                     current_setting('app.is_thc', true) = 'on'
-                    OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses
-                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    )
+                    OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
                     OR project_id IN (
                         SELECT id FROM projects
                         WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
@@ -329,28 +309,12 @@ return new class extends Migration
                     ADD CONSTRAINT drums_location_valid CHECK (lokasi_tipe IN ('warehouse', 'project', 'terpasang', 'transit'));
                 DROP POLICY IF EXISTS material_sn_tenant_isolation ON material_sns;
                 CREATE POLICY material_sn_tenant_isolation ON material_sns
-                    USING (current_setting('app.is_thc', true) = 'on' OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    ))
-                    WITH CHECK (current_setting('app.is_thc', true) = 'on' OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    ));
+                    USING (current_setting('app.is_thc', true) = 'on' OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint)
+                    WITH CHECK (current_setting('app.is_thc', true) = 'on' OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint);
                 DROP POLICY IF EXISTS drum_tenant_isolation ON drums;
                 CREATE POLICY drum_tenant_isolation ON drums
-                    USING (current_setting('app.is_thc', true) = 'on' OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    ))
-                    WITH CHECK (current_setting('app.is_thc', true) = 'on' OR (
-                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
-                            SELECT id FROM warehouses WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
-                        )
-                    ));
+                    USING (current_setting('app.is_thc', true) = 'on' OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint)
+                    WITH CHECK (current_setting('app.is_thc', true) = 'on' OR mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint);
             SQL);
         }
 
