@@ -45,7 +45,7 @@ class AuthenticateApiKey
                 return $this->fail($request, 'invalid_format', 401, 'API Key tidak valid.');
             }
 
-            if ($this->rateLimiter->tooManyAttempts($this->failureKey($request), 10)) {
+            if ($this->authenticationRateLimited($request)) {
                 return ApiResponse::error($request, 'rate_limited', 429, 'Terlalu banyak kegagalan autentikasi.');
             }
 
@@ -139,6 +139,17 @@ class AuthenticateApiKey
         return 'api-key:failed-ip:'.($request->ip() ?? 'unknown');
     }
 
+    private function authenticationRateLimited(Request $request): bool
+    {
+        if (! $this->rateLimiter->tooManyAttempts($this->failureKey($request), 10)) {
+            return false;
+        }
+
+        $this->apiKeyService->audit(null, 'rate_limited', null, ['reason' => 'authentication_failures'], ApiResponse::requestId($request));
+
+        return true;
+    }
+
     private function inactiveReason(ApiKey $apiKey): string
     {
         if ($apiKey->revoked_at !== null) {
@@ -164,6 +175,10 @@ class AuthenticateApiKey
     private function fail(Request $request, string $reason, int $status, string $message): Response
     {
         if ($status === 401) {
+            if ($this->authenticationRateLimited($request)) {
+                return ApiResponse::error($request, 'rate_limited', 429, 'Terlalu banyak kegagalan autentikasi.');
+            }
+
             $this->rateLimiter->hit($this->failureKey($request), 60);
             $this->apiKeyService->audit(null, 'authentication_failed', null, ['reason' => $reason], ApiResponse::requestId($request));
         }

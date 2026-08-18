@@ -317,6 +317,20 @@ class ApiKeyRestApiTest extends TestCase
             ->assertJsonPath('errors.0.code', 'invalid_parameter');
     }
 
+    public function test_authentication_failures_are_rate_limited_per_ip(): void
+    {
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])
+                ->getJson('/api/v1/projects')
+                ->assertUnauthorized();
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])
+            ->getJson('/api/v1/projects')
+            ->assertStatus(429)
+            ->assertJsonPath('errors.0.code', 'rate_limited');
+    }
+
     /** @return array{string,ApiKey,User} */
     private function credential(?int $mitraId = null): array
     {

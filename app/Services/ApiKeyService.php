@@ -112,16 +112,6 @@ class ApiKeyService
     /** @param array<string,mixed> $metadata */
     public function audit(?ApiKey $apiKey, string $event, ?User $actor = null, array $metadata = [], ?string $requestId = null): ApiKeyAudit
     {
-        $redacted = [];
-        foreach ($metadata as $key => $value) {
-            if (in_array(strtolower((string) $key), ['key', 'raw_key', 'plaintext', 'candidate_hash', 'authorization', 'authorization_header', 'token'], true)) {
-                continue;
-            }
-            if (is_scalar($value) || $value === null || is_array($value)) {
-                $redacted[$key] = $value;
-            }
-        }
-
         return ApiKeyAudit::query()->create([
             'api_key_id' => $apiKey?->getKey(),
             'actor_id' => $actor?->id,
@@ -129,9 +119,27 @@ class ApiKeyService
             'request_id' => $requestId,
             'ip_address' => request()?->ip(),
             'user_agent' => request()?->userAgent(),
-            'metadata' => $redacted,
+            'metadata' => $this->redactMetadata($metadata),
             'created_at' => now(),
         ]);
+    }
+
+    /** @param array<string,mixed> $metadata @return array<string,mixed> */
+    private function redactMetadata(array $metadata): array
+    {
+        $redacted = [];
+        foreach ($metadata as $key => $value) {
+            if (in_array(strtolower((string) $key), ['key', 'raw_key', 'plaintext', 'candidate_hash', 'authorization', 'authorization_header', 'token'], true)) {
+                continue;
+            }
+            if (is_array($value)) {
+                $redacted[$key] = $this->redactMetadata($value);
+            } elseif (is_scalar($value) || $value === null) {
+                $redacted[$key] = $value;
+            }
+        }
+
+        return $redacted;
     }
 
     private function ensureManager(User $actor): void
