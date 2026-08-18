@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Models\ProjectProgress;
 use App\Models\ProjectRabJasa;
 use App\Models\ProjectRabMaterial;
+use App\Models\ProjectTimeline;
 use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
@@ -247,13 +248,27 @@ class PortfolioCockpitTest extends TestCase
         $this->addRabJasa($projectA, '100');
         $projectB = $this->projectFor($mitraB, 'PRJ-2608-0009', 'Project Beta');
         $this->addRabJasa($projectB, '50');
-        $user = $this->userWithPermissions($mitraA->id, 'read_dashboard', 'read_project', 'read_project_progress', 'read_project_material');
+        $this->asThc(function () use ($projectA, $projectB): void {
+            foreach ([$projectA, $projectB] as $project) {
+                ProjectTimeline::query()->create([
+                    'mitra_id' => $project->mitra_id,
+                    'project_id' => $project->id,
+                    'type' => 'system_log',
+                    'event_key' => 'step_changed',
+                    'created_at' => '2026-08-15 08:00:00',
+                    'updated_at' => '2026-08-15 08:00:00',
+                ]);
+            }
+        });
+        $user = $this->userWithPermissions($mitraA->id, 'read_dashboard', 'read_project', 'read_project_progress', 'read_project_material', 'read_project_timeline');
 
         $this->actingAs($user)
             ->get(route('portfolio.index'))
             ->assertOk()
             ->assertSee('<strong data-kpi="active-projects">1</strong>', false)
             ->assertSee('<strong data-kpi="active-rab-value">Rp 1.000.000</strong>', false)
+            ->assertSee('Step Project diperbarui')
+            ->assertSee('Project Alpha')
             ->assertDontSee('Rp 1.500.000')
             ->assertDontSee('Project Beta')
             ->assertDontSee('PRJ-2608-0009')
@@ -299,6 +314,126 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('Project Beta')
             ->assertSee('<strong data-kpi="active-projects">1</strong>', false)
             ->assertSee('<strong data-kpi="verified-percent">0.00%</strong>', false);
+    }
+
+    public function test_portfolio_includes_a_scoped_trend_health_matrix_status_distribution_and_public_activity(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitra = Mitra::factory()->create(['nama' => 'Mitra Cockpit']);
+        $project = $this->projectFor($mitra, 'PRJ-2608-0018', 'Project Cockpit');
+        $rab = $this->addRabJasa($project, '100');
+        $this->savePlan($project, '2026-08-30');
+        $this->recordProgress($project, $rab, '2026-08-10', '40', 'verified');
+        $finished = $this->projectFor($mitra, 'PRJ-2608-0019', 'Project Selesai', 'selesai');
+        $this->addRabJasa($finished, '50');
+
+        $this->asThc(function () use ($project): void {
+            ProjectTimeline::query()->create([
+                'mitra_id' => $project->mitra_id,
+                'project_id' => $project->id,
+                'type' => 'comment',
+                'event_key' => 'comment_created',
+                'body' => 'Aktivitas publik Project Cockpit',
+            ]);
+            ProjectTimeline::query()->create([
+                'mitra_id' => $project->mitra_id,
+                'project_id' => $project->id,
+                'type' => 'internal_note',
+                'event_key' => 'internal_note_created',
+                'body' => 'Rahasia internal tidak boleh tampil',
+            ]);
+        });
+
+        $thc = $this->userWithPermissions(
+            null,
+            'read_dashboard',
+            'read_project',
+            'read_project_progress',
+            'read_project_material',
+            'read_project_timeline',
+        );
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('Tren realisasi jasa')
+            ->assertSee('Health Matrix')
+            ->assertSee('Distribusi Status Project')
+            ->assertSee('Aktivitas terbaru lintas Project')
+            ->assertSee('data-portfolio-trend', false)
+            ->assertSee('data-health-matrix', false)
+            ->assertSee('data-status-distribution', false)
+            ->assertSee('data-project-activity', false)
+            ->assertSee('data-project-identity', false)
+            ->assertSee('min-width: 800px', false)
+            ->assertSee('Aktivitas publik Project Cockpit')
+            ->assertSee('Project Selesai')
+            ->assertSee('Mitra Cockpit')
+            ->assertDontSee('Rahasia internal tidak boleh tampil')
+            ->assertSee('40.00%', false)
+            ->assertSee('50.00%', false);
+    }
+
+    public function test_portfolio_panels_follow_risk_and_period_filters_together(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitra = Mitra::factory()->create();
+        $red = $this->projectFor($mitra, 'PRJ-2608-0020', 'Project Merah');
+        $redRab = $this->addRabJasa($red, '100');
+        $this->savePlan($red, '2026-08-30');
+        $this->recordProgress($red, $redRab, '2026-08-10', '30', 'verified');
+        $green = $this->projectFor($mitra, 'PRJ-2608-0021', 'Project Hijau');
+        $greenRab = $this->addRabJasa($green, '100');
+        $this->savePlan($green, '2026-08-30');
+        $this->recordProgress($green, $greenRab, '2026-08-10', '50', 'verified');
+
+        $this->asThc(function () use ($red, $green): void {
+            foreach ([$red, $green] as $project) {
+                ProjectTimeline::query()->create([
+                    'mitra_id' => $project->mitra_id,
+                    'project_id' => $project->id,
+                    'type' => 'system_log',
+                    'event_key' => 'step_changed',
+                    'created_at' => '2026-08-10 08:00:00',
+                    'updated_at' => '2026-08-10 08:00:00',
+                ]);
+            }
+        });
+
+        $thc = $this->userWithPermissions(
+            null,
+            'read_dashboard',
+            'read_project',
+            'read_project_progress',
+            'read_project_material',
+            'read_project_timeline',
+        );
+
+        $response = $this->actingAs($thc)
+            ->get(route('portfolio.index', ['periode' => '2026-08', 'risiko' => 'merah']))
+            ->assertOk()
+            ->assertSee('Merah')
+            ->assertSee('<strong data-kpi="active-projects">1</strong>', false)
+            ->assertSee('30.00%', false)
+            ->assertSee('50.00%', false)
+            ->assertSee('<div class="portfolio__distribution-row" data-status-key="red">', false)
+            ->assertSee('overflow-x: auto', false);
+
+        $html = $response->getContent();
+        $matrixStart = strpos($html, 'id="portfolio-health-matrix"');
+        $matrixEnd = strpos($html, '</section>', $matrixStart);
+        $activityStart = strpos($html, 'id="portfolio-project-activity"');
+        $activityEnd = strpos($html, '</section>', $activityStart);
+        $this->assertNotFalse($matrixStart);
+        $this->assertNotFalse($matrixEnd);
+        $this->assertNotFalse($activityStart);
+        $this->assertNotFalse($activityEnd);
+        $matrixHtml = substr($html, $matrixStart, $matrixEnd - $matrixStart);
+        $activityHtml = substr($html, $activityStart, $activityEnd - $activityStart);
+        $this->assertStringContainsString('PRJ-2608-0020', $matrixHtml);
+        $this->assertStringNotContainsString('PRJ-2608-0021', $matrixHtml);
+        $this->assertStringContainsString('PRJ-2608-0020', $activityHtml);
+        $this->assertStringNotContainsString('PRJ-2608-0021', $activityHtml);
     }
 
     public function test_risk_filter_narrows_the_portfolio_to_projects_beyond_the_spi_threshold(): void

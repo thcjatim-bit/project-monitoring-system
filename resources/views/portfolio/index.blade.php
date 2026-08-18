@@ -37,9 +37,53 @@
         .portfolio__state--loading { background: #f0f9ff; color: #155e75; }
         .portfolio__state--empty { background: #f8fafc; color: #526071; }
         .portfolio__state--error { background: #fef2f2; color: #991b1b; }
+        .portfolio__section-head { align-items: end; display: flex; flex-wrap: wrap; gap: 10px 20px; justify-content: space-between; }
+        .portfolio__trend-list { display: grid; gap: 14px; list-style: none; margin: 18px 0 0; padding: 0; }
+        .portfolio__trend-item { display: grid; gap: 7px; grid-template-columns: 92px minmax(0, 1fr) 92px; align-items: center; }
+        .portfolio__trend-date { color: #526071; font-size: .82rem; }
+        .portfolio__trend-bars { display: grid; gap: 5px; }
+        .portfolio__trend-bar { background: #e2e8f0; border-radius: 999px; height: 9px; overflow: hidden; }
+        .portfolio__trend-bar span { background: #0f766e; border-radius: inherit; display: block; height: 100%; }
+        .portfolio__trend-bar--target span { background: #64748b; }
+        .portfolio__trend-values { color: #526071; font-size: .78rem; text-align: right; }
+        .portfolio__trend-legend { color: #526071; display: flex; flex-wrap: wrap; font-size: .8rem; gap: 14px; margin-top: 14px; }
+        .portfolio__legend-dot { border-radius: 999px; display: inline-block; height: 9px; margin-right: 5px; width: 9px; }
+        .portfolio__legend-dot--actual { background: #0f766e; }
+        .portfolio__legend-dot--target { background: #64748b; }
+        .portfolio__table-wrap { margin-top: 16px; overflow-x: auto; }
+        .portfolio__matrix { border-collapse: collapse; min-width: 800px; width: 100%; }
+        .portfolio__matrix th, .portfolio__matrix td { border-bottom: 1px solid #e2e8f0; padding: 11px 10px; text-align: left; vertical-align: top; }
+        .portfolio__matrix th { color: #526071; font-size: .78rem; letter-spacing: .03em; text-transform: uppercase; }
+        .portfolio__matrix tbody th { color: #172033; font-size: .9rem; letter-spacing: normal; text-transform: none; }
+        .portfolio__matrix tbody tr:last-child th, .portfolio__matrix tbody tr:last-child td { border-bottom: 0; }
+        .portfolio__matrix small { color: #526071; display: block; font-size: .78rem; font-weight: 400; margin-top: 4px; }
+        .portfolio__risk { border-radius: 999px; display: inline-block; font-size: .76rem; font-weight: 800; padding: 4px 8px; white-space: nowrap; }
+        .portfolio__risk[data-risk-status="green"] { background: #dcfce7; color: #166534; }
+        .portfolio__risk[data-risk-status="yellow"] { background: #fef3c7; color: #92400e; }
+        .portfolio__risk[data-risk-status="red"] { background: #fee2e2; color: #991b1b; }
+        .portfolio__risk[data-risk-status="na"] { background: #e2e8f0; color: #475569; }
+        .portfolio__distributions { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 16px; }
+        .portfolio__distribution { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+        .portfolio__distribution h3 { font-size: 1rem; margin: 0 0 12px; }
+        .portfolio__distribution-row { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(74px, 1fr) minmax(80px, 2fr) auto; margin-top: 9px; }
+        .portfolio__distribution-row:first-of-type { margin-top: 0; }
+        .portfolio__distribution-track { background: #e2e8f0; border-radius: 999px; height: 8px; overflow: hidden; }
+        .portfolio__distribution-track span { background: #0f766e; display: block; height: 100%; }
+        .portfolio__distribution-track[data-status="yellow"] span { background: #d97706; }
+        .portfolio__distribution-track[data-status="red"] span { background: #dc2626; }
+        .portfolio__distribution-track[data-status="na"] span { background: #64748b; }
+        .portfolio__distribution-count { font-size: .82rem; font-weight: 800; min-width: 28px; text-align: right; }
+        .portfolio__activity-list { display: grid; gap: 10px; list-style: none; margin: 16px 0 0; padding: 0; }
+        .portfolio__activity-item { border-left: 3px solid #0f766e; background: #f8fafc; padding: 11px 13px; }
+        .portfolio__activity-meta { color: #526071; display: flex; flex-wrap: wrap; font-size: .78rem; gap: 6px 12px; }
+        .portfolio__activity-item p { margin: 6px 0 0; }
+        .portfolio__activity-item small { color: #526071; display: block; margin-top: 5px; }
         @media (max-width: 680px) {
             .portfolio { padding: 24px 14px 36px; }
             .portfolio__kpis { grid-template-columns: 1fr; }
+            .portfolio__panel { padding: 16px; }
+            .portfolio__trend-item { grid-template-columns: 76px minmax(0, 1fr) 76px; }
+            .portfolio__matrix { min-width: 760px; }
         }
     </style>
 
@@ -85,11 +129,17 @@
                     </div>
                     <div class="portfolio__field">
                         <label for="filter-risiko">Status risiko</label>
-                        <select id="filter-risiko" name="risiko">
-                            @foreach ($options['risikos'] as $value => $label)
-                                <option value="{{ $value }}" @selected($filters['risiko'] === $value)>{{ $label }}</option>
-                            @endforeach
-                        </select>
+                        @if ($canReadProgress)
+                            <select id="filter-risiko" name="risiko">
+                                @foreach ($options['risikos'] as $value => $label)
+                                    <option value="{{ $value }}" @selected($filters['risiko'] === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        @else
+                            <select id="filter-risiko" disabled>
+                                <option>Status risiko membutuhkan izin Progres jasa</option>
+                            </select>
+                        @endif
                     </div>
                 </div>
                 <div class="portfolio__filter-actions">
@@ -188,7 +238,7 @@
                             <p>Butuh izin membaca Material Project.</p>
                         @else
                             <strong data-kpi="material-readiness">{{ $kpis['material_readiness_percent'] === null ? 'N/A' : number_format($kpis['material_readiness_percent'], 2).'%' }}</strong>
-                            <p>Rata-rata kesiapan {{ $kpis['material_projects'] }} Project ber-RAB Material, posisi terkini di luar filter periode. {{ $kpis['material_transit_projects'] }} Project masih punya Material Transit yang belum dihitung sebagai Material tersedia.</p>
+                            <p>Rata-rata kesiapan {{ $kpis['material_projects'] }} Project ber-RAB Material s.d. {{ $filters['as_of']->format('d M Y') }}. {{ $kpis['material_transit_projects'] }} Project masih punya Material Transit yang belum dihitung sebagai Material tersedia.</p>
                         @endif
                         @if ($projectsUrl)
                             <p><a href="{{ $projectsUrl }}">Buka kesiapan Material per Project</a></p>
@@ -206,5 +256,184 @@
                 </div>
             @endif
         </section>
+
+        <section class="portfolio__panel" id="portfolio-trend" aria-labelledby="portfolio-trend-title" data-portfolio-trend>
+            <div class="portfolio__section-head">
+                <div>
+                    <h2 id="portfolio-trend-title">Tren realisasi jasa</h2>
+                    <p class="portfolio__panel-note">Realisasi jasa terverifikasi dibanding target kumulatif untuk {{ $trend['periode_label'] }}, dihitung s.d. {{ $trend['as_of'] }}.</p>
+                </div>
+                <span class="portfolio__updated">Data diperbarui {{ $generatedAt->format('d M Y H:i') }}</span>
+            </div>
+
+            @if ($portfolioError)
+                <div class="portfolio__state portfolio__state--error" role="alert">{{ $portfolioError }}</div>
+            @elseif (! $canReadProgress)
+                <div class="portfolio__state portfolio__state--empty">Tren realisasi jasa membutuhkan izin membaca Progres jasa.</div>
+            @elseif ($trend['points'] === [])
+                <div class="portfolio__state portfolio__state--empty">Belum ada data tren untuk filter yang sedang berlaku.</div>
+            @else
+                <ol class="portfolio__trend-list" aria-label="Tren realisasi jasa dan target kumulatif">
+                    @foreach ($trend['points'] as $point)
+                        <li class="portfolio__trend-item" data-trend-date="{{ $point['date'] }}">
+                            <span class="portfolio__trend-date">{{ \Carbon\CarbonImmutable::parse($point['date'])->format('d M') }}</span>
+                            <span class="portfolio__trend-bars">
+                                <span class="portfolio__trend-bar" title="Realisasi jasa terverifikasi {{ number_format($point['verified_percent'], 2) }}%"><span style="width: {{ min(100, max(0, (float) $point['verified_percent'])) }}%"></span></span>
+                                <span class="portfolio__trend-bar portfolio__trend-bar--target" title="Target kumulatif {{ $point['target_available'] ? number_format($point['target_percent'], 2).'%' : 'N/A' }}"><span style="width: {{ min(100, max(0, (float) $point['target_percent'])) }}%"></span></span>
+                            </span>
+                            <span class="portfolio__trend-values">{{ number_format($point['verified_percent'], 2) }}% / {{ $point['target_available'] ? number_format($point['target_percent'], 2).'%' : 'N/A' }}</span>
+                        </li>
+                    @endforeach
+                </ol>
+                <p class="portfolio__trend-legend"><span><span class="portfolio__legend-dot portfolio__legend-dot--actual"></span>Realisasi terverifikasi</span><span><span class="portfolio__legend-dot portfolio__legend-dot--target"></span>Target kumulatif</span></p>
+            @endif
+        </section>
+
+        <section class="portfolio__panel" id="portfolio-health-matrix" aria-labelledby="portfolio-health-matrix-title" data-health-matrix>
+            <div class="portfolio__section-head">
+                <div>
+                    <h2 id="portfolio-health-matrix-title">Health Matrix</h2>
+                    <p class="portfolio__panel-note">Perbandingan Project dalam cakupan filter aktif. Progres pending ditampilkan terpisah dan tidak dihitung sebagai realisasi.</p>
+                </div>
+                <span class="portfolio__updated">{{ $healthMatrix->count() }} Project</span>
+            </div>
+
+            @if ($portfolioError)
+                <div class="portfolio__state portfolio__state--error" role="alert">{{ $portfolioError }}</div>
+            @elseif ($healthMatrix->isEmpty())
+                <div class="portfolio__state portfolio__state--empty">Belum ada Project yang cocok dengan filter yang sedang berlaku.</div>
+            @else
+                <div class="portfolio__table-wrap">
+                    <table class="portfolio__matrix">
+                        <thead>
+                            <tr>
+                                <th scope="col">Project</th>
+                                <th scope="col">Mitra</th>
+                                <th scope="col">Progres jasa terverifikasi</th>
+                                <th scope="col">SPI</th>
+                                <th scope="col">Kesiapan Material</th>
+                                <th scope="col">Status risiko</th>
+                                <th scope="col">Status Project</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($healthMatrix as $row)
+                                <tr data-project-id="{{ $row['project_id'] }}" data-risk-status="{{ $row['spi_status'] }}">
+                                    <th scope="row" data-project-identity>
+                                        @if ($row['url'])
+                                            <a href="{{ $row['url'] }}">{{ $row['id_project'] }}</a>
+                                        @else
+                                            {{ $row['id_project'] }}
+                                        @endif
+                                        <small>{{ $row['nama'] }}</small>
+                                    </th>
+                                    <td>{{ $row['mitra'] }}</td>
+                                    <td>
+                                        @if ($canReadProgress)
+                                            {{ number_format($row['verified_percent'], 2) }}%
+                                            <small>Pending {{ number_format($row['pending_percent'], 2) }}%</small>
+                                        @else
+                                            Terbatas
+                                        @endif
+                                    </td>
+                                    <td>{{ $row['spi_label'] }}</td>
+                                    <td>
+                                        @if (! $canReadMaterial)
+                                            Terbatas
+                                        @elseif ($row['material_readiness_percent'] === null)
+                                            N/A
+                                        @else
+                                            {{ number_format($row['material_readiness_percent'], 2) }}%
+                                        @endif
+                                    </td>
+                                    <td><span class="portfolio__risk" data-risk-status="{{ $row['spi_status'] }}">{{ $row['risk_label'] }}</span></td>
+                                    <td>{{ $row['status_project_label'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </section>
+
+        <section class="portfolio__panel" id="portfolio-status-distribution" aria-labelledby="portfolio-status-distribution-title" data-status-distribution>
+            <h2 id="portfolio-status-distribution-title">Distribusi Status Project</h2>
+            <p class="portfolio__panel-note">Distribusi mengikuti Project dan status risiko yang sama dengan Health Matrix.</p>
+            @if ($portfolioError)
+                <div class="portfolio__state portfolio__state--error" role="alert">{{ $portfolioError }}</div>
+            @elseif ($healthMatrix->isEmpty())
+                <div class="portfolio__state portfolio__state--empty">Belum ada Status Project yang cocok dengan filter yang sedang berlaku.</div>
+            @else
+                <div class="portfolio__distributions">
+                    <div class="portfolio__distribution" aria-labelledby="portfolio-risk-distribution-title">
+                        <h3 id="portfolio-risk-distribution-title">Status risiko</h3>
+                        @foreach ($statusDistribution as $status)
+                            <div class="portfolio__distribution-row" data-status-key="{{ $status['key'] }}">
+                                <span>{{ $status['label'] }}</span>
+                                <span class="portfolio__distribution-track" data-status="{{ $status['key'] }}"><span style="width: {{ min(100, max(0, (float) $status['percent'])) }}%"></span></span>
+                                <strong class="portfolio__distribution-count">{{ $status['count'] }}</strong>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="portfolio__distribution" aria-labelledby="portfolio-project-status-title">
+                        <h3 id="portfolio-project-status-title">Status Project</h3>
+                        @foreach ($projectStatusDistribution as $status)
+                            <div class="portfolio__distribution-row" data-project-status="{{ $status['key'] }}">
+                                <span>{{ $status['label'] }}</span>
+                                <span class="portfolio__distribution-track"><span style="width: {{ min(100, max(0, (float) $status['percent'])) }}%"></span></span>
+                                <strong class="portfolio__distribution-count">{{ $status['count'] }}</strong>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+        </section>
+
+        <section class="portfolio__panel" id="portfolio-project-activity" aria-labelledby="portfolio-project-activity-title" data-project-activity>
+            <div class="portfolio__section-head">
+                <div>
+                    <h2 id="portfolio-project-activity-title">Aktivitas terbaru lintas Project</h2>
+                    <p class="portfolio__panel-note">Linimasa terbaru dari Project yang cocok dengan filter. Komentar Internal tidak ditampilkan.</p>
+                </div>
+            </div>
+            @if ($portfolioError)
+                <div class="portfolio__state portfolio__state--error" role="alert">{{ $portfolioError }}</div>
+            @elseif (! $canReadTimeline)
+                <div class="portfolio__state portfolio__state--empty">Aktivitas Project membutuhkan izin membaca Linimasa Project.</div>
+            @elseif ($activity->isEmpty())
+                <div class="portfolio__state portfolio__state--empty">Belum ada aktivitas terbaru yang dapat ditampilkan.</div>
+            @else
+                <ol class="portfolio__activity-list">
+                    @foreach ($activity as $item)
+                        <li class="portfolio__activity-item" data-project-activity-type="{{ $item['type'] }}">
+                            <div class="portfolio__activity-meta">
+                                <span>{{ $item['occurred_at']->format('d M Y H:i') }}</span>
+                                <span>{{ $item['mitra'] }}</span>
+                            </div>
+                            <p>
+                                @if ($item['url'])
+                                    <a href="{{ $item['url'] }}"><strong>{{ $item['id_project'] }}</strong></a>
+                                @else
+                                    <strong>{{ $item['id_project'] }}</strong>
+                                @endif
+                                · {{ $item['project_name'] }} · {{ $item['title'] }}
+                            </p>
+                            @if ($item['body'])
+                                <small>{{ $item['body'] }}</small>
+                            @endif
+                        </li>
+                    @endforeach
+                </ol>
+            @endif
+        </section>
     </main>
+
+    <script>
+        document.querySelector('form[action="{{ route('portfolio.index') }}"]')?.addEventListener('submit', function () {
+            const loading = document.querySelector('[data-portfolio-state="loading"]');
+            if (loading) {
+                loading.hidden = false;
+            }
+        });
+    </script>
 </x-layouts.app>
