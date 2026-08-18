@@ -42,6 +42,16 @@ class Project extends Model
         return $this->hasMany(ProjectRabMaterial::class);
     }
 
+    public function materialUsages(): HasMany
+    {
+        return $this->hasMany(PemakaianMaterial::class);
+    }
+
+    public function rekons(): HasMany
+    {
+        return $this->hasMany(ProjectRekon::class);
+    }
+
     public function baselines(): HasMany
     {
         return $this->hasMany(ProjectBaseline::class);

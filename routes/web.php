@@ -6,6 +6,7 @@ use App\Http\Controllers\CommandCenterController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
+use App\Http\Controllers\MaterialUsageController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMaterialController;
 use App\Http\Controllers\ProjectPhotoController;
@@ -159,5 +160,18 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware(['thc', 'izin:approve_material_request'])->group(function (): void {
         Route::patch('/material-requests/{materialRequest}/approve', [MaterialRequestController::class, 'approve'])->name('material-requests.approve');
         Route::patch('/material-requests/{materialRequest}/reject', [MaterialRequestController::class, 'reject'])->name('material-requests.reject');
+    });
+    Route::get('/material-usages', [MaterialUsageController::class, 'index'])
+        ->middleware('izin:read_material_usage')
+        ->name('material-usages.index');
+    Route::post('/projects/{project}/pemakaian-material', [MaterialUsageController::class, 'store'])
+        ->middleware('izin:create_material_usage')
+        ->name('projects.material-usages.store');
+    Route::patch('/material-usages/{pemakaianMaterial}/cancel', [MaterialUsageController::class, 'cancel'])
+        ->middleware('izin:create_material_usage')
+        ->name('material-usages.cancel');
+    Route::middleware(['thc', 'izin:approve_material_usage'])->group(function (): void {
+        Route::patch('/material-usages/{pemakaianMaterial}/approve', [MaterialUsageController::class, 'approve'])->name('material-usages.approve');
+        Route::patch('/material-usages/{pemakaianMaterial}/reject', [MaterialUsageController::class, 'reject'])->name('material-usages.reject');
     });
 });
