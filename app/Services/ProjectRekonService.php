@@ -217,7 +217,6 @@ class ProjectRekonService
             ->values();
 
         return $keys->map(function (string $key) use ($ledger, $prior): array {
-            $identity = $ledger['identities'][$key] ?? $prior->get($key);
             $old = $prior->get($key);
             $outgoing = $ledger['outgoing'][$key] ?? (float) ($old?->keluar_gudang ?? 0);
             $installed = $ledger['installed'][$key] ?? (float) ($old?->terpasang ?? 0);
@@ -287,6 +286,9 @@ class ProjectRekonService
         $seen = [];
         foreach ($items as $item) {
             $key = $this->itemKey($item);
+            if (isset($seen[$key])) {
+                throw ValidationException::withMessages(['items' => 'Material tidak boleh memiliki lebih dari satu baris Rekon Material.']);
+            }
             $seen[$key] = true;
             $old = $oldItems->get($key);
             $outgoing = $ledger['outgoing'][$key] ?? (float) ($old?->keluar_gudang ?? 0);
@@ -379,13 +381,13 @@ class ProjectRekonService
     private function moveProjectToLoss(ProjectRekon $rekon, ProjectRekonItem $item, float $qty, User $actor): void
     {
         $category = $item->kategori_hilang_rusak ?? 'hilang';
-        $this->record($rekon, $item, 'project', $rekon->project_id, -$qty, 'rekon_'.$category, $actor);
+        $this->record($rekon, $item, 'project', $rekon->project_id, -$qty, $this->lossTransactionType($category), $actor);
         $this->setIdentityLoss($item, $category);
     }
 
     private function moveLossToProject(ProjectRekon $rekon, ProjectRekonItem $item, float $qty, User $actor, ?string $category): void
     {
-        $this->record($rekon, $item, 'project', $rekon->project_id, $qty, 'rekon_'.($category ?? 'hilang'), $actor);
+        $this->record($rekon, $item, 'project', $rekon->project_id, $qty, $this->lossTransactionType($category ?? 'hilang'), $actor);
         $this->setIdentityProject($item);
     }
 
@@ -501,6 +503,16 @@ class ProjectRekonService
             (int) ($item->material_sn_id ?? 0),
             (int) ($item->drum_id ?? 0),
         ]);
+    }
+
+    private function lossTransactionType(string $category): string
+    {
+        return match ($category) {
+            'hilang' => 'rekon_hilang',
+            'rusak' => 'rekon_rusak',
+            'waste_wajar' => 'rekon_waste',
+            default => throw ValidationException::withMessages(['items' => 'Kategori hilang/rusak tidak valid.']),
+        };
     }
 
     private function nextNumber(string $yearMonth): string

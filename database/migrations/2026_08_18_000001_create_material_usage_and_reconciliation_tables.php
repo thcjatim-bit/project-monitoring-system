@@ -146,6 +146,64 @@ return new class extends Migration
                 ADD CONSTRAINT drums_location_valid
                 CHECK (lokasi_tipe IN ('warehouse', 'project', 'terpasang', 'transit', 'hilang', 'rusak', 'waste'));
 
+            DROP POLICY IF EXISTS material_sn_tenant_isolation ON material_sns;
+            CREATE POLICY material_sn_tenant_isolation ON material_sns
+                USING (
+                    current_setting('app.is_thc', true) = 'on'
+                    OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses
+                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    )
+                    OR project_id IN (
+                        SELECT id FROM projects
+                        WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                    )
+                )
+                WITH CHECK (
+                    current_setting('app.is_thc', true) = 'on'
+                    OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses
+                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    )
+                    OR project_id IN (
+                        SELECT id FROM projects
+                        WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                    )
+                );
+
+            DROP POLICY IF EXISTS drum_tenant_isolation ON drums;
+            CREATE POLICY drum_tenant_isolation ON drums
+                USING (
+                    current_setting('app.is_thc', true) = 'on'
+                    OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses
+                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    )
+                    OR project_id IN (
+                        SELECT id FROM projects
+                        WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                    )
+                )
+                WITH CHECK (
+                    current_setting('app.is_thc', true) = 'on'
+                    OR (
+                        lokasi_tipe = 'warehouse' AND lokasi_id IN (
+                            SELECT id FROM warehouses
+                            WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                        )
+                    )
+                    OR project_id IN (
+                        SELECT id FROM projects
+                        WHERE mitra_id = nullif(current_setting('app.mitra_id', true), '')::bigint
+                    )
+                );
+
             ALTER TABLE pemakaian_materials ENABLE ROW LEVEL SECURITY;
             ALTER TABLE pemakaian_materials FORCE ROW LEVEL SECURITY;
             CREATE POLICY pemakaian_material_tenant_isolation ON pemakaian_materials
@@ -185,6 +243,7 @@ return new class extends Migration
             GRANT SELECT, INSERT, UPDATE ON pemakaian_materials, project_rekons, project_rekon_items TO pms_app;
             GRANT USAGE, SELECT, UPDATE ON SEQUENCE pemakaian_materials_id_seq, project_rekons_id_seq, project_rekon_items_id_seq TO pms_app;
             GRANT SELECT, INSERT, UPDATE ON project_rekon_sequences TO pms_app;
+            REVOKE DELETE ON pemakaian_materials, project_rekons, project_rekon_items, project_rekon_sequences FROM pms_app;
 
             CREATE OR REPLACE FUNCTION validate_material_transaction_identity() RETURNS trigger AS $fn$
             DECLARE material_type text;

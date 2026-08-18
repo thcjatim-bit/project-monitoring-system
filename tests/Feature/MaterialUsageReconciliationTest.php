@@ -7,12 +7,15 @@ use App\Models\Izin;
 use App\Models\Material;
 use App\Models\Mitra;
 use App\Models\Project;
+use App\Models\ProjectRekon;
 use App\Models\ProjectRekonItem;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\MaterialInventoryService;
 use App\Services\MaterialUsageService;
+use App\Services\ProjectMaterialInstallationService;
 use App\Services\ProjectRekonService;
+use App\Services\ProjectStepService;
 use App\Support\TenantDatabaseContext;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -183,6 +186,194 @@ class MaterialUsageReconciliationTest extends TestCase
                 'jenis_transaksi' => 'rekon_kembali',
                 'lokasi_tipe' => 'project',
                 'qty_delta' => '-6.000',
+            ]);
+        });
+    }
+
+    public function test_cancellation_and_rejection_leave_the_stock_book_unchanged(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Penolakan Pemakaian Material',
+            'mitra_id' => $mitra->id,
+        ]));
+        $warehouse = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create();
+        $thc = $this->userWithPermissions(null, 'operate_warehouse', 'approve_material_usage');
+        $mitraUser = $this->userWithPermissions($mitra->id, 'create_material_usage');
+
+        $this->asThc(fn (): mixed => app(MaterialInventoryService::class)->receive($thc, $warehouse, $material->id, '10', 'Penerimaan awal'));
+        $cancelled = $this->asMitra($mitra->id, fn () => app(MaterialUsageService::class)->submit($mitraUser, $project, [
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty' => '2',
+        ]));
+        $this->asMitra($mitra->id, fn () => app(MaterialUsageService::class)->cancel($cancelled, $mitraUser));
+
+        $rejected = $this->asMitra($mitra->id, fn () => app(MaterialUsageService::class)->submit($mitraUser, $project, [
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty' => '3',
+        ]));
+        $this->asThc(fn () => app(MaterialUsageService::class)->decide($rejected, $thc, 'ditolak', 'Tidak sesuai kebutuhan project'));
+
+        $this->asThc(function () use ($cancelled, $rejected, $warehouse, $material): void {
+            $this->assertDatabaseHas('pemakaian_materials', ['id' => $cancelled->id, 'status' => 'dibatalkan']);
+            $this->assertDatabaseHas('pemakaian_materials', ['id' => $rejected->id, 'status' => 'ditolak']);
+            $this->assertDatabaseCount('material_transaksis', 1);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'warehouse',
+                'lokasi_id' => $warehouse->id,
+                'qty' => '10.000',
+            ]);
+        });
+    }
+
+    public function test_rekon_correction_reverses_old_accounting_and_preserves_history(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Koreksi Rekon Material',
+            'mitra_id' => $mitra->id,
+        ]));
+        $warehouse = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create();
+        $thc = $this->userWithPermissions(null, 'operate_warehouse', 'approve_material_usage', 'create_material_rekon', 'approve_material_rekon');
+        $mitraUser = $this->userWithPermissions($mitra->id, 'create_material_usage');
+
+        $this->asThc(fn (): mixed => app(MaterialInventoryService::class)->receive($thc, $warehouse, $material->id, '10', 'Penerimaan awal'));
+        $usage = $this->asMitra($mitra->id, fn () => app(MaterialUsageService::class)->submit($mitraUser, $project, [
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty' => '6',
+        ]));
+        $this->asThc(fn (): mixed => app(MaterialUsageService::class)->decide($usage, $thc, 'disetujui'));
+
+        $first = $this->asThc(fn () => app(ProjectRekonService::class)->open($project, $thc));
+        $firstItem = $this->asThc(fn (): ProjectRekonItem => ProjectRekonItem::query()->where('project_rekon_id', $first->id)->firstOrFail());
+        $this->asThc(fn (): bool => $firstItem->update(['dikembalikan' => '6']));
+        $this->asThc(fn (): mixed => app(ProjectRekonService::class)->approve($first, $thc));
+
+        $second = $this->asThc(fn () => app(ProjectRekonService::class)->open($project, $thc));
+        $secondItem = $this->asThc(fn (): ProjectRekonItem => ProjectRekonItem::query()->where('project_rekon_id', $second->id)->firstOrFail());
+        $this->asThc(fn (): bool => $secondItem->update([
+            'dikembalikan' => '4',
+            'hilang_rusak' => '2',
+            'kategori_hilang_rusak' => 'waste_wajar',
+        ]));
+        $this->asThc(fn (): mixed => app(ProjectRekonService::class)->approve($second, $thc));
+
+        $this->asThc(function () use ($first, $second, $project, $warehouse, $material): void {
+            $this->assertDatabaseHas('project_rekons', ['id' => $first->id, 'status' => 'disetujui']);
+            $this->assertDatabaseHas('project_rekons', ['id' => $second->id, 'status' => 'disetujui', 'koreksi_dari_id' => $first->id]);
+            $this->assertDatabaseHas('projects', ['id' => $project->id, 'status_project' => 'selesai']);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'warehouse',
+                'lokasi_id' => $warehouse->id,
+                'qty' => '8.000',
+            ]);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'project',
+                'lokasi_id' => $project->id,
+                'qty' => '0.000',
+            ]);
+            $this->assertDatabaseHas('material_transaksis', [
+                'project_rekon_item_id' => $secondItem->id,
+                'jenis_transaksi' => 'rekon_waste',
+                'lokasi_tipe' => 'project',
+                'qty_delta' => '-2.000',
+            ]);
+            $this->assertDatabaseCount('project_rekons', 2);
+        });
+    }
+
+    public function test_go_live_opens_one_rekon_and_does_not_duplicate_after_approval(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project GO Live Rekon Material',
+            'mitra_id' => $mitra->id,
+        ]));
+        $thc = $this->userWithPermissions(null, 'create_material_rekon', 'approve_material_rekon', 'update_project_step');
+
+        $this->asThc(fn (): mixed => app(ProjectStepService::class)->move($project, $thc, 'go_live', 'completed'));
+
+        $this->asThc(function () use ($project): void {
+            $this->assertDatabaseHas('project_rekons', [
+                'project_id' => $project->id,
+                'source' => 'go_live',
+                'status' => 'diajukan',
+            ]);
+            $this->assertDatabaseCount('project_rekons', 1);
+        });
+        $rekon = $this->asThc(fn (): ProjectRekon => ProjectRekon::query()->where('project_id', $project->id)->firstOrFail());
+        $this->asThc(fn (): mixed => app(ProjectRekonService::class)->approve($rekon, $thc));
+        $this->asThc(fn (): ?object => app(ProjectRekonService::class)->openForGoLive($project, $thc));
+
+        $this->asThc(function () use ($project): void {
+            $this->assertDatabaseHas('project_rekons', ['project_id' => $project->id, 'source' => 'go_live', 'status' => 'disetujui']);
+            $this->assertDatabaseHas('projects', ['id' => $project->id, 'status_project' => 'selesai']);
+            $this->assertDatabaseCount('project_rekons', 1);
+        });
+    }
+
+    public function test_installation_writes_project_to_installed_and_rekon_reads_the_installed_quantity(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Material Terpasang',
+            'mitra_id' => $mitra->id,
+        ]));
+        $warehouse = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $material = Material::factory()->create();
+        $thc = $this->userWithPermissions(null, 'operate_warehouse', 'approve_material_usage', 'create_material_rekon');
+        $mitraUser = $this->userWithPermissions($mitra->id, 'create_material_usage', 'report_project_progress');
+
+        $this->asThc(fn (): mixed => app(MaterialInventoryService::class)->receive($thc, $warehouse, $material->id, '10', 'Penerimaan awal'));
+        $usage = $this->asMitra($mitra->id, fn () => app(MaterialUsageService::class)->submit($mitraUser, $project, [
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty' => '6',
+        ]));
+        $this->asThc(fn (): mixed => app(MaterialUsageService::class)->decide($usage, $thc, 'disetujui'));
+        $this->asMitra($mitra->id, fn (): array => app(ProjectMaterialInstallationService::class)->record($mitraUser, $project, [
+            'warehouse_id' => $warehouse->id,
+            'material_id' => $material->id,
+            'qty' => '2',
+        ]));
+
+        $rekon = $this->asThc(fn () => app(ProjectRekonService::class)->open($project, $thc));
+        $this->asThc(function () use ($project, $warehouse, $material, $rekon): void {
+            $this->assertDatabaseCount('material_transaksis', 5);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'project',
+                'lokasi_id' => $project->id,
+                'qty' => '4.000',
+            ]);
+            $this->assertDatabaseHas('material_stoks', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $material->id,
+                'lokasi_tipe' => 'terpasang',
+                'lokasi_id' => $project->id,
+                'qty' => '2.000',
+            ]);
+            $this->assertDatabaseHas('project_rekon_items', [
+                'project_rekon_id' => $rekon->id,
+                'keluar_gudang' => '6.000',
+                'terpasang' => '2.000',
+                'sisa_project' => '4.000',
             ]);
         });
     }

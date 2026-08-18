@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Material;
 use App\Models\PemakaianMaterial;
 use App\Models\Project;
+use App\Models\Warehouse;
 use App\Services\MaterialUsageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class MaterialUsageController extends Controller
         return view('material-usages.index', [
             'usages' => PemakaianMaterial::query()->with(['project', 'warehouse', 'material.unit', 'requester', 'decider'])->latest()->get(),
             'projects' => Project::query()->latest()->get(),
+            'warehouses' => Warehouse::query()->orderBy('nama')->get(),
             'materials' => Material::query()->with('unit')->where('aktif', true)->whereHas('unit', fn ($query) => $query->where('aktif', true))->orderBy('nama')->get(),
         ]);
     }
