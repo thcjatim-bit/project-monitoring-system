@@ -353,6 +353,14 @@ XML;
             return (string) $payload['portfolioError'];
         }
 
+        $filters = $payload['filters'] ?? [];
+        $hasEntityFilter = ($filters['project'] ?? null) !== null
+            || ($filters['mitra'] ?? null) !== null;
+
+        if ((int) ($payload['scopedProjectCount'] ?? 0) === 0 && $hasEntityFilter) {
+            return 'Tidak ada Project aktif yang cocok dengan filter yang sedang berlaku.';
+        }
+
         if ((int) ($payload['scopedProjectCount'] ?? 0) === 0) {
             return 'Belum ada Project dalam cakupan akses Anda.';
         }
