@@ -11,6 +11,7 @@ use App\Models\ProjectRekon;
 use App\Models\ProjectRekonItem;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Queries\ProjectRekonQuery;
 use App\Services\MaterialInventoryService;
 use App\Services\MaterialUsageService;
 use App\Services\ProjectMaterialInstallationService;
@@ -18,6 +19,7 @@ use App\Services\ProjectRekonService;
 use App\Services\ProjectStepService;
 use App\Support\TenantDatabaseContext;
 use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -267,7 +269,7 @@ class MaterialUsageReconciliationTest extends TestCase
         ]));
         $this->asThc(fn (): mixed => app(ProjectRekonService::class)->approve($second, $thc));
 
-        $this->asThc(function () use ($first, $second, $project, $warehouse, $material): void {
+        $this->asThc(function () use ($first, $second, $secondItem, $project, $warehouse, $material): void {
             $this->assertDatabaseHas('project_rekons', ['id' => $first->id, 'status' => 'disetujui']);
             $this->assertDatabaseHas('project_rekons', ['id' => $second->id, 'status' => 'disetujui', 'koreksi_dari_id' => $first->id]);
             $this->assertDatabaseHas('projects', ['id' => $project->id, 'status_project' => 'selesai']);
@@ -293,6 +295,13 @@ class MaterialUsageReconciliationTest extends TestCase
             ]);
             $this->assertDatabaseCount('project_rekons', 2);
         });
+
+        $readModel = $this->asThc(fn (): array => app(ProjectRekonQuery::class)->forProject($project));
+        $this->assertSame($second->id, $readModel['active_rekon']['id']);
+        $this->assertCount(2, $readModel['rekons']);
+        $this->assertSame(4.0, $readModel['active_rekon']['items'][0]['dikembalikan']);
+        $this->assertArrayNotHasKey('approved_by', $readModel['active_rekon']);
+        $this->assertArrayNotHasKey('catatan', $readModel['active_rekon']['items'][0]);
     }
 
     public function test_go_live_opens_one_rekon_and_does_not_duplicate_after_approval(): void
@@ -375,6 +384,63 @@ class MaterialUsageReconciliationTest extends TestCase
                 'terpasang' => '2.000',
                 'sisa_project' => '4.000',
             ]);
+        });
+    }
+
+    public function test_mitra_cannot_read_or_reassign_another_tenants_usage_and_rekon_sources(): void
+    {
+        $mitraA = Mitra::factory()->create();
+        $mitraB = Mitra::factory()->create();
+        $projectA = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Tenant A',
+            'mitra_id' => $mitraA->id,
+        ]));
+        $projectB = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Tenant B',
+            'mitra_id' => $mitraB->id,
+        ]));
+        $warehouseA = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitraA->id]));
+        $warehouseB = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitraB->id]));
+        $material = Material::factory()->create();
+        $thc = $this->userWithPermissions(null, 'create_material_rekon');
+        $userA = $this->userWithPermissions($mitraA->id, 'create_material_usage');
+        $userB = $this->userWithPermissions($mitraB->id, 'create_material_usage');
+
+        $usageA = $this->asMitra($mitraA->id, fn () => app(MaterialUsageService::class)->submit($userA, $projectA, [
+            'warehouse_id' => $warehouseA->id,
+            'material_id' => $material->id,
+            'qty' => '1',
+        ]));
+        $usageB = $this->asMitra($mitraB->id, fn () => app(MaterialUsageService::class)->submit($userB, $projectB, [
+            'warehouse_id' => $warehouseB->id,
+            'material_id' => $material->id,
+            'qty' => '1',
+        ]));
+        $rekonA = $this->asThc(fn () => app(ProjectRekonService::class)->open($projectA, $thc));
+        $rekonB = $this->asThc(fn () => app(ProjectRekonService::class)->open($projectB, $thc));
+
+        $this->asMitra($mitraA->id, function () use ($usageA, $usageB, $rekonA, $rekonB, $mitraB): void {
+            $this->assertSame([(int) $usageA->id], DB::table('pemakaian_materials')->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all());
+            $this->assertSame([(int) $rekonA->id], DB::table('project_rekons')->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all());
+
+            try {
+                DB::table('pemakaian_materials')->where('id', $usageA->id)->update(['mitra_id' => $mitraB->id]);
+                $this->fail('Expected tenant RLS to reject a cross-tenant usage update.');
+            } catch (QueryException $exception) {
+                $this->assertSame('42501', (string) $exception->getCode());
+            }
+
+            try {
+                DB::table('project_rekons')->where('id', $rekonA->id)->update(['mitra_id' => $mitraB->id]);
+                $this->fail('Expected tenant RLS to reject a cross-tenant Rekon update.');
+            } catch (QueryException $exception) {
+                $this->assertSame('42501', (string) $exception->getCode());
+            }
+
+            $this->assertFalse(DB::table('pemakaian_materials')->where('id', $usageB->id)->exists());
+            $this->assertFalse(DB::table('project_rekons')->where('id', $rekonB->id)->exists());
         });
     }
 
