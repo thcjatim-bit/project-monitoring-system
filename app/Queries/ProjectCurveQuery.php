@@ -7,6 +7,7 @@ use App\Models\ProjectBaseline;
 use App\Models\ProjectProgress;
 use App\Models\ProjectRabJasa;
 use App\Models\ProjectVariationOrderItem;
+use App\Support\SpiThreshold;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 
@@ -75,7 +76,7 @@ class ProjectCurveQuery
         }
 
         $spi = $planPercent > 0 ? round($verifiedPercent / $planPercent, 4) : null;
-        $spiStatus = $spi === null ? 'na' : ($spi >= 1 ? 'green' : ($spi >= 0.9 ? 'yellow' : 'red'));
+        $spiStatus = SpiThreshold::status($spi);
         $latestProgressDate = collect(array_keys($verifiedByDate + $pendingByDate))->max();
         $xAxisEnd = $asOfDate;
         if ($project->toc !== null && $project->toc->gt($xAxisEnd)) {
@@ -95,7 +96,7 @@ class ProjectCurveQuery
             'pending_percent' => $pendingPercent,
             'plan_percent' => $planPercent,
             'spi' => $spi,
-            'spi_label' => $spi === null ? 'N/A' : number_format($spi, 2, '.', ''),
+            'spi_label' => SpiThreshold::label($spi),
             'spi_status' => $spiStatus,
             'verified_series' => $this->series($verifiedByDate, $grandTotal),
             'pending_series' => $this->series($pendingByDate, $grandTotal),

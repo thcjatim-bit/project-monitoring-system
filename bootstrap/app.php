@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnsureThcUser;
 use App\Http\Middleware\EnsureUserHasIzin;
 use App\Http\Middleware\EnsureWarehouseAssignment;
@@ -13,6 +14,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -22,7 +24,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->appendToGroup('web', SetTenantDatabaseContext::class);
         $middleware->prependToPriorityList(SubstituteBindings::class, SetTenantDatabaseContext::class);
-        $middleware->alias(['izin' => EnsureUserHasIzin::class, 'thc' => EnsureThcUser::class, 'warehouse' => EnsureWarehouseAssignment::class]);
+        $middleware->alias([
+            'izin' => EnsureUserHasIzin::class,
+            'thc' => EnsureThcUser::class,
+            'warehouse' => EnsureWarehouseAssignment::class,
+            'api.key' => AuthenticateApiKey::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

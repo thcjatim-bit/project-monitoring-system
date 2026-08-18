@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\AuthenticatedSessionController;
 use App\Http\Controllers\CommandCenterController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\MaterialUsageController;
+use App\Http\Controllers\PortfolioCockpitController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMaterialController;
 use App\Http\Controllers\ProjectMaterialInstallationController;
@@ -65,6 +67,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', [CommandCenterController::class, 'index'])
         ->middleware(['thc', 'izin:read_dashboard'])
         ->name('dashboard');
+    Route::get('/portfolio', [PortfolioCockpitController::class, 'index'])
+        ->middleware('izin:read_dashboard')
+        ->name('portfolio.index');
+    Route::get('/portfolio/export', [PortfolioCockpitController::class, 'export'])
+        ->middleware('izin:read_dashboard')
+        ->name('portfolio.export');
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
@@ -123,6 +131,12 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/admin/users', [AdminController::class, 'createUser'])->name('admin.users.create');
         Route::patch('/admin/users/{user}/toggle', [AdminController::class, 'toggleUser'])->name('admin.users.toggle');
         Route::post('/admin/users/{user}/reset', [AdminController::class, 'resetCredentials'])->name('admin.users.reset');
+    });
+    Route::middleware(['thc', 'izin:manage_api_keys'])->group(function (): void {
+        Route::get('/admin/api-keys', [ApiKeyController::class, 'index'])->name('admin.api-keys.index');
+        Route::post('/admin/api-keys', [ApiKeyController::class, 'store'])->name('admin.api-keys.store');
+        Route::patch('/admin/api-keys/{apiKey}/revoke', [ApiKeyController::class, 'revoke'])->name('admin.api-keys.revoke');
+        Route::post('/admin/api-keys/{apiKey}/rotate', [ApiKeyController::class, 'rotate'])->name('admin.api-keys.rotate');
     });
     Route::get('/admin/mitras', [AdminController::class, 'mitras'])
         ->middleware(['thc', 'izin:manage_mitras'])
