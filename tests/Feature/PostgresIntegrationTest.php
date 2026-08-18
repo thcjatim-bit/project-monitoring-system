@@ -73,7 +73,7 @@ class PostgresIntegrationTest extends TestCase
         $tables = DB::table('pg_class as c')
             ->join('pg_namespace as n', 'n.oid', '=', 'c.relnamespace')
             ->where('n.nspname', 'public')
-            ->whereIn('c.relname', ['drums', 'material_request_items', 'material_requests', 'material_sns', 'material_stoks', 'material_transaksis', 'projects', 'warehouses'])
+            ->whereIn('c.relname', ['drums', 'material_request_items', 'material_requests', 'material_sns', 'material_stoks', 'material_transaksis', 'pemakaian_materials', 'project_rekon_items', 'project_rekons', 'projects', 'warehouses'])
             ->where('c.relkind', 'r')
             ->select(['c.relname', 'c.relrowsecurity', 'c.relforcerowsecurity'])
             ->orderBy('c.relname')
@@ -81,7 +81,7 @@ class PostgresIntegrationTest extends TestCase
             ->keyBy('relname');
 
         $this->assertSame(
-            ['drums', 'material_request_items', 'material_requests', 'material_sns', 'material_stoks', 'material_transaksis', 'projects', 'warehouses'],
+            ['drums', 'material_request_items', 'material_requests', 'material_sns', 'material_stoks', 'material_transaksis', 'pemakaian_materials', 'project_rekon_items', 'project_rekons', 'projects', 'warehouses'],
             $tables->keys()->all()
         );
 
@@ -104,6 +104,9 @@ class PostgresIntegrationTest extends TestCase
             'material_sns' => 'material_sn_tenant_isolation',
             'material_stoks' => 'warehouse_stock_tenant_isolation',
             'material_transaksis' => 'material_transaction_tenant_isolation',
+            'pemakaian_materials' => 'pemakaian_material_tenant_isolation',
+            'project_rekon_items' => 'project_rekon_item_tenant_isolation',
+            'project_rekons' => 'project_rekon_tenant_isolation',
             'projects' => 'tenant_isolation',
             'warehouses' => 'tenant_isolation',
         ], $policies);
@@ -211,6 +214,27 @@ class PostgresIntegrationTest extends TestCase
         SQL);
 
         $this->assertFalse($privileges->can_delete_timeline);
+    }
+
+    public function test_material_usage_and_reconciliation_sources_have_no_application_delete_path(): void
+    {
+        $privileges = DB::selectOne(<<<'SQL'
+            select has_table_privilege(current_user, 'public.pemakaian_materials', 'INSERT') as can_insert_usage,
+                   has_table_privilege(current_user, 'public.pemakaian_materials', 'UPDATE') as can_update_usage,
+                   has_table_privilege(current_user, 'public.pemakaian_materials', 'DELETE') as can_delete_usage,
+                   has_table_privilege(current_user, 'public.project_rekons', 'INSERT') as can_insert_rekon,
+                   has_table_privilege(current_user, 'public.project_rekons', 'UPDATE') as can_update_rekon,
+                   has_table_privilege(current_user, 'public.project_rekons', 'DELETE') as can_delete_rekon,
+                   has_table_privilege(current_user, 'public.project_rekon_items', 'DELETE') as can_delete_rekon_item
+        SQL);
+
+        $this->assertTrue($privileges->can_insert_usage);
+        $this->assertTrue($privileges->can_update_usage);
+        $this->assertFalse($privileges->can_delete_usage);
+        $this->assertTrue($privileges->can_insert_rekon);
+        $this->assertTrue($privileges->can_update_rekon);
+        $this->assertFalse($privileges->can_delete_rekon);
+        $this->assertFalse($privileges->can_delete_rekon_item);
     }
 
     public function test_mitra_raw_query_cannot_read_or_write_another_mitras_project_photo(): void

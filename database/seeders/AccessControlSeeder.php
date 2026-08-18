@@ -39,16 +39,23 @@ class AccessControlSeeder extends Seeder
             'read_material_request' => 'Melihat Request Material',
             'create_material_request' => 'Mengajukan Request Material',
             'approve_material_request' => 'Memutuskan Request Material',
+            'read_material_usage' => 'Melihat Pemakaian Material',
+            'create_material_usage' => 'Mengajukan Pemakaian Material',
+            'approve_material_usage' => 'Memutuskan Pemakaian Material',
+            'read_material_rekon' => 'Melihat Rekon Material',
+            'create_material_rekon' => 'Membuka Rekon Material',
+            'edit_material_rekon' => 'Mengubah Draft Rekon Material',
+            'approve_material_rekon' => 'Memutuskan Rekon Material',
         ])->mapWithKeys(fn (string $nama, string $kode) => [
             $kode => Izin::query()->firstOrCreate(['kode' => $kode], ['nama' => $nama]),
         ]);
 
         $matriks = [
             'admin_thc' => ['nama' => 'Admin THC', 'izins' => $izins->keys()->all()],
-            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'manage_project_plan', 'read_project_progress', 'verify_project_progress', 'update_project_step', 'read_project_material', 'manage_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request']],
-            'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request']],
+            'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'manage_project_plan', 'read_project_progress', 'verify_project_progress', 'update_project_step', 'read_project_material', 'manage_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'read_material_usage', 'approve_material_usage', 'read_material_rekon', 'create_material_rekon', 'edit_material_rekon', 'approve_material_rekon']],
+            'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon']],
             'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'read_project_material', 'read_project_timeline', 'read_master_data']],
-            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'create_material_request']],
+            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'create_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon']],
         ];
 
         foreach ($matriks as $preset => $definition) {
