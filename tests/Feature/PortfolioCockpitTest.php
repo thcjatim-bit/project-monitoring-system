@@ -847,7 +847,7 @@ class PortfolioCockpitTest extends TestCase
             ->get(route('portfolio.export', ['mitra' => $mitra->id, 'periode' => '2026-07']))
             ->assertStatus(503)
             ->assertSee('Portfolio Cockpit belum dapat dimuat. Coba lagi atau buka modul sumbernya.')
-            ->assertSee('Mitra #'.$mitra->id)
+            ->assertSee('Mitra Export Error')
             ->assertSee('Juli 2026');
     }
 
