@@ -23,13 +23,12 @@ class PostgresBiViewTest extends TestCase
 
     protected function tearDown(): void
     {
-        parent::tearDown();
-
         if (extension_loaded('pdo_pgsql')) {
             $writer = DB::connection('migrator');
             $writer->select("select set_config('app.is_thc', 'on', false)");
             $writer->select("select set_config('app.mitra_id', '', false)");
             $writer->unprepared(<<<'SQL'
+                TRUNCATE projects CASCADE;
                 TRUNCATE project_rekon_items, project_rekons, material_transaksis;
                 DELETE FROM project_baseline_days
                 WHERE project_baseline_id IN (SELECT id FROM project_baselines WHERE project_id IN (SELECT id FROM projects WHERE id_project LIKE 'PRJ-BI-%'));
@@ -46,7 +45,6 @@ class PostgresBiViewTest extends TestCase
                 DELETE FROM material_requests WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
                 DELETE FROM material_stoks WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
                 DELETE FROM warehouses WHERE mitra_id IN (SELECT id FROM mitras WHERE kode LIKE 'BI-%');
-                DELETE FROM projects WHERE id_project LIKE 'PRJ-BI-%';
                 DELETE FROM users WHERE email LIKE 'bi-%@example.test';
                 DELETE FROM materials WHERE kode LIKE 'MAT-%';
                 DELETE FROM units WHERE kode LIKE 'U-%';
@@ -54,6 +52,8 @@ class PostgresBiViewTest extends TestCase
             SQL);
             $writer->disconnect();
         }
+
+        parent::tearDown();
     }
 
     public function test_bi_publishes_the_allowlisted_views_with_security_options(): void
