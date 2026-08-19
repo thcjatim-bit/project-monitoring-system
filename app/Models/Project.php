@@ -13,6 +13,12 @@ class Project extends Model
 
     protected static function booted(): void
     {
+        static::updating(function (self $project): void {
+            if ($project->isDirty('id_project') && $project->getOriginal('id_project') !== null) {
+                throw new \LogicException('ID Project tidak dapat diubah setelah diterbitkan.');
+            }
+        });
+
         static::created(function (self $project): void {
             ProjectStep::initialize($project);
         });

@@ -116,7 +116,7 @@ class AccessControlTest extends TestCase
 
         $this->actingAs($user)
             ->post('/projects', ['id_project' => 'PRJ-2608-0010', 'nama' => 'Project berizin', 'mitra_id' => $mitra->id])
-            ->assertRedirect('/projects');
+            ->assertRedirect(route('projects.create'));
 
         $this->assertDatabaseHas('projects', ['id_project' => 'PRJ-2608-0010', 'mitra_id' => $mitra->id]);
     }

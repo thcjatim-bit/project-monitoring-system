@@ -89,8 +89,8 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('izin:read_dashboard')
         ->name('portfolio.export');
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('izin:read_project')->name('projects.index');
-    Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware('izin:create_project')->name('projects.create');
-    Route::post('/projects', [ProjectController::class, 'store'])->middleware('izin:create_project')->name('projects.store');
+    Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware(['thc', 'izin:create_project'])->name('projects.create');
+    Route::post('/projects', [ProjectController::class, 'store'])->middleware(['thc', 'izin:create_project'])->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->middleware('izin:read_project')->name('projects.show');
     Route::get('/projects/{project}/timeline', [ProjectTimelineController::class, 'index'])
         ->middleware('izin:read_project_timeline')
