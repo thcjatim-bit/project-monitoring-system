@@ -11,14 +11,22 @@ use Illuminate\Support\Str;
 
 class MitraOnboardingService
 {
-    public function __construct(private WahaClient $waha) {}
+    public function __construct(private WahaClient $waha, private MitraCodeGenerator $codes) {}
 
     /** @return array{mitra: Mitra, user: User, password: string} */
     public function onboard(array $attributes): array
     {
-        return DB::transaction(function () use ($attributes): array {
+        $kode = $attributes['kode'] ?: DB::transaction(
+            fn (): string => $this->codes->generate(now()->format('ym')),
+        );
+
+        return DB::transaction(function () use ($attributes, $kode): array {
             $password = Str::password(16);
-            $mitra = Mitra::create(['kode' => $attributes['kode'], 'nama' => $attributes['nama'], 'aktif' => true]);
+            $mitra = Mitra::create([
+                'kode' => $kode,
+                'nama' => $attributes['nama'],
+                'aktif' => true,
+            ]);
             $user = $mitra->users()->create([
                 'name' => $attributes['admin_name'],
                 'email' => $attributes['admin_email'],

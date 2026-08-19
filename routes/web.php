@@ -144,8 +144,10 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware(['thc', 'izin:manage_users'])->group(function (): void {
         Route::get('/admin/users', [AdminController::class, 'users'])->name('admin.users');
         Route::post('/admin/users', [AdminController::class, 'createUser'])->name('admin.users.create');
+        Route::patch('/admin/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
         Route::patch('/admin/users/{user}/toggle', [AdminController::class, 'toggleUser'])->name('admin.users.toggle');
         Route::post('/admin/users/{user}/reset', [AdminController::class, 'resetCredentials'])->name('admin.users.reset');
+        Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.users.delete');
     });
     Route::middleware(['thc', 'izin:manage_api_keys'])->group(function (): void {
         Route::get('/admin/api-keys', [ApiKeyController::class, 'index'])->name('admin.api-keys.index');
@@ -159,6 +161,15 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/admin/mitras', [AdminController::class, 'onboardMitra'])
         ->middleware(['thc', 'izin:manage_mitras'])
         ->name('admin.mitras.create');
+    Route::patch('/admin/mitras/{mitra}', [AdminController::class, 'updateMitra'])
+        ->middleware(['thc', 'izin:manage_mitras'])
+        ->name('admin.mitras.update');
+    Route::patch('/admin/mitras/{mitra}/toggle', [AdminController::class, 'toggleMitra'])
+        ->middleware(['thc', 'izin:manage_mitras'])
+        ->name('admin.mitras.toggle');
+    Route::delete('/admin/mitras/{mitra}', [AdminController::class, 'deleteMitra'])
+        ->middleware(['thc', 'izin:manage_mitras'])
+        ->name('admin.mitras.delete');
     Route::middleware('thc')->group(function (): void {
         Route::get('/admin/warehouses', [AdminController::class, 'warehouses'])->middleware('izin:manage_warehouses')->name('admin.warehouses');
         Route::post('/admin/warehouses', [AdminController::class, 'createWarehouse'])->middleware('izin:manage_warehouses')->name('admin.warehouses.create');

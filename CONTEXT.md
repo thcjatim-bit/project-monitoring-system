@@ -6,6 +6,7 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 
 - **THC** — pemilik sistem. User THC melihat seluruh data lintas mitra.
 - **Mitra** — kontraktor yang mengerjakan **jasa saja** (bukan material). Punya user sendiri di sistem yang sama. Hanya melihat data miliknya.
+- **Kode Mitra** — pengenal Mitra yang unik dan tidak berubah tanpa tindakan THC; boleh diisi manual untuk kode lama atau dibentuk otomatis sebagai `MTR-YYMM-NNNN` saat onboarding. Nomor otomatis berurutan per bulan dan tidak digunakan kembali.
 - **Isolasi mitra** — jaminan bahwa user mitra mustahil membaca atau mengubah baris milik mitra lain. Ditegakkan di database lewat Row-Level Security, bukan di kode aplikasi. Lihat `docs/adr/0001-isolasi-mitra-row-level-security.md`.
 - **Tabel bertenant** — tabel yang punya kolom `mitra_id` dan tunduk pada RLS.
 - **Tabel bersama** — master data lintas mitra (Material, Unit, PoP, Pekerjaan Jasa). Tidak punya `mitra_id`; boleh dibaca semua, hanya bisa ditulis THC.

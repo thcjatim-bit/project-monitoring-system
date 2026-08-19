@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\WahaClient;
+use App\Exceptions\SafeDeletionException;
 use App\Models\Grup;
 use App\Models\Material;
 use App\Models\Mitra;
@@ -10,7 +11,10 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WhatsappSessionStatus;
+use App\Services\MitraCodeGenerator;
+use App\Services\MitraDeletionService;
 use App\Services\MitraOnboardingService;
+use App\Services\UserDeletionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,7 +27,13 @@ class AdminController extends Controller
 {
     public function users(): View
     {
-        return view('admin.users', ['users' => User::with(['mitra', 'grup'])->latest()->get(), 'grups' => Grup::orderBy('nama')->get()]);
+        $mitraIds = User::query()->whereNotNull('mitra_id')->pluck('mitra_id');
+
+        return view('admin.users', [
+            'users' => User::with(['mitra', 'grup'])->latest()->get(),
+            'grups' => Grup::orderBy('nama')->get(),
+            'mitras' => Mitra::where(fn ($query) => $query->where('aktif', true)->orWhereIn('id', $mitraIds))->orderBy('nama')->get(),
+        ]);
     }
 
     public function mitras(): View
@@ -49,6 +59,22 @@ class AdminController extends Controller
         return back()->with('status', 'User dibuat dan kredensial dikirim melalui WhatsApp.');
     }
 
+    public function updateUser(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'no_wa' => ['required', 'regex:/^62[0-9]{8,13}$/'],
+            'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where(
+                fn ($query) => $query->where('aktif', true)->orWhere('id', $user->mitra_id)
+            )],
+            'grup_id' => ['required', 'exists:grups,id'],
+        ]);
+        $user->update($data);
+
+        return back()->with('status', 'User diperbarui.');
+    }
+
     public function toggleUser(User $user): RedirectResponse
     {
         $user->update(['aktif' => ! $user->aktif]);
@@ -67,12 +93,56 @@ class AdminController extends Controller
         return back()->with('status', 'Kata sandi baru dikirim melalui WhatsApp.');
     }
 
+    public function deleteUser(Request $request, User $user, UserDeletionService $service): RedirectResponse
+    {
+        try {
+            $service->delete($user, $request->user());
+        } catch (SafeDeletionException $exception) {
+            return back()->withErrors(['delete' => $exception->getMessage()])->with('delete_user_id', $user->id);
+        }
+
+        return back()->with('status', 'User dihapus.');
+    }
+
     public function onboardMitra(Request $request, MitraOnboardingService $service): RedirectResponse
     {
-        $data = $request->validate(['kode' => ['required', 'string', 'max:255', 'unique:mitras,kode'], 'nama' => ['required', 'string', 'max:255'], 'admin_name' => ['required', 'string', 'max:255'], 'admin_email' => ['required', 'email', 'unique:users,email'], 'no_wa' => ['required', 'regex:/^62[0-9]{8,13}$/']]);
+        $data = $request->validate(['kode' => ['nullable', 'string', 'max:255', 'unique:mitras,kode'], 'nama' => ['required', 'string', 'max:255'], 'admin_name' => ['required', 'string', 'max:255'], 'admin_email' => ['required', 'email', 'unique:users,email'], 'no_wa' => ['required', 'regex:/^62[0-9]{8,13}$/']]);
+        $data['kode'] = trim((string) ($data['kode'] ?? '')) ?: null;
         $service->onboard($data);
 
         return back()->with('status', 'Mitra dan administrator berhasil dibuat.');
+    }
+
+    public function updateMitra(Request $request, Mitra $mitra, MitraCodeGenerator $codes): RedirectResponse
+    {
+        $data = $request->validate([
+            'kode' => ['required', 'string', 'max:255', Rule::unique('mitras', 'kode')->ignore($mitra->id)],
+            'nama' => ['required', 'string', 'max:255'],
+        ]);
+        if ($data['kode'] !== $mitra->kode && $codes->wasIssued($data['kode'])) {
+            return back()->withErrors(['kode' => 'Kode Mitra otomatis yang pernah diterbitkan tidak dapat digunakan kembali.']);
+        }
+        $mitra->update($data);
+
+        return back()->with('status', 'Mitra diperbarui.');
+    }
+
+    public function toggleMitra(Mitra $mitra): RedirectResponse
+    {
+        $mitra->update(['aktif' => ! $mitra->aktif]);
+
+        return back()->with('status', $mitra->aktif ? 'Mitra diaktifkan.' : 'Mitra dinonaktifkan.');
+    }
+
+    public function deleteMitra(Mitra $mitra, MitraDeletionService $service): RedirectResponse
+    {
+        try {
+            $service->delete($mitra);
+        } catch (SafeDeletionException $exception) {
+            return back()->withErrors(['delete' => $exception->getMessage()])->with('delete_mitra_id', $mitra->id);
+        }
+
+        return back()->with('status', 'Mitra dihapus.');
     }
 
     public function warehouses(): View
