@@ -12,6 +12,8 @@
             .control-room h1 { color: #15324b; font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -.055em; line-height: 1.05; margin: 0 0 9px; }
             .control-room__subtitle { color: #687684; margin: 0; }
             .control-room__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+            .control-room__module-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+            .control-room__module-nav a { background: #fff; border: 1px solid #cbd6dc; border-radius: 8px; color: #15324b; font-size: .8rem; font-weight: 700; padding: 8px 11px; text-decoration: none; }
             .control-room__button { background: #087f8c; border: 1px solid #087f8c; border-radius: 8px; color: #fff; display: inline-block; font-size: .84rem; font-weight: 700; padding: 10px 14px; text-decoration: none; }
             .control-room__button--muted { background: #fff; border-color: #cbd6dc; color: #15324b; }
             .control-room__meta { background: #fff; border: 1px solid #dce4e8; border-radius: 14px; display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; padding: 20px; }
@@ -88,6 +90,11 @@
             .control-room__photo-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
             .control-room__photo-form select, .control-room__photo-form input { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
             .control-room__photo-help { color: #687684; font-size: .75rem; margin: 8px 0 0; }
+            .control-room__installation { grid-column: 1 / -1; }
+            .control-room__installation-form { border-top: 1px solid #e8edef; display: grid; gap: 9px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 17px; padding-top: 16px; }
+            .control-room__installation-form label { color: #687684; display: grid; font-size: .74rem; gap: 5px; }
+            .control-room__installation-form input, .control-room__installation-form select { border: 1px solid #cbd6dc; border-radius: 7px; min-height: 36px; padding: 7px 9px; }
+            .control-room__installation-help { color: #687684; font-size: .75rem; margin: 8px 0 0; }
             .control-room__timeline-list { display: grid; gap: 10px; list-style: none; margin: 15px 0 0; padding: 0; }
             .control-room__timeline-entry { border-left: 3px solid #cbd6dc; border-radius: 0 8px 8px 0; background: #f6f8f9; padding: 11px 13px; }
             .control-room__timeline-entry--comment { border-color: #087f8c; }
@@ -106,6 +113,7 @@
             .control-room__step-name { display: block; font-size: .75rem; font-weight: 750; }
             .control-room__step-status { color: #687684; display: block; font-size: .68rem; margin-top: 4px; }
             @media (max-width: 780px) { .control-room { padding: 24px 16px 50px; } .control-room__header { align-items: flex-start; flex-direction: column; } .control-room__meta, .control-room__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .control-room__grid { grid-template-columns: 1fr; } .control-room__progress-form { grid-template-columns: 1fr 1fr; } }
+            @media (max-width: 780px) { .control-room__installation-form { grid-template-columns: 1fr 1fr; } }
         </style>
 
         <a class="control-room__back" href="{{ route('projects.index') }}">← Kembali ke daftar Project</a>
@@ -120,6 +128,21 @@
                 <a class="control-room__button control-room__button--muted" href="#project-timeline">Linimasa</a>
             </div>
         </header>
+        <nav class="control-room__module-nav" aria-label="Submodul Project">
+            <a href="{{ route('projects.planning.index', $project) }}">RAB Jasa · Baseline · VO</a>
+            @if (auth()->user()->hasIzin('read_material_usage'))
+                <a href="{{ route('projects.material-usages.index', $project) }}">Pemakaian Material</a>
+            @endif
+            @if (auth()->user()->hasIzin('read_material_rekon'))
+                <a href="{{ route('projects.rekons.index', $project) }}">Rekon Material</a>
+            @endif
+            @if ($canReportInstallation)
+                <a href="#project-material-installation">Material Installation</a>
+            @endif
+            @if (auth()->user()->hasIzin('upload_project_photo'))
+                <a href="#project-photos">Foto Pekerjaan</a>
+            @endif
+        </nav>
 
         <div class="control-room__state control-room__state--loading" data-control-room-state="loading" role="status" aria-live="polite" hidden>
             Memuat Control Room {{ $project->id_project }}…
@@ -360,6 +383,37 @@
                             <button class="control-room__button" type="submit">Tambah kebutuhan</button>
                         </form>
                     @endif
+                @endif
+            </article>
+            <article class="control-room__panel control-room__installation" id="project-material-installation">
+                <h2>Material Installation</h2>
+                <p>Catat material dari saldo Project menjadi terpasang. Pengajuan Pemakaian Material yang masih Pending tidak dapat dipasang.</p>
+                @if ($canReportInstallation)
+                    @if ($installationStocks->isEmpty())
+                        <div class="control-room__state">Belum ada saldo Material Project yang dapat dipasang.</div>
+                    @else
+                        <form class="control-room__installation-form" method="POST" action="{{ route('projects.material-installations.store', $project) }}" data-submit-loading>
+                            @csrf
+                            <label>Warehouse sumber
+                                <select name="warehouse_id" required><option value="">Pilih Warehouse</option>@foreach ($installationStocks->unique('warehouse_id') as $stock)<option value="{{ $stock->warehouse_id }}">{{ $stock->warehouse?->nama ?? 'Warehouse' }}</option>@endforeach</select>
+                            </label>
+                            <label>Material
+                                <select name="material_id" required><option value="">Pilih Material</option>@foreach ($installationStocks->unique('material_id') as $stock)<option value="{{ $stock->material_id }}">{{ $stock->material?->kode }} — {{ $stock->material?->nama }} (tersedia {{ number_format((float) $stock->qty, 3, '.', '') }})</option>@endforeach</select>
+                            </label>
+                            <label>Qty terpasang <input name="qty" type="number" min="0.001" step="0.001" required></label>
+                            <label>SN (untuk material ber-SN)
+                                <select name="material_sn_id"><option value="">Tidak memakai SN</option>@foreach ($installationSerials as $serial)<option value="{{ $serial->id }}">{{ $serial->serial_number }} · {{ $serial->material?->nama }}</option>@endforeach</select>
+                            </label>
+                            <label>Drum (untuk drum kabel)
+                                <select name="drum_id"><option value="">Tidak memakai Drum</option>@foreach ($installationDrums as $drum)<option value="{{ $drum->id }}">{{ $drum->drum_id ?: 'Drum #'.$drum->id }} · sisa {{ number_format((float) $drum->sisa, 3, '.', '') }}</option>@endforeach</select>
+                            </label>
+                            <label>Catatan <input name="catatan" maxlength="2000"></label>
+                            <button class="control-room__button" type="submit">Catat Material Terpasang</button>
+                        </form>
+                    @endif
+                    <p class="control-room__installation-help">Saldo dan identitas material ditentukan oleh buku transaksi/RLS; form ini tidak mengubah stok secara langsung.</p>
+                @else
+                    <div class="control-room__state">Input Material Installation tersedia untuk Mitra pemilik Project dengan izin report_project_progress.</div>
                 @endif
             </article>
             <article class="control-room__panel control-room__photos" id="project-photos">

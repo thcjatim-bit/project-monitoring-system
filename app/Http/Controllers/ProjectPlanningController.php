@@ -2,14 +2,52 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MitraHargaJasa;
 use App\Models\Project;
+use App\Models\ProjectBaseline;
+use App\Models\ProjectRabJasa;
 use App\Models\ProjectVariationOrder;
 use App\Services\ProjectPlanningService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class ProjectPlanningController extends Controller
 {
+    public function index(Project $project): View
+    {
+        $viewer = request()->user();
+        $canManage = $viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan');
+
+        return view('projects.planning', [
+            'project' => $project->loadMissing('mitra'),
+            'rabJasas' => ProjectRabJasa::query()
+                ->where('project_id', $project->id)
+                ->with('pekerjaanJasa')
+                ->orderBy('id')
+                ->get(),
+            'prices' => $canManage
+                ? MitraHargaJasa::query()
+                    ->where('mitra_id', $project->mitra_id)
+                    ->where('status', 'disetujui')
+                    ->with('pekerjaanJasa')
+                    ->orderBy('pekerjaan_jasa_id')
+                    ->get()
+                : collect(),
+            'baselines' => ProjectBaseline::query()
+                ->where('project_id', $project->id)
+                ->with('days')
+                ->orderByDesc('version')
+                ->get(),
+            'variationOrders' => ProjectVariationOrder::query()
+                ->where('project_id', $project->id)
+                ->with(['items.rabJasa.pekerjaanJasa', 'items.hargaJasaMitra.pekerjaanJasa'])
+                ->orderByDesc('id')
+                ->get(),
+            'canManage' => $canManage,
+        ]);
+    }
+
     public function storeRabJasa(Request $request, Project $project, ProjectPlanningService $service): RedirectResponse
     {
         $data = $request->validate([

@@ -25,6 +25,13 @@ class ProjectRekonController extends Controller
         ]);
     }
 
+    public function show(ProjectRekon $projectRekon): View
+    {
+        return view('project-rekons.show', [
+            'rekon' => $projectRekon->load(['project', 'items.material.unit', 'items.warehouse']),
+        ]);
+    }
+
     public function store(Request $request, Project $project, ProjectRekonService $service): RedirectResponse
     {
         $note = $request->validate(['catatan' => ['nullable', 'string', 'max:2000']])['catatan'] ?? null;

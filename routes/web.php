@@ -92,6 +92,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/projects/buat', [ProjectController::class, 'create'])->middleware(['thc', 'izin:create_project'])->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->middleware(['thc', 'izin:create_project'])->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->middleware('izin:read_project')->name('projects.show');
+    Route::get('/projects/{project}/planning', [ProjectPlanningController::class, 'index'])
+        ->middleware('izin:read_project')
+        ->name('projects.planning.index');
     Route::get('/projects/{project}/timeline', [ProjectTimelineController::class, 'index'])
         ->middleware('izin:read_project_timeline')
         ->name('projects.timeline.index');
@@ -119,6 +122,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/projects/{project}/rekons', [ProjectRekonController::class, 'index'])
         ->middleware('izin:read_material_rekon')
         ->name('projects.rekons.index');
+    Route::get('/project-rekons/{projectRekon}', [ProjectRekonController::class, 'show'])
+        ->middleware('izin:read_material_rekon')
+        ->name('project-rekons.show');
     Route::middleware(['thc', 'izin:create_material_rekon'])->group(function (): void {
         Route::post('/projects/{project}/rekons', [ProjectRekonController::class, 'store'])->name('projects.rekons.store');
     });
@@ -231,6 +237,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/material-usages', [MaterialUsageController::class, 'index'])
         ->middleware('izin:read_material_usage')
         ->name('material-usages.index');
+    Route::get('/projects/{project}/material-usages', [MaterialUsageController::class, 'projectIndex'])
+        ->middleware('izin:read_material_usage')
+        ->name('projects.material-usages.index');
+    Route::get('/material-usages/{pemakaianMaterial}', [MaterialUsageController::class, 'show'])
+        ->middleware('izin:read_material_usage')
+        ->name('material-usages.show');
     Route::post('/projects/{project}/pemakaian-material', [MaterialUsageController::class, 'store'])
         ->middleware('izin:create_material_usage')
         ->name('projects.material-usages.store');

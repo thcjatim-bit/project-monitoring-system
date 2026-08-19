@@ -17,11 +17,18 @@ class MaterialUsageController extends Controller
 {
     public function index(): View
     {
-        return view('material-usages.index', [
-            'usages' => PemakaianMaterial::query()->with(['project', 'warehouse', 'material.unit', 'requester', 'decider'])->latest()->get(),
-            'projects' => Project::query()->latest()->get(),
-            'warehouses' => Warehouse::query()->orderBy('nama')->get(),
-            'materials' => Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get(),
+        return view('material-usages.index', $this->data());
+    }
+
+    public function projectIndex(Project $project): View
+    {
+        return view('material-usages.index', $this->data($project));
+    }
+
+    public function show(PemakaianMaterial $pemakaianMaterial): View
+    {
+        return view('material-usages.show', [
+            'usage' => $pemakaianMaterial->load(['project', 'warehouse', 'material.unit', 'serialNumber', 'drum', 'requester', 'decider']),
         ]);
     }
 
@@ -34,8 +41,13 @@ class MaterialUsageController extends Controller
             'drum_id' => ['nullable', 'integer', 'exists:drums,id'],
             'qty' => ['required', 'numeric', 'gt:0'],
             'catatan' => ['nullable', 'string', 'max:2000'],
+            'return_to_project' => ['sometimes', 'boolean'],
         ]);
         $service->submit($request->user(), $project, $data);
+
+        if ($request->boolean('return_to_project')) {
+            return redirect()->route('projects.material-usages.index', $project)->with('status', 'Pemakaian Material berhasil diajukan.');
+        }
 
         return redirect()->route('material-usages.index')->with('status', 'Pemakaian Material berhasil diajukan.');
     }
@@ -61,5 +73,28 @@ class MaterialUsageController extends Controller
         $service->decide($pemakaianMaterial, $request->user(), 'ditolak', $note);
 
         return redirect()->route('material-usages.index')->with('status', 'Pemakaian Material ditolak.');
+    }
+
+    /** @return array<string, mixed> */
+    private function data(?Project $project = null): array
+    {
+        $user = request()->user();
+        $projects = $project === null ? Project::query()->latest()->get() : collect([$project]);
+        $warehouseQuery = Warehouse::query()->orderBy('nama');
+        if ($user->mitra_id !== null) {
+            $warehouseQuery->where('mitra_id', $user->mitra_id);
+        }
+
+        return [
+            'project' => $project,
+            'usages' => PemakaianMaterial::query()
+                ->when($project !== null, fn ($query) => $query->where('project_id', $project->id))
+                ->with(['project', 'warehouse', 'material.unit', 'requester', 'decider'])
+                ->latest()
+                ->get(),
+            'projects' => $projects,
+            'warehouses' => $warehouseQuery->get(),
+            'materials' => Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get(),
+        ];
     }
 }
