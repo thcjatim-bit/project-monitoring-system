@@ -98,6 +98,8 @@ class ProjectWorkflowUiTest extends TestCase
             ->assertSee('Pemakaian Material')
             ->assertSee('Daftar pengajuan untuk '.$project->id_project)
             ->assertSee(route('material-usages.show', $usage), false)
+            ->assertSee('name="material_sn_id"', false)
+            ->assertSee('name="drum_id"', false)
             ->assertSee('Pending / diajukan');
     }
 
