@@ -137,7 +137,7 @@
                 <a href="{{ route('projects.rekons.index', $project) }}">Rekon Material</a>
             @endif
             @if ($canReportInstallation)
-                <a href="#project-material-installation">Material Installation</a>
+                <a href="#project-material-installation">Material Terpasang</a>
             @endif
             @if (auth()->user()->hasIzin('upload_project_photo'))
                 <a href="#project-photos">Foto Pekerjaan</a>
@@ -387,14 +387,14 @@
             </article>
             @if ($canReadInstallation)
             <article class="control-room__panel control-room__installation" id="project-material-installation">
-                <h2>Material Installation</h2>
+                <h2>Material Terpasang</h2>
                 <p>Catat material dari saldo Project menjadi terpasang. Pengajuan Pemakaian Material yang masih Pending tidak dapat dipasang.</p>
                 @if (! $canReadInstallation)
-                    <div class="control-room__state">Riwayat Material Installation memerlukan izin baca modul material.</div>
+                    <div class="control-room__state">Riwayat Material Terpasang memerlukan izin baca modul material.</div>
                 @elseif ($installationHistory->isEmpty())
                     <div class="control-room__state">Belum ada riwayat Material terpasang untuk Project ini.</div>
                 @else
-                    <ul class="control-room__material-list" aria-label="Riwayat Material Installation">
+                    <ul class="control-room__material-list" aria-label="Riwayat Material Terpasang">
                         @foreach ($installationHistory as $installation)
                             <li class="control-room__material-row"><span><strong>{{ $installation->material?->nama ?? 'Material' }}</strong><small>{{ number_format((float) $installation->qty_delta, 3, '.', '') }} {{ $installation->material?->unit?->nama }} · {{ $installation->created_at?->format('d M Y H:i') }}</small></span><small>{{ $installation->actor?->name ?? 'User' }}</small></li>
                         @endforeach
@@ -425,7 +425,7 @@
                     @endif
                     <p class="control-room__installation-help">Saldo dan identitas material ditentukan oleh buku transaksi/RLS; form ini tidak mengubah stok secara langsung.</p>
                 @else
-                    <div class="control-room__state">Input Material Installation tersedia untuk Mitra pemilik Project dengan izin report_project_progress.</div>
+                    <div class="control-room__state">Input Material Terpasang tersedia untuk Mitra pemilik Project dengan izin report_project_progress.</div>
                 @endif
             </article>
             @endif

@@ -90,7 +90,11 @@ class User extends Authenticatable
     public function homeRouteName(): string
     {
         if ($this->mitra_id !== null) {
-            return $this->hasIzin('read_dashboard') ? 'mitra.dashboard' : 'mitra.landing';
+            if ($this->hasIzin('read_dashboard')) {
+                return 'mitra.dashboard';
+            }
+
+            return $this->hasIzin('read_project') ? 'projects.index' : 'mitra.landing';
         }
 
         if ($this->hasIzin('read_dashboard')) {

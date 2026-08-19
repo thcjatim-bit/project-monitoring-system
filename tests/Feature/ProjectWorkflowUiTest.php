@@ -34,7 +34,7 @@ class ProjectWorkflowUiTest extends TestCase
             ->assertSee(route('projects.planning.index', $project), false)
             ->assertSee(route('projects.material-usages.index', $project), false)
             ->assertSee(route('projects.rekons.index', $project), false)
-            ->assertSee('Material Installation')
+            ->assertSee('Material Terpasang')
             ->assertSee('Belum ada saldo Material Project yang dapat dipasang.');
     }
 
@@ -83,7 +83,7 @@ class ProjectWorkflowUiTest extends TestCase
             ->get(route('projects.show', $project))
             ->assertOk()
             ->assertSee('id="project-material-installation"', false)
-            ->assertSee('Material Installation')
+            ->assertSee('Material Terpasang')
             ->assertSee('Belum ada riwayat Material terpasang untuk Project ini.');
     }
 

@@ -71,6 +71,7 @@ class MitraDashboardQuery
         MaterialStok::query()
             ->where('lokasi_tipe', 'warehouse')
             ->where('qty', '>', 0)
+            ->whereHas('material', fn ($query) => $query->where('jenis', 'biasa'))
             ->with(['warehouse', 'material.unit'])
             ->orderBy('warehouse_id')
             ->orderBy('material_id')

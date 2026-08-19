@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Grup;
 use App\Models\Izin;
+use App\Models\Material;
 use App\Models\Mitra;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\Warehouse;
+use App\Services\MaterialInventoryService;
 use App\Support\TenantDatabaseContext;
 use Illuminate\Support\Str;
 use Tests\Concerns\RefreshDatabase;
@@ -44,6 +47,16 @@ class MitraDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Akses Mitra belum tersedia')
             ->assertDontSee('href="'.route('dashboard').'"', false);
+    }
+
+    public function test_mitra_with_project_permission_uses_project_landing_when_dashboard_is_unavailable(): void
+    {
+        $user = $this->mitraUser(['read_project']);
+
+        $this->post('/masuk', [
+            'email' => $user->email,
+            'password' => 'rahasia-benar',
+        ])->assertRedirect(route('projects.index'));
     }
 
     public function test_mitra_cannot_enter_the_thc_dashboard_directly(): void
@@ -85,6 +98,27 @@ class MitraDashboardTest extends TestCase
             ->assertDontSee('Hapus');
 
         $this->get(route('projects.show', $projectA))->assertOk();
+    }
+
+    public function test_mitra_dashboard_lists_each_special_material_balance_once(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $warehouse = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $serialised = Material::factory()->create(['nama' => 'Material Ber-SN Dashboard', 'jenis' => 'ber_sn']);
+        $drum = Material::factory()->create(['nama' => 'Material Drum Dashboard', 'jenis' => 'drum_kabel']);
+        $actor = User::factory()->create();
+
+        $this->asThc(function () use ($actor, $warehouse, $serialised, $drum): void {
+            $inventory = app(MaterialInventoryService::class);
+            $inventory->receive($actor, $warehouse, $serialised->id, '1', 'Saldo awal', 'SN-DASHBOARD-001');
+            $inventory->receive($actor, $warehouse, $drum->id, '100', 'Saldo awal', null, 'DRM-DASHBOARD-001');
+        });
+
+        $user = $this->mitraUser(['read_dashboard', 'read_master_data'], $mitra);
+        $response = $this->actingAs($user)->get(route('mitra.dashboard'))->assertOk();
+
+        $this->assertSame(1, substr_count($response->getContent(), 'Material Ber-SN Dashboard'));
+        $this->assertSame(1, substr_count($response->getContent(), 'Material Drum Dashboard'));
     }
 
     public function test_login_page_contains_variant_a_branding_and_complete_field_states(): void
