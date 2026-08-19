@@ -30,6 +30,7 @@ class ProjectPlanningController extends Controller
                 ? MitraHargaJasa::query()
                     ->where('mitra_id', $project->mitra_id)
                     ->where('status', 'disetujui')
+                    ->whereDate('berlaku_mulai', '<=', today())
                     ->with('pekerjaanJasa')
                     ->orderBy('pekerjaan_jasa_id')
                     ->get()

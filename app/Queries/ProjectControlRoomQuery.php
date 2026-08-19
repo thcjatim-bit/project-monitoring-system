@@ -6,6 +6,7 @@ use App\Models\Drum;
 use App\Models\Material;
 use App\Models\MaterialSn;
 use App\Models\MaterialStok;
+use App\Models\MaterialTransaksi;
 use App\Models\Project;
 use App\Models\ProjectPhoto;
 use App\Models\ProjectProgress;
@@ -63,6 +64,9 @@ class ProjectControlRoomQuery
             && $viewer->mitra_id !== null
             && (int) $viewer->mitra_id === (int) $project->mitra_id
             && $viewer->hasIzin('report_project_progress');
+        $canReadInstallation = $viewer === null
+            || $viewer->hasIzin('read_project_material')
+            || $viewer->hasIzin('report_project_progress');
         $installationStocks = $canReportInstallation
             ? MaterialStok::query()
                 ->where('lokasi_tipe', 'project')
@@ -89,6 +93,16 @@ class ProjectControlRoomQuery
                 ->orderBy('drum_id')
                 ->get()
             : new Collection;
+        $installationHistory = $canReadInstallation
+            ? MaterialTransaksi::query()
+                ->where('project_id', $project->id)
+                ->where('lokasi_tipe', 'terpasang')
+                ->where('jenis_transaksi', 'terpasang')
+                ->where('qty_delta', '>', 0)
+                ->with(['material.unit', 'actor'])
+                ->latest('id')
+                ->get()
+            : new Collection;
 
         return [
             'project' => $project->loadMissing('mitra'),
@@ -103,9 +117,11 @@ class ProjectControlRoomQuery
             'progresses' => $progresses,
             'rabJasas' => $rabJasas,
             'canReportInstallation' => $canReportInstallation,
+            'canReadInstallation' => $canReadInstallation,
             'installationStocks' => $installationStocks,
             'installationSerials' => $installationSerials,
             'installationDrums' => $installationDrums,
+            'installationHistory' => $installationHistory,
             'canReadProgress' => $canReadProgress,
             'material' => $material,
             'materials' => $viewer?->hasIzin('manage_project_material') || $viewer === null
@@ -157,9 +173,11 @@ class ProjectControlRoomQuery
             'progresses' => new Collection,
             'rabJasas' => new Collection,
             'canReportInstallation' => false,
+            'canReadInstallation' => false,
             'installationStocks' => new Collection,
             'installationSerials' => new Collection,
             'installationDrums' => new Collection,
+            'installationHistory' => new Collection,
             'canReadProgress' => false,
             'material' => [
                 'required' => 0.0,

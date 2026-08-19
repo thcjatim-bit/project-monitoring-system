@@ -385,9 +385,21 @@
                     @endif
                 @endif
             </article>
+            @if ($canReadInstallation)
             <article class="control-room__panel control-room__installation" id="project-material-installation">
                 <h2>Material Installation</h2>
                 <p>Catat material dari saldo Project menjadi terpasang. Pengajuan Pemakaian Material yang masih Pending tidak dapat dipasang.</p>
+                @if (! $canReadInstallation)
+                    <div class="control-room__state">Riwayat Material Installation memerlukan izin baca modul material.</div>
+                @elseif ($installationHistory->isEmpty())
+                    <div class="control-room__state">Belum ada riwayat Material terpasang untuk Project ini.</div>
+                @else
+                    <ul class="control-room__material-list" aria-label="Riwayat Material Installation">
+                        @foreach ($installationHistory as $installation)
+                            <li class="control-room__material-row"><span><strong>{{ $installation->material?->nama ?? 'Material' }}</strong><small>{{ number_format((float) $installation->qty_delta, 3, '.', '') }} {{ $installation->material?->unit?->nama }} · {{ $installation->created_at?->format('d M Y H:i') }}</small></span><small>{{ $installation->actor?->name ?? 'User' }}</small></li>
+                        @endforeach
+                    </ul>
+                @endif
                 @if ($canReportInstallation)
                     @if ($installationStocks->isEmpty())
                         <div class="control-room__state">Belum ada saldo Material Project yang dapat dipasang.</div>
@@ -416,6 +428,7 @@
                     <div class="control-room__state">Input Material Installation tersedia untuk Mitra pemilik Project dengan izin report_project_progress.</div>
                 @endif
             </article>
+            @endif
             <article class="control-room__panel control-room__photos" id="project-photos">
                 <h2>Foto Pekerjaan</h2>
                 <p>Bukti lapangan terikat pada Project dan Step. Status sinkronisasi tidak mengubah akses terhadap file aplikasi.</p>
