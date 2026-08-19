@@ -15,7 +15,8 @@
             .app-shell__nav { align-items: center; display: flex; flex: 1; flex-wrap: wrap; gap: 8px 16px; }
             .app-shell__nav a { color: #526071; font-size: .88rem; text-decoration: none; }
             .app-shell__nav a:hover, .app-shell__nav a[aria-current="page"] { color: #087f8c; }
-            .app-shell__user { color: #687684; font-size: .8rem; white-space: nowrap; }
+            .app-shell__user { align-items: center; color: #687684; display: flex; gap: 10px; font-size: .8rem; white-space: nowrap; }
+            .app-shell__logout { border: 1px solid #dce4e8; border-radius: 8px; color: #526071; background: #fff; padding: 6px 9px; cursor: pointer; }
             .app-shell__content { min-height: calc(100vh - 64px); }
             @media (max-width: 760px) {
                 .app-shell__bar { align-items: flex-start; flex-direction: column; gap: 10px; padding: 16px 18px; }
@@ -30,13 +31,17 @@
         @auth
             @php
                 $authenticatedUser = auth()->user();
+                $isMitraUser = $authenticatedUser->mitra_id !== null;
                 $canViewDashboard = $authenticatedUser->mitra_id === null && $authenticatedUser->hasIzin('read_dashboard');
-                $canViewPortfolio = $authenticatedUser->hasIzin('read_dashboard');
+                $canViewMitraDashboard = $isMitraUser && $authenticatedUser->hasIzin('read_dashboard');
+                $canViewPortfolio = ! $isMitraUser && $authenticatedUser->hasIzin('read_dashboard');
                 $canViewProjects = $authenticatedUser->hasIzin('read_project');
             @endphp
             <header class="app-shell__bar">
                 @if ($canViewDashboard)
                     <a class="app-shell__brand" href="{{ route('dashboard') }}">PMS <span>THC</span></a>
+                @elseif ($canViewMitraDashboard)
+                    <a class="app-shell__brand" href="{{ route('mitra.dashboard') }}">PMS <span>THC</span></a>
                 @elseif ($canViewPortfolio)
                     <a class="app-shell__brand" href="{{ route('portfolio.index') }}">PMS <span>THC</span></a>
                 @elseif ($canViewProjects)
@@ -48,6 +53,9 @@
                     @if ($canViewDashboard)
                         <a href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>Dashboard</a>
                     @endif
+                    @if ($canViewMitraDashboard)
+                        <a href="{{ route('mitra.dashboard') }}" @if (request()->routeIs('mitra.dashboard')) aria-current="page" @endif>Dashboard Mitra</a>
+                    @endif
                     @if ($canViewPortfolio)
                         <a href="{{ route('portfolio.index') }}" @if (request()->routeIs('portfolio.*')) aria-current="page" @endif>Portfolio</a>
                     @endif
@@ -58,10 +66,31 @@
                         <a href="{{ route('material-requests.index') }}">Request Material</a>
                     @endif
                 </nav>
-                <span class="app-shell__user">{{ auth()->user()->name }}</span>
+                <div class="app-shell__user">
+                    <span>{{ auth()->user()->name }}</span>
+                    <button class="app-shell__logout" type="button" data-logout-url="{{ route('logout') }}" data-csrf-token="{{ csrf_token() }}">Keluar</button>
+                </div>
             </header>
         @endauth
         <div class="app-shell__content">{{ $slot }}</div>
+
+        @auth
+            <script>
+                document.querySelector('[data-logout-url]')?.addEventListener('click', (event) => {
+                    const button = event.currentTarget;
+                    const form = document.createElement('form');
+                    form.setAttribute('method', 'POST');
+                    form.setAttribute('action', button.dataset.logoutUrl);
+                    const token = document.createElement('input');
+                    token.setAttribute('type', 'hidden');
+                    token.setAttribute('name', '_token');
+                    token.value = button.dataset.csrfToken;
+                    form.append(token);
+                    document.body.append(form);
+                    form.submit();
+                });
+            </script>
+        @endauth
 
         <livewire:scripts />
     </body>

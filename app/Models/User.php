@@ -86,4 +86,17 @@ class User extends Authenticatable
             ->whereHas('izins', fn ($query) => $query->where('kode', $kode))
             ->exists();
     }
+
+    public function homeRouteName(): string
+    {
+        if ($this->mitra_id !== null) {
+            return $this->hasIzin('read_dashboard') ? 'mitra.dashboard' : 'mitra.landing';
+        }
+
+        if ($this->hasIzin('read_dashboard')) {
+            return 'dashboard';
+        }
+
+        return $this->hasIzin('read_project') ? 'projects.index' : 'access.landing';
+    }
 }

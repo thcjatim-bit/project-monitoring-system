@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Middleware\AuthenticateApiKey;
+use App\Http\Middleware\EnsureMitraUser;
 use App\Http\Middleware\EnsureThcUser;
+use App\Http\Middleware\EnsureTransitReadAccess;
 use App\Http\Middleware\EnsureUserHasIzin;
 use App\Http\Middleware\EnsureWarehouseAssignment;
 use App\Http\Middleware\SetTenantDatabaseContext;
@@ -27,6 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'izin' => EnsureUserHasIzin::class,
             'thc' => EnsureThcUser::class,
+            'mitra' => EnsureMitraUser::class,
+            'transit.read' => EnsureTransitReadAccess::class,
             'warehouse' => EnsureWarehouseAssignment::class,
             'api.key' => AuthenticateApiKey::class,
         ]);

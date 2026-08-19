@@ -38,7 +38,7 @@
         <h2>Daftar Pemakaian</h2>
         <ul>
             @forelse ($usages as $usage)
-                <li>
+                <li id="pemakaian-material-{{ $usage->id }}">
                     <strong>#{{ $usage->id }}</strong> — {{ $usage->status }} — {{ $usage->material?->nama }} {{ $usage->qty }}
                     @if ($usage->project) — {{ $usage->project->id_project }} @endif
                     @if (auth()->user()->mitra_id !== null && auth()->user()->hasIzin('create_material_usage') && $usage->status === 'diajukan')

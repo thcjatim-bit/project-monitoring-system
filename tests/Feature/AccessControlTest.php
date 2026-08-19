@@ -38,7 +38,7 @@ class AccessControlTest extends TestCase
         $user = User::factory()->create(['password' => 'rahasia-benar']);
 
         $this->post('/masuk', ['email' => $user->email, 'password' => 'rahasia-benar'])
-            ->assertRedirect('/dashboard');
+            ->assertRedirect(route('access.landing'));
 
         $this->assertAuthenticatedAs($user);
     }
@@ -58,8 +58,10 @@ class AccessControlTest extends TestCase
         $this->post('/masuk', ['email' => $thc->email, 'password' => 'password'])
             ->assertRedirect('/dashboard');
 
+        $this->post('/keluar')->assertRedirect(route('login'));
+
         $this->post('/masuk', ['email' => $mitra->email, 'password' => 'password'])
-            ->assertRedirect('/dashboard');
+            ->assertRedirect(route('mitra.dashboard'));
     }
 
     public function test_inactive_user_cannot_sign_in(): void

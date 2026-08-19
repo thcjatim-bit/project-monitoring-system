@@ -8,6 +8,7 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\MaterialUsageController;
+use App\Http\Controllers\MitraDashboardController;
 use App\Http\Controllers\PortfolioCockpitController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMaterialController;
@@ -21,11 +22,18 @@ use App\Http\Controllers\ProjectTimelineController;
 use App\Http\Controllers\SuratJalanController;
 use App\Http\Middleware\SetTenantDatabaseContext;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Illuminate\View\View;
 
-Route::redirect('/', '/dashboard');
+Route::get('/', function (Request $request): RedirectResponse {
+    return $request->user()
+        ? redirect()->route($request->user()->homeRouteName())
+        : redirect('/dashboard');
+})->name('home');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/masuk', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -64,6 +72,13 @@ if (! app()->environment('production')) {
 }
 
 Route::middleware('auth')->group(function (): void {
+    Route::get('/akses-terbatas', fn (): View => view('access.landing'))->name('access.landing');
+    Route::middleware('mitra')->group(function (): void {
+        Route::get('/mitra', [MitraDashboardController::class, 'landing'])->name('mitra.landing');
+        Route::get('/mitra/dashboard', [MitraDashboardController::class, 'index'])
+            ->middleware('izin:read_dashboard')
+            ->name('mitra.dashboard');
+    });
     Route::get('/dashboard', [CommandCenterController::class, 'index'])
         ->middleware(['thc', 'izin:read_dashboard'])
         ->name('dashboard');
@@ -173,9 +188,11 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/warehouse/stock/drum-split', [MaterialInventoryController::class, 'splitDrum'])->name('warehouse.stock.drum-split');
         Route::post('/warehouse/transfers', [SuratJalanController::class, 'issue'])->name('warehouse.transfers.issue');
         Route::post('/warehouse/transfers/{suratJalan}/receive', [SuratJalanController::class, 'receive'])->name('warehouse.transfers.receive');
-        Route::get('/warehouse/transfers/{suratJalan}/print', [SuratJalanController::class, 'print'])->name('warehouse.transfers.print');
         Route::get('/warehouse/transit', [SuratJalanController::class, 'transit'])->name('warehouse.transit');
     });
+    Route::get('/warehouse/transfers/{suratJalan}/print', [SuratJalanController::class, 'print'])
+        ->middleware('transit.read')
+        ->name('warehouse.transfers.print');
     Route::middleware(['thc', 'izin:operate_warehouse'])->group(function (): void {
         Route::post('/warehouse/transfers/{suratJalan}/resolve', [SuratJalanController::class, 'resolve'])->name('warehouse.transfers.resolve');
         Route::post('/warehouse/transfers/{suratJalan}/cancel', [SuratJalanController::class, 'cancel'])->name('warehouse.transfers.cancel');
