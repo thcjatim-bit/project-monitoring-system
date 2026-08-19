@@ -1,6 +1,8 @@
 <x-layouts.app>
     <main>
+        <p><a href="{{ route('projects.show', $project) }}">← Kembali ke Project Control Room</a></p>
         <h1>Rekon Material: {{ $project->id_project }}</h1>
+        <p>Rekon aktif dan koreksi historis tetap dibedakan. Persetujuan THC menulis hasil ke buku transaksi append-only.</p>
 
         @if (session('status')) <p>{{ session('status') }}</p> @endif
 
@@ -14,7 +16,7 @@
 
         @forelse ($rekons as $rekon)
             <article>
-                <h2>{{ $rekon->nomor }} — {{ $rekon->source }} — {{ $rekon->status }}</h2>
+                <h2><a href="{{ route('project-rekons.show', $rekon) }}">{{ $rekon->nomor }}</a> — {{ $rekon->source }} — {{ $rekon->status }}</h2>
                 @if ($rekon->koreksi_dari_id)
                     <p>Koreksi Rekon #{{ $rekon->koreksi_dari_id }}</p>
                 @endif
@@ -76,7 +78,7 @@
                 @endif
             </article>
         @empty
-            <p>Belum ada Rekon Material.</p>
+            <p role="status">Belum ada Rekon Material untuk Project ini.</p>
         @endforelse
     </main>
 </x-layouts.app>
