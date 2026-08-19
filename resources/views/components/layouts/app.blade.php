@@ -276,18 +276,36 @@
                 $isThcUser = $authenticatedUser->mitra_id === null;
                 $canViewDashboard = $isThcUser && $authenticatedUser->hasIzin('read_dashboard');
                 $canViewProjects = $authenticatedUser->hasIzin('read_project');
-                $canViewMitraUsers = $isThcUser && ($authenticatedUser->hasIzin('manage_users') || $authenticatedUser->hasIzin('manage_mitras'));
+                $canManageMitras = $isThcUser && $authenticatedUser->hasIzin('manage_mitras');
+                $canManageUsers = $isThcUser && $authenticatedUser->hasIzin('manage_users');
+                $canViewMitraUsers = $canManageUsers || $canManageMitras;
                 $canViewMasterData = $authenticatedUser->hasIzin('read_master_data');
-                $canViewWarehouse = ($isThcUser && $authenticatedUser->hasIzin('manage_warehouses')) || $authenticatedUser->hasIzin('operate_warehouse');
+                $canManageWarehouses = $isThcUser && $authenticatedUser->hasIzin('manage_warehouses');
+                $canOperateWarehouse = $authenticatedUser->hasIzin('operate_warehouse');
+                $canViewWarehouse = $canManageWarehouses || $canOperateWarehouse;
                 $canViewMaterialRequest = $authenticatedUser->hasIzin('read_material_request');
                 $canViewMaterialUsage = $authenticatedUser->hasIzin('read_material_usage');
                 $canViewMaterialRekon = $authenticatedUser->hasIzin('read_material_rekon');
-                $homeUrl = $canViewDashboard ? route('dashboard') : ($canViewProjects ? route('projects.index') : route('login'));
+                $homeUrl = match (true) {
+                    $canViewDashboard => route('dashboard'),
+                    $canViewProjects => route('projects.index'),
+                    $canManageMitras => route('admin.mitras'),
+                    $canManageUsers => route('admin.users'),
+                    $canViewMasterData => route('admin.materials'),
+                    $canManageWarehouses => route('admin.warehouses'),
+                    $canOperateWarehouse => route('warehouse.transit'),
+                    $canViewMaterialRequest => route('material-requests.index'),
+                    $canViewMaterialUsage => route('material-usages.index'),
+                    default => request()->url(),
+                };
+                $activeMasterEntity = request()->routeIs('admin.master.*')
+                    ? request()->route('entity')
+                    : null;
                 $activeContext = match (true) {
                     request()->routeIs('dashboard') => 'Command Center',
                     request()->routeIs('projects.*', 'project-rekons.*') => 'Project',
                     request()->routeIs('admin.users', 'admin.mitras') => 'Mitra & User',
-                    request()->routeIs('admin.materials', 'admin.master.*') => 'Material & Unit',
+                    request()->routeIs('admin.materials', 'admin.master.*') => 'Master Data',
                     request()->routeIs('admin.warehouses', 'warehouse.*') => 'Warehouse',
                     request()->routeIs('material-requests.*') => 'Request Material',
                     request()->routeIs('material-usages.*') => 'Pemakaian Material',
@@ -331,12 +349,12 @@
                         @if ($canViewMitraUsers)
                             <div class="app-shell__nav-group">
                                 <span class="app-shell__nav-label">Mitra &amp; User</span>
-                                @if ($authenticatedUser->hasIzin('manage_mitras'))
+                                @if ($canManageMitras)
                                     <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.mitras')]) href="{{ route('admin.mitras') }}" @if (request()->routeIs('admin.mitras')) aria-current="page" @endif>
                                         <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">MIT</span>Mitra</span>
                                     </a>
                                 @endif
-                                @if ($authenticatedUser->hasIzin('manage_users'))
+                                @if ($canManageUsers)
                                     <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.users')]) href="{{ route('admin.users') }}" @if (request()->routeIs('admin.users')) aria-current="page" @endif>
                                         <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">USR</span>User</span>
                                     </a>
@@ -346,12 +364,18 @@
 
                         @if ($canViewMasterData)
                             <div class="app-shell__nav-group">
-                                <span class="app-shell__nav-label">Material &amp; Unit</span>
+                                <span class="app-shell__nav-label">Master Data</span>
                                 <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.materials')]) href="{{ route('admin.materials') }}" @if (request()->routeIs('admin.materials')) aria-current="page" @endif>
                                     <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">MAT</span>Material</span>
                                 </a>
-                                <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.master.*')]) href="{{ route('admin.master.index', ['entity' => 'units']) }}" @if (request()->routeIs('admin.master.*')) aria-current="page" @endif>
-                                    <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">UNT</span>Unit &amp; master data</span>
+                                <a @class(['app-shell__nav-link', 'is-active' => $activeMasterEntity === 'units']) href="{{ route('admin.master.index', ['entity' => 'units']) }}" @if ($activeMasterEntity === 'units') aria-current="page" @endif>
+                                    <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">UNT</span>Unit</span>
+                                </a>
+                                <a @class(['app-shell__nav-link', 'is-active' => $activeMasterEntity === 'pops']) href="{{ route('admin.master.index', ['entity' => 'pops']) }}" @if ($activeMasterEntity === 'pops') aria-current="page" @endif>
+                                    <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">POP</span>PoP</span>
+                                </a>
+                                <a @class(['app-shell__nav-link', 'is-active' => $activeMasterEntity === 'pekerjaan-jasa']) href="{{ route('admin.master.index', ['entity' => 'pekerjaan-jasa']) }}" @if ($activeMasterEntity === 'pekerjaan-jasa') aria-current="page" @endif>
+                                    <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">JS</span>Pekerjaan Jasa</span>
                                 </a>
                             </div>
                         @endif
@@ -359,12 +383,12 @@
                         @if ($canViewWarehouse)
                             <div class="app-shell__nav-group">
                                 <span class="app-shell__nav-label">Warehouse</span>
-                                @if ($isThcUser && $authenticatedUser->hasIzin('manage_warehouses'))
+                                @if ($canManageWarehouses)
                                     <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.warehouses')]) href="{{ route('admin.warehouses') }}" @if (request()->routeIs('admin.warehouses')) aria-current="page" @endif>
                                         <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">WH</span>Penugasan Warehouse</span>
                                     </a>
                                 @endif
-                                @if ($authenticatedUser->hasIzin('operate_warehouse'))
+                                @if ($canOperateWarehouse)
                                     <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('warehouse.*')]) href="{{ route('warehouse.transit') }}" @if (request()->routeIs('warehouse.*')) aria-current="page" @endif>
                                         <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">↔</span>Surat Jalan &amp; Transit</span>
                                     </a>

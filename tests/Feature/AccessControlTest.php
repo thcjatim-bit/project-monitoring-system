@@ -59,7 +59,7 @@ class AccessControlTest extends TestCase
             ->assertSee('app-shell__sidebar', false)
             ->assertSee('Pusat kerja', false)
             ->assertSee('Mitra &amp; User', false)
-            ->assertSee('Material &amp; Unit', false)
+            ->assertSee('Master Data', false)
             ->assertSee('Warehouse', false)
             ->assertSee('Pemakaian Material', false)
             ->assertSee('Rekon Material tersedia dari detail Project', false)

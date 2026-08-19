@@ -297,7 +297,12 @@
                 @endif
             </article>
             <article class="control-room__panel control-room__materials" id="project-materials">
-                <h2>Kesiapan Material</h2>
+                <div class="control-room__actions">
+                    <h2>Kesiapan Material</h2>
+                    @if (auth()->user()->hasIzin('read_material_rekon'))
+                        <a class="control-room__button control-room__button--muted" href="{{ route('projects.rekons.index', $project) }}">Rekon Material</a>
+                    @endif
+                </div>
                 <p>Material yang masih Transit tidak dihitung sebagai material siap pakai.</p>
                 @if ($material['state'] === 'forbidden')
                     <div class="control-room__state">Data kesiapan material memerlukan izin baca modul material.</div>
