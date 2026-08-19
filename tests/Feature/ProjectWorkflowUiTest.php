@@ -8,12 +8,13 @@ use App\Models\Material;
 use App\Models\Mitra;
 use App\Models\MitraHargaJasa;
 use App\Models\PekerjaanJasa;
+use App\Models\PemakaianMaterial;
 use App\Models\Pks;
 use App\Models\Project;
 use App\Models\ProjectRekon;
-use App\Models\PemakaianMaterial;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Support\TenantDatabaseContext;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
@@ -147,12 +148,12 @@ class ProjectWorkflowUiTest extends TestCase
 
     private function asThc(\Closure $callback): mixed
     {
-        app(\App\Support\TenantDatabaseContext::class)->set(null, true);
+        app(TenantDatabaseContext::class)->set(null, true);
 
         try {
             return $callback();
         } finally {
-            app(\App\Support\TenantDatabaseContext::class)->set(null, false);
+            app(TenantDatabaseContext::class)->set(null, false);
         }
     }
 }
