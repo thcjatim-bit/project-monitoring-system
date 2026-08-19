@@ -21,7 +21,7 @@
                 <input name="name" value="{{ old('form_context') === 'user_'.$user->id ? old('name') : $user->name }}" required>
                 <input name="email" type="email" value="{{ old('form_context') === 'user_'.$user->id ? old('email') : $user->email }}" required>
                 <input name="no_wa" value="{{ old('form_context') === 'user_'.$user->id ? old('no_wa') : $user->no_wa }}" placeholder="628..." required>
-                <select name="mitra_id"><option value="">THC</option>@foreach($mitras as $mitra)<option value="{{ $mitra->id }}" @selected((string) (old('form_context') === 'user_'.$user->id ? old('mitra_id') : $user->mitra_id) === (string) $mitra->id)>{{ $mitra->nama }}</option>@endforeach</select>
+                <select name="mitra_id"><option value="">THC</option>@foreach($editableMitras as $mitra)<option value="{{ $mitra->id }}" @selected((string) (old('form_context') === 'user_'.$user->id ? old('mitra_id') : $user->mitra_id) === (string) $mitra->id)>{{ $mitra->nama }}</option>@endforeach</select>
                 <select name="grup_id" required>@foreach($grups as $grup)<option value="{{ $grup->id }}" @selected((string) (old('form_context') === 'user_'.$user->id ? old('grup_id') : $user->grup_id) === (string) $grup->id)>{{ $grup->nama }}</option>@endforeach</select>
                 <button>Simpan User</button>
             </form>

@@ -32,7 +32,8 @@ class AdminController extends Controller
         return view('admin.users', [
             'users' => User::with(['mitra', 'grup'])->latest()->get(),
             'grups' => Grup::orderBy('nama')->get(),
-            'mitras' => Mitra::where(fn ($query) => $query->where('aktif', true)->orWhereIn('id', $mitraIds))->orderBy('nama')->get(),
+            'mitras' => Mitra::where('aktif', true)->orderBy('nama')->get(),
+            'editableMitras' => Mitra::where(fn ($query) => $query->where('aktif', true)->orWhereIn('id', $mitraIds))->orderBy('nama')->get(),
         ]);
     }
 
