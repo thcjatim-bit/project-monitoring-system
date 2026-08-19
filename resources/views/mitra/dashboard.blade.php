@@ -67,14 +67,16 @@
             </section>
         @endif
 
-        <section aria-labelledby="transit-summary-title">
-            <h2 id="transit-summary-title">Transit</h2>
-            @forelse ($transits as $transit)
-                <p><a href="{{ route('warehouse.transfers.print', $transit) }}">{{ $transit->nomor }}</a> · {{ $transit->origin?->nama }} → {{ $transit->destination?->nama }} · Terbit</p>
-            @empty
-                <p>Tidak ada Transit aktif.</p>
-            @endforelse
-        </section>
+        @if ($user->hasIzin('read_transit'))
+            <section aria-labelledby="transit-summary-title">
+                <h2 id="transit-summary-title">Transit</h2>
+                @forelse ($transits as $transit)
+                    <p><a href="{{ route('warehouse.transfers.print', $transit) }}">{{ $transit->nomor }}</a> · {{ $transit->origin?->nama }} → {{ $transit->destination?->nama }} · Terbit</p>
+                @empty
+                    <p>Tidak ada Transit aktif.</p>
+                @endforelse
+            </section>
+        @endif
 
         @if ($user->hasIzin('read_project_timeline'))
             <section aria-labelledby="activity-summary-title">

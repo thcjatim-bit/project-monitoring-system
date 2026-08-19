@@ -34,6 +34,7 @@ class AccessControlSeeder extends Seeder
             'manage_warehouses' => 'Mengelola Warehouse',
             'manage_materials' => 'Mengelola Material',
             'operate_warehouse' => 'Mengoperasikan Warehouse',
+            'read_transit' => 'Membaca Transit',
             'manage_master_data' => 'Mengelola Master Data',
             'read_master_data' => 'Melihat Master Data',
             'read_material_request' => 'Melihat Request Material',
@@ -57,7 +58,7 @@ class AccessControlSeeder extends Seeder
             'pm' => ['nama' => 'PM', 'izins' => ['read_dashboard', 'read_project', 'create_project', 'update_project', 'manage_project_plan', 'read_project_progress', 'verify_project_progress', 'update_project_step', 'read_project_material', 'manage_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'read_material_usage', 'approve_material_usage', 'read_material_rekon', 'create_material_rekon', 'edit_material_rekon', 'approve_material_rekon']],
             'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon']],
             'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'read_project_material', 'read_project_timeline', 'read_master_data']],
-            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'create_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon']],
+            'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'create_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon', 'read_transit']],
         ];
 
         foreach ($matriks as $preset => $definition) {

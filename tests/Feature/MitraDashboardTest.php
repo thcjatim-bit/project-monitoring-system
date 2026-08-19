@@ -34,6 +34,16 @@ class MitraDashboardTest extends TestCase
             ->assertDontSee('Command Center THC');
     }
 
+    public function test_mitra_dashboard_hides_transit_without_read_transit_permission(): void
+    {
+        $user = $this->mitraUser(['read_dashboard']);
+
+        $this->actingAs($user)
+            ->get(route('mitra.dashboard'))
+            ->assertOk()
+            ->assertDontSee('id="transit-summary-title"', false);
+    }
+
     public function test_mitra_without_dashboard_permission_gets_a_clear_safe_landing(): void
     {
         $user = $this->mitraUser([]);

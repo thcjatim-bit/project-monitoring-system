@@ -51,12 +51,14 @@ class MitraDashboardQuery
             'usages' => $actor->hasIzin('read_material_usage')
                 ? PemakaianMaterial::query()->with(['project', 'material.unit', 'warehouse'])->latest()->limit(8)->get()
                 : new EloquentCollection,
-            'transits' => SuratJalan::query()
-                ->where('status', 'terbit')
-                ->with(['origin', 'destination', 'project'])
-                ->latest('issued_at')
-                ->limit(8)
-                ->get(),
+            'transits' => $actor->hasIzin('read_transit')
+                ? SuratJalan::query()
+                    ->where('status', 'terbit')
+                    ->with(['origin', 'destination', 'project'])
+                    ->latest('issued_at')
+                    ->limit(8)
+                    ->get()
+                : new EloquentCollection,
             'activities' => $actor->hasIzin('read_project_timeline')
                 ? ProjectTimeline::query()->where('type', '!=', 'internal_note')->with(['project', 'actor'])->latest()->limit(8)->get()
                 : new EloquentCollection,

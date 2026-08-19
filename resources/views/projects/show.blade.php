@@ -389,9 +389,7 @@
             <article class="control-room__panel control-room__installation" id="project-material-installation">
                 <h2>Material Terpasang</h2>
                 <p>Catat material dari saldo Project menjadi terpasang. Pengajuan Pemakaian Material yang masih Pending tidak dapat dipasang.</p>
-                @if (! $canReadInstallation)
-                    <div class="control-room__state">Riwayat Material Terpasang memerlukan izin baca modul material.</div>
-                @elseif ($installationHistory->isEmpty())
+                @if ($installationHistory->isEmpty())
                     <div class="control-room__state">Belum ada riwayat Material terpasang untuk Project ini.</div>
                 @else
                     <ul class="control-room__material-list" aria-label="Riwayat Material Terpasang">
