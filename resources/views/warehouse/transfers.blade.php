@@ -1,11 +1,11 @@
 <x-layouts.app>
 <main class="ui-page">
-    <header class="ui-page__header"><div><p class="ui-page__eyebrow">Warehouse</p><h1>Surat Jalan</h1><p class="ui-page__subtitle">Pantau dokumen perpindahan, status Transit, penerimaan sebagian, retur, dan penyelesaian selisih.</p></div><div class="ui-page__actions"><a class="ui-button" href="{{ route('warehouse.index') }}">Operasional Material</a><a class="ui-button ui-button--muted" href="{{ route('warehouse.transit') }}">Transit</a></div></header>
+    <header class="ui-page__header"><div><p class="ui-page__eyebrow">Warehouse</p><h1>Surat Jalan</h1><p class="ui-page__subtitle">Pantau dokumen perpindahan, status Transit, penerimaan sebagian, retur, dan penyelesaian selisih.</p></div><div class="ui-page__actions">@if (! $readOnlyTransit)<a class="ui-button" href="{{ route('warehouse.index') }}">Operasional Material</a><a class="ui-button ui-button--muted" href="{{ route('warehouse.transit') }}">Transit</a>@endif</div></header>
     <x-form-errors />
     @if(session('status'))<div class="ui-state ui-state--success" role="status">{{ session('status') }}</div>@endif
     <div class="ui-state ui-state--loading" role="status" aria-live="polite" data-transfers-loading hidden>Memuat daftar Surat Jalan…</div>
     @if($transfers->isEmpty())
-        <div class="ui-state" role="status"><strong>Belum ada Surat Jalan yang terkait Warehouse tugas Anda.</strong><br>Terbitkan Surat Jalan dari halaman Operasional Material setelah memiliki dua Warehouse aktif yang ditugaskan.</div>
+        <div class="ui-state" role="status"><strong>{{ $readOnlyTransit ? 'Belum ada Surat Jalan untuk Mitra Anda.' : 'Belum ada Surat Jalan yang terkait Warehouse tugas Anda.' }}</strong>@if (! $readOnlyTransit)<br>Terbitkan Surat Jalan dari halaman Operasional Material setelah memiliki dua Warehouse aktif yang ditugaskan.@endif</div>
     @else
         <section class="ui-panel"><div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Rute</th><th>Item</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
         @foreach($transfers as $transfer)

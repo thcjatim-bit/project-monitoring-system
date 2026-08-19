@@ -1,6 +1,6 @@
 <x-layouts.app>
 <main class="ui-page">
-    <header class="ui-page__header"><div><p class="ui-page__eyebrow">Warehouse</p><h1>Material dalam Transit</h1><p class="ui-page__subtitle">Material di bawah masih berada dalam perjalanan dan belum dihitung sebagai stok Warehouse tujuan.</p></div><div class="ui-page__actions"><a class="ui-button" href="{{ route('warehouse.index') }}">Operasional Material</a><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.index') }}">Daftar Surat Jalan</a></div></header>
+    <header class="ui-page__header"><div><p class="ui-page__eyebrow">Warehouse</p><h1>Material dalam Transit</h1><p class="ui-page__subtitle">Material di bawah masih berada dalam perjalanan dan belum dihitung sebagai stok Warehouse tujuan.</p></div><div class="ui-page__actions">@if (! $readOnlyTransit)<a class="ui-button" href="{{ route('warehouse.index') }}">Operasional Material</a>@endif<a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.index') }}">Daftar Surat Jalan</a></div></header>
     <x-form-errors />
     @if(session('status'))<div class="ui-state ui-state--success" role="status">{{ session('status') }}</div>@endif
     <div class="ui-state ui-state--loading" role="status" aria-live="polite" data-transit-loading hidden>Memuat data Transit…</div>

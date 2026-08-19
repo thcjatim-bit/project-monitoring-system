@@ -20,19 +20,30 @@ class SuratJalanController extends Controller
 {
     public function index(Request $request): View
     {
-        $warehouses = $this->assignedWarehouses($request);
-        $warehouseIds = $warehouses->modelKeys();
+        $readOnlyTransit = $request->user()->mitra_id !== null
+            && $request->user()->hasIzin('read_transit')
+            && ! $request->user()->hasIzin('operate_warehouse');
+        $warehouseIds = $readOnlyTransit
+            ? []
+            : $this->assignedWarehouses($request)->modelKeys();
 
-        return view('warehouse.transfers', [
-            'transfers' => SuratJalan::query()
-                ->with(['origin', 'destination', 'items.material.unit'])
-                ->where(function ($query) use ($warehouseIds): void {
+        $transfers = SuratJalan::query()
+            ->with(['origin', 'destination', 'items.material.unit'])
+            ->when(
+                $readOnlyTransit,
+                fn ($query) => $query->where('mitra_id', $request->user()->mitra_id),
+                fn ($query) => $query->where(function ($query) use ($warehouseIds): void {
                     $query->whereIn('warehouse_asal_id', $warehouseIds)
                         ->orWhereIn('warehouse_tujuan_id', $warehouseIds);
-                })
-                ->latest('tanggal')
-                ->latest('id')
-                ->get(),
+                }),
+            )
+            ->latest('tanggal')
+            ->latest('id')
+            ->get();
+
+        return view('warehouse.transfers', [
+            'readOnlyTransit' => $readOnlyTransit,
+            'transfers' => $transfers,
         ]);
     }
 
@@ -164,14 +175,23 @@ class SuratJalanController extends Controller
 
     public function transit(): Response
     {
-        $warehouseIds = $this->assignedWarehouses(request())->modelKeys();
+        $user = request()->user();
+        $readOnlyTransit = $user->mitra_id !== null
+            && $user->hasIzin('read_transit')
+            && ! $user->hasIzin('operate_warehouse');
+        $warehouseIds = $readOnlyTransit ? [] : $this->assignedWarehouses(request())->modelKeys();
 
         return response()->view('warehouse.transit', [
+            'readOnlyTransit' => $readOnlyTransit,
             'stocks' => MaterialStok::query()
                 ->with(['material.unit', 'warehouse'])
                 ->where('lokasi_tipe', 'transit')
                 ->where('qty', '>', 0)
-                ->whereIn('warehouse_id', $warehouseIds)
+                ->when(
+                    $readOnlyTransit,
+                    fn ($query) => $query->where('mitra_id', $user->mitra_id),
+                    fn ($query) => $query->whereIn('warehouse_id', $warehouseIds),
+                )
                 ->orderBy('lokasi_id')
                 ->get(),
         ]);

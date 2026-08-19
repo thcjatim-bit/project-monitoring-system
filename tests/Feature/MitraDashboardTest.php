@@ -103,7 +103,7 @@ class MitraDashboardTest extends TestCase
             ->assertSee('Project aktif')
             ->assertSee('Kesiapan Material Project')
             ->assertSee('Keluar')
-            ->assertDontSee('Portfolio')
+            ->assertSee('Portfolio')
             ->assertDontSee('Simpan perubahan')
             ->assertDontSee('Hapus');
 

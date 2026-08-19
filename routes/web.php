@@ -120,10 +120,10 @@ Route::middleware('auth')->group(function (): void {
     });
     Route::patch('/projects/{project}/step', [ProjectStepController::class, 'update'])->middleware('izin:update_project_step')->name('projects.step.update');
     Route::get('/projects/{project}/rekons', [ProjectRekonController::class, 'index'])
-        ->middleware('izin:read_material_rekon')
+        ->middleware(['izin:read_project', 'izin:read_material_rekon'])
         ->name('projects.rekons.index');
     Route::get('/project-rekons/{projectRekon}', [ProjectRekonController::class, 'show'])
-        ->middleware('izin:read_material_rekon')
+        ->middleware(['izin:read_project', 'izin:read_material_rekon'])
         ->name('project-rekons.show');
     Route::middleware(['thc', 'izin:create_material_rekon'])->group(function (): void {
         Route::post('/projects/{project}/rekons', [ProjectRekonController::class, 'store'])->name('projects.rekons.store');
@@ -206,10 +206,12 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/warehouse/stock/drum-split', [MaterialInventoryController::class, 'splitDrum'])->name('warehouse.stock.drum-split');
         Route::post('/warehouse/transfers', [SuratJalanController::class, 'issue'])->name('warehouse.transfers.issue');
         Route::post('/warehouse/transfers/{suratJalan}/receive', [SuratJalanController::class, 'receive'])->name('warehouse.transfers.receive');
-        Route::get('/warehouse/transit', [SuratJalanController::class, 'transit'])->name('warehouse.transit');
     });
+    Route::get('/warehouse/transit', [SuratJalanController::class, 'transit'])
+        ->middleware('transit.read')
+        ->name('warehouse.transit');
     Route::get('/warehouse/transfers', [SuratJalanController::class, 'index'])
-        ->middleware('izin:operate_warehouse')
+        ->middleware('transit.read')
         ->name('warehouse.transfers.index');
     Route::get('/warehouse/transfers/{suratJalan}', [SuratJalanController::class, 'show'])
         ->middleware('transit.read')
