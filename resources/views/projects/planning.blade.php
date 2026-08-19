@@ -38,6 +38,9 @@
             </div>
             <div class="project-workspace__actions">
                 <a class="project-workspace__button project-workspace__button--muted" href="{{ route('projects.show', $project) }}">Control Room</a>
+                <a class="project-workspace__button project-workspace__button--muted" href="#rab-jasa">Detail RAB Jasa</a>
+                <a class="project-workspace__button project-workspace__button--muted" href="#baseline-toc">Detail Baseline / TOC</a>
+                <a class="project-workspace__button project-workspace__button--muted" href="#variation-orders">Detail Variation Order</a>
                 @if (auth()->user()->hasIzin('read_project_timeline'))
                     <a class="project-workspace__button project-workspace__button--muted" href="{{ route('projects.timeline.index', $project) }}">Linimasa</a>
                 @endif
@@ -53,7 +56,7 @@
         @endif
 
         <section class="project-workspace__grid">
-            <article class="project-workspace__panel project-workspace__panel--wide">
+            <article class="project-workspace__panel project-workspace__panel--wide" id="rab-jasa">
                 <h2>RAB Jasa</h2>
                 <p>Harga satuan dibekukan ketika baris RAB dibuat. Perubahan di tengah jalan dicatat melalui Variation Order.</p>
                 @if ($rabJasas->isEmpty())
@@ -63,7 +66,7 @@
                         <thead><tr><th>Pekerjaan Jasa</th><th>Qty</th><th>Harga satuan beku</th><th>Total nilai</th></tr></thead>
                         <tbody>
                             @foreach ($rabJasas as $rab)
-                                <tr><td>{{ $rab->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa' }} @if ($rab->variation_order_id)<small>Dari Variation Order #{{ $rab->variation_order_id }}</small>@endif</td><td>{{ number_format((float) $rab->qty, 3, '.', '') }}</td><td>Rp {{ number_format((float) $rab->harga_satuan, 2, ',', '.') }}</td><td>Rp {{ number_format((float) $rab->total_nilai, 2, ',', '.') }}</td></tr>
+                                <tr><td>{{ $rab->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa' }} @if ($rab->variation_order_id)<small>Dari Variation Order #{{ $rab->variation_order_id }}</small>@endif<br><details><summary>Detail RAB Jasa</summary><small>Baris #{{ $rab->id }} · harga dibekukan saat dibuat oleh #{{ $rab->dibuat_oleh ?? 'User' }}</small></details></td><td>{{ number_format((float) $rab->qty, 3, '.', '') }}</td><td>Rp {{ number_format((float) $rab->harga_satuan, 2, ',', '.') }}</td><td>Rp {{ number_format((float) $rab->total_nilai, 2, ',', '.') }}</td></tr>
                             @endforeach
                         </tbody>
                     </table>
@@ -86,13 +89,13 @@
                 @endif
             </article>
 
-            <article class="project-workspace__panel">
+            <article class="project-workspace__panel" id="baseline-toc">
                 <h2>Baseline / TOC</h2>
                 <p>TOC berada di level Project. Baseline berikutnya menjadi Revised Baseline dan tidak mengubah Original Baseline.</p>
                 @if ($baselines->isEmpty())
                     <div class="project-workspace__state">Belum ada baseline. Baseline pertama akan menjadi Original Baseline.</div>
                 @else
-                    <table class="project-workspace__table"><thead><tr><th>Jenis / versi</th><th>TOC</th><th>Titik rencana</th></tr></thead><tbody>@foreach ($baselines as $baseline)<tr><td>{{ $baseline->kind === 'original' ? 'Original Baseline' : 'Revised Baseline' }} v{{ $baseline->version }}</td><td>{{ $baseline->toc->format('d M Y') }}</td><td>{{ $baseline->days->count() }} titik hingga {{ number_format((float) $baseline->days->last()?->cumulative_percent, 2, '.', '') }}%</td></tr>@endforeach</tbody></table>
+                    <table class="project-workspace__table"><thead><tr><th>Jenis / versi</th><th>TOC</th><th>Titik rencana</th></tr></thead><tbody>@foreach ($baselines as $baseline)<tr><td>{{ $baseline->kind === 'original' ? 'Original Baseline' : 'Revised Baseline' }} v{{ $baseline->version }}<br><details><summary>Detail Baseline / TOC</summary><small>Baseline #{{ $baseline->id }} · supersedes #{{ $baseline->supersedes_id ?? 'tidak ada' }}</small></details></td><td>{{ $baseline->toc->format('d M Y') }}</td><td>{{ $baseline->days->count() }} titik hingga {{ number_format((float) $baseline->days->last()?->cumulative_percent, 2, '.', '') }}%</td></tr>@endforeach</tbody></table>
                 @endif
                 @if ($canManage)
                     <form class="project-workspace__form" method="POST" action="{{ route('projects.plan.update', $project) }}">
@@ -109,14 +112,14 @@
                 @endif
             </article>
 
-            <article class="project-workspace__panel">
+            <article class="project-workspace__panel" id="variation-orders">
                 <h2>Variation Order</h2>
                 <p>Gunakan qty negatif untuk mengurangi baris RAB existing, atau qty positif dengan Harga Jasa Mitra baru untuk menambah pekerjaan.</p>
                 @if ($variationOrders->isEmpty())
                     <div class="project-workspace__state">Belum ada Variation Order.</div>
                 @else
                     @foreach ($variationOrders as $variation)
-                        <div class="project-workspace__state"><strong>{{ $variation->nomor }}</strong> <span class="project-workspace__badge {{ $variation->status === 'approved' ? 'project-workspace__badge--approved' : '' }}">{{ $variation->status }}</span><br>{{ $variation->alasan }}<small>{{ $variation->items->map(fn ($item) => ($item->rabJasa?->pekerjaanJasa?->nama ?? $item->hargaJasaMitra?->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa').' '.number_format((float) $item->quantity_delta, 3, '.', ''))->join(', ') }}</small>@if ($canManage && $variation->status === 'draft')<form method="POST" action="{{ route('projects.variation-orders.approve', [$project, $variation]) }}" style="margin-top:9px">@csrf @method('PATCH')<button class="project-workspace__button" type="submit">Setujui Variation Order</button></form>@endif</div>
+                        <div class="project-workspace__state"><strong>{{ $variation->nomor }}</strong> <span class="project-workspace__badge {{ $variation->status === 'approved' ? 'project-workspace__badge--approved' : '' }}">{{ $variation->status }}</span><br><details open><summary>Detail Variation Order</summary>{{ $variation->alasan }}<small>{{ $variation->items->map(fn ($item) => ($item->rabJasa?->pekerjaanJasa?->nama ?? $item->hargaJasaMitra?->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa').' '.number_format((float) $item->quantity_delta, 3, '.', ''))->join(', ') }}</small></details>@if ($canManage && $variation->status === 'draft')<form method="POST" action="{{ route('projects.variation-orders.approve', [$project, $variation]) }}" style="margin-top:9px">@csrf @method('PATCH')<button class="project-workspace__button" type="submit">Setujui Variation Order</button></form>@endif</div>
                     @endforeach
                 @endif
                 @if ($canManage)

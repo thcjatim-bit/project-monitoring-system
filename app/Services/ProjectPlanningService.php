@@ -26,6 +26,7 @@ class ProjectPlanningService
             $price = MitraHargaJasa::query()
                 ->where('mitra_id', $project->mitra_id)
                 ->where('status', 'disetujui')
+                ->whereDate('berlaku_mulai', '<=', today())
                 ->find($hargaJasaId);
 
             if ($price === null) {
@@ -153,6 +154,7 @@ class ProjectPlanningService
                     $price = MitraHargaJasa::query()
                         ->where('mitra_id', $project->mitra_id)
                         ->where('status', 'disetujui')
+                        ->whereDate('berlaku_mulai', '<=', today())
                         ->find($item['harga_jasa_id']);
                     if ($price === null) {
                         throw ValidationException::withMessages(['items' => 'Penambahan RAB hanya boleh memakai Harga Jasa Mitra yang disetujui.']);

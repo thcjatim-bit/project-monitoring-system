@@ -51,6 +51,12 @@
                             <select name="material_id" required><option value="">Pilih Material</option>@foreach ($materials as $material)<option value="{{ $material->id }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit?->nama }})</option>@endforeach</select>
                         </label>
                         <label>Qty <input name="qty" type="number" min="0.001" step="0.001" required></label>
+                        <label>Serial Number (material ber-SN)
+                            <select name="material_sn_id"><option value="">Tidak memakai SN</option>@foreach ($serialNumbers as $serial)<option value="{{ $serial->id }}">{{ $serial->serial_number }} — {{ $serial->material?->nama }}</option>@endforeach</select>
+                        </label>
+                        <label>Drum (material drum kabel)
+                            <select name="drum_id"><option value="">Tidak memakai Drum</option>@foreach ($drums as $drum)<option value="{{ $drum->id }}">{{ $drum->drum_id }} — {{ $drum->material?->nama }} (sisa {{ number_format((float) $drum->sisa, 3, '.', '') }})</option>@endforeach</select>
+                        </label>
                         <label>Catatan <input name="catatan" maxlength="2000"></label>
                     </div>
                     <button class="module-page__button" type="submit">Ajukan Pemakaian</button>

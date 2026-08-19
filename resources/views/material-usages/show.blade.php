@@ -25,6 +25,8 @@
                 <div><dt>Material</dt><dd>{{ $usage->material?->nama ?? 'Material' }}</dd></div>
                 <div><dt>Qty</dt><dd>{{ number_format((float) $usage->qty, 3, '.', '') }} {{ $usage->material?->unit?->nama }}</dd></div>
                 <div><dt>Warehouse asal</dt><dd>{{ $usage->warehouse?->nama ?? 'Warehouse' }}</dd></div>
+                <div><dt>Serial Number</dt><dd>{{ $usage->serialNumber?->serial_number ?? 'Tidak ada' }}</dd></div>
+                <div><dt>Drum</dt><dd>{{ $usage->drum?->drum_id ?? 'Tidak ada' }}</dd></div>
                 <div><dt>Diajukan oleh</dt><dd>{{ $usage->requester?->name ?? 'User' }}</dd></div>
                 <div><dt>Diputuskan oleh</dt><dd>{{ $usage->decider?->name ?? 'Belum diputuskan' }}</dd></div>
             </dl>

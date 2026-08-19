@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Material;
+use App\Models\MaterialSn;
+use App\Models\Drum;
 use App\Models\PemakaianMaterial;
 use App\Models\Project;
 use App\Models\Warehouse;
@@ -85,6 +87,9 @@ class MaterialUsageController extends Controller
             $warehouseQuery->where('mitra_id', $user->mitra_id);
         }
 
+        $warehouses = $warehouseQuery->get();
+        $warehouseIds = $warehouses->modelKeys();
+
         return [
             'project' => $project,
             'usages' => PemakaianMaterial::query()
@@ -93,7 +98,21 @@ class MaterialUsageController extends Controller
                 ->latest()
                 ->get(),
             'projects' => $projects,
-            'warehouses' => $warehouseQuery->get(),
+            'warehouses' => $warehouses,
+            'serialNumbers' => MaterialSn::query()
+                ->where('status', 'tersedia')
+                ->where('lokasi_tipe', 'warehouse')
+                ->whereIn('lokasi_id', $warehouseIds)
+                ->with('material')
+                ->orderBy('serial_number')
+                ->get(),
+            'drums' => Drum::query()
+                ->where('lokasi_tipe', 'warehouse')
+                ->where('sisa', '>', 0)
+                ->whereIn('lokasi_id', $warehouseIds)
+                ->with('material')
+                ->orderBy('drum_id')
+                ->get(),
             'materials' => Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get(),
         ];
     }
