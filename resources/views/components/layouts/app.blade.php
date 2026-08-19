@@ -65,6 +65,16 @@
                     @if (auth()->user()->hasIzin('read_material_request'))
                         <a href="{{ route('material-requests.index') }}">Request Material</a>
                     @endif
+                    @if (auth()->user()->hasIzin('read_master_data'))
+                        <a href="{{ route('admin.materials') }}" @if (request()->routeIs('admin.materials')) aria-current="page" @endif>Material</a>
+                        <a href="{{ route('admin.master.index', 'units') }}" @if (request()->routeIs('admin.master.index') && request()->route('entity') === 'units') aria-current="page" @endif>Unit/Satuan</a>
+                    @endif
+                    @if (auth()->user()->hasIzin('manage_warehouses') && auth()->user()->mitra_id === null)
+                        <a href="{{ route('admin.warehouses') }}" @if (request()->routeIs('admin.warehouses')) aria-current="page" @endif>Assignment Warehouse</a>
+                    @endif
+                    @if (auth()->user()->hasIzin('operate_warehouse'))
+                        <a href="{{ route('warehouse.index') }}" @if (request()->routeIs('warehouse.index', 'warehouse.transfers.*', 'warehouse.transit')) aria-current="page" @endif>Operasional Material</a>
+                    @endif
                 </nav>
                 <div class="app-shell__user">
                     <span>{{ auth()->user()->name }}</span>

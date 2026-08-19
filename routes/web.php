@@ -194,6 +194,7 @@ Route::middleware('auth')->group(function (): void {
     });
     Route::post('/webhooks/waha', [AdminController::class, 'wahaWebhook'])->withoutMiddleware(['web']);
     Route::middleware('izin:operate_warehouse')->group(function (): void {
+        Route::get('/warehouse', [MaterialInventoryController::class, 'index'])->name('warehouse.index');
         Route::post('/warehouse/stock/receive', [MaterialInventoryController::class, 'receive'])->name('warehouse.stock.receive');
         Route::post('/warehouse/stock/issue', [MaterialInventoryController::class, 'issue'])->name('warehouse.stock.issue');
         Route::post('/warehouse/stock/drum-split', [MaterialInventoryController::class, 'splitDrum'])->name('warehouse.stock.drum-split');
@@ -201,6 +202,12 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/warehouse/transfers/{suratJalan}/receive', [SuratJalanController::class, 'receive'])->name('warehouse.transfers.receive');
         Route::get('/warehouse/transit', [SuratJalanController::class, 'transit'])->name('warehouse.transit');
     });
+    Route::get('/warehouse/transfers', [SuratJalanController::class, 'index'])
+        ->middleware('izin:operate_warehouse')
+        ->name('warehouse.transfers.index');
+    Route::get('/warehouse/transfers/{suratJalan}', [SuratJalanController::class, 'show'])
+        ->middleware('transit.read')
+        ->name('warehouse.transfers.show');
     Route::get('/warehouse/transfers/{suratJalan}/print', [SuratJalanController::class, 'print'])
         ->middleware('transit.read')
         ->name('warehouse.transfers.print');

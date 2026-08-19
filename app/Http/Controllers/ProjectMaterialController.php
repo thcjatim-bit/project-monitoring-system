@@ -3,17 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Rules\ActiveMaterial;
 use App\Services\ProjectMaterialService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ProjectMaterialController extends Controller
 {
     public function store(Request $request, Project $project, ProjectMaterialService $service): RedirectResponse
     {
         $data = $request->validate([
-            'material_id' => ['required', 'integer', Rule::exists('materials', 'id')->where('aktif', true)],
+            'material_id' => ['required', 'integer', new ActiveMaterial],
             'qty' => ['required', 'numeric', 'gt:0'],
             'catatan' => ['nullable', 'string', 'max:1000'],
         ]);

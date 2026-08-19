@@ -72,7 +72,7 @@ class ProjectControlRoomQuery
             'canReadProgress' => $canReadProgress,
             'material' => $material,
             'materials' => $viewer?->hasIzin('manage_project_material') || $viewer === null
-                ? Material::query()->with('unit')->where('aktif', true)->orderBy('nama')->get()
+                ? Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get()
                 : new Collection,
             'photos' => ProjectPhoto::query()->with(['step', 'uploader'])->where('project_id', $project->id)->latest()->get(),
             'mentionableUsers' => $viewer?->hasIzin('mention_project_user')

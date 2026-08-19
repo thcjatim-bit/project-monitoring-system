@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\MaterialFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,12 @@ class Material extends Model
     protected function casts(): array
     {
         return ['aktif' => 'boolean', 'ambang_minimum' => 'decimal:3'];
+    }
+
+    public function scopeActiveWithUnit(Builder $query): Builder
+    {
+        return $query->where('aktif', true)
+            ->whereHas('unit', fn ($unitQuery) => $unitQuery->where('aktif', true));
     }
 
     public function stocks(): HasMany

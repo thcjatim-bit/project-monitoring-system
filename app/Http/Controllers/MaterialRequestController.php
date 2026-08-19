@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Material;
 use App\Models\MaterialRequest;
 use App\Models\Project;
+use App\Rules\ActiveMaterial;
 use App\Services\MaterialRequestService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class MaterialRequestController extends Controller
     {
         return view('material-requests.index', [
             'requests' => MaterialRequest::query()->with(['items.material.unit', 'requester', 'decider'])->latest()->get(),
-            'materials' => Material::query()->with('unit')->where('aktif', true)->whereHas('unit', fn ($query) => $query->where('aktif', true))->orderBy('nama')->get(),
+            'materials' => Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get(),
             'projects' => Project::query()->latest()->get(),
         ]);
     }
@@ -37,7 +38,7 @@ class MaterialRequestController extends Controller
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('mitra_id', $request->user()->mitra_id)],
             'catatan' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.material_id' => ['required', 'integer', Rule::exists('materials', 'id')->where('aktif', true)],
+            'items.*.material_id' => ['required', 'integer', new ActiveMaterial],
             'items.*.qty' => ['required', 'numeric', 'gt:0'],
             'items.*.catatan' => ['nullable', 'string', 'max:1000'],
         ]);

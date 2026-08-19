@@ -299,6 +299,12 @@
             <article class="control-room__panel control-room__materials" id="project-materials">
                 <h2>Kesiapan Material</h2>
                 <p>Material yang masih Transit tidak dihitung sebagai material siap pakai.</p>
+                @if ($errors->any())
+                    <div class="control-room__state control-room__state--error" role="alert">
+                        <strong>Periksa form Material.</strong>
+                        <ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+                    </div>
+                @endif
                 @if ($material['state'] === 'forbidden')
                     <div class="control-room__state">Data kesiapan material memerlukan izin baca modul material.</div>
                 @elseif ($material['state'] === 'empty')
@@ -336,20 +342,24 @@
                     </ul>
                 @endif
                 @if (auth()->user()->hasIzin('manage_project_material'))
-                    <form class="control-room__material-form" method="POST" action="{{ route('projects.rab-material.store', $project) }}">
-                        @csrf
-                        <label>Material
-                            <select name="material_id" required>
-                                @foreach ($materials as $availableMaterial)
-                                    <option value="{{ $availableMaterial->id }}">{{ $availableMaterial->kode }} — {{ $availableMaterial->nama }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                        <label>Qty kebutuhan
-                            <input type="number" name="qty" min="0.001" step="0.001" required>
-                        </label>
-                        <button class="control-room__button" type="submit">Tambah kebutuhan</button>
-                    </form>
+                    @if ($materials->isEmpty())
+                        <div class="control-room__state" role="status"><strong>Belum ada Material dengan Unit/Satuan aktif.</strong><br>Aktifkan Unit/Satuan dan Material sebelum menyusun RAB Material.@if (auth()->user()->hasIzin('read_master_data')) <a href="{{ route('admin.master.index', 'units') }}">Kelola Unit/Satuan</a>.@endif</div>
+                    @else
+                        <form class="control-room__material-form" method="POST" action="{{ route('projects.rab-material.store', $project) }}" data-submit-loading>
+                            @csrf
+                            <label>Material
+                                <select name="material_id" required><option value="">Pilih Material</option>
+                                    @foreach ($materials as $availableMaterial)
+                                        <option value="{{ $availableMaterial->id }}" @selected(old('material_id') == $availableMaterial->id)>{{ $availableMaterial->kode }} — {{ $availableMaterial->nama }} ({{ $availableMaterial->unit->nama }})</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label>Qty kebutuhan
+                                <input type="number" name="qty" min="0.001" step="0.001" value="{{ old('qty') }}" required>
+                            </label>
+                            <button class="control-room__button" type="submit">Tambah kebutuhan</button>
+                        </form>
+                    @endif
                 @endif
             </article>
             <article class="control-room__panel control-room__photos" id="project-photos">

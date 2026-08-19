@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Rules\ActiveMaterial;
 use App\Services\ProjectMaterialInstallationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ class ProjectMaterialInstallationController extends Controller
     {
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('mitra_id', $request->user()->mitra_id)],
-            'material_id' => ['required', 'integer', 'exists:materials,id'],
+            'material_id' => ['required', 'integer', new ActiveMaterial],
             'material_sn_id' => ['nullable', 'integer', 'exists:material_sns,id'],
             'drum_id' => ['nullable', 'integer', 'exists:drums,id'],
             'qty' => ['required', 'numeric', 'gt:0'],

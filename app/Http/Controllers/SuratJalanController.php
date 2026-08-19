@@ -6,16 +6,60 @@ use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
 use App\Models\SuratJalan;
 use App\Models\Warehouse;
+use App\Rules\ActiveMaterial;
 use App\Services\SuratJalanService;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
+use Illuminate\View\View;
 
 class SuratJalanController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $warehouses = $this->assignedWarehouses($request);
+        $warehouseIds = $warehouses->modelKeys();
+
+        return view('warehouse.transfers', [
+            'transfers' => SuratJalan::query()
+                ->with(['origin', 'destination', 'items.material.unit'])
+                ->where(function ($query) use ($warehouseIds): void {
+                    $query->whereIn('warehouse_asal_id', $warehouseIds)
+                        ->orWhereIn('warehouse_tujuan_id', $warehouseIds);
+                })
+                ->latest('tanggal')
+                ->latest('id')
+                ->get(),
+        ]);
+    }
+
+    public function show(Request $request, SuratJalan $suratJalan): View
+    {
+        $suratJalan->load([
+            'origin', 'destination', 'mitra', 'issuer', 'receiver',
+            'returnedFrom', 'items.material.unit', 'items.serialNumber', 'items.drum',
+        ]);
+        $canOperateOrigin = $request->user()->canOperateWarehouse($suratJalan->origin, 'operate_warehouse');
+        $canOperateDestination = $request->user()->canOperateWarehouse($suratJalan->destination, 'operate_warehouse');
+
+        abort_unless($canOperateOrigin || $canOperateDestination || $request->user()->hasIzin('read_dashboard'), 403);
+
+        return view('warehouse.transfer-show', [
+            'suratJalan' => $suratJalan,
+            'transactions' => MaterialTransaksi::query()
+                ->with(['material.unit', 'warehouse', 'actor', 'correctionSource'])
+                ->where('surat_jalan_id', $suratJalan->id)
+                ->latest()
+                ->get(),
+            'canReceive' => $canOperateDestination && $suratJalan->status === 'terbit',
+            'canManageOrigin' => $canOperateOrigin,
+            'canManageDestination' => $canOperateDestination,
+        ]);
+    }
+
     public function issue(Request $request, SuratJalanService $service): RedirectResponse
     {
         $data = $request->validate([
@@ -35,7 +79,9 @@ class SuratJalanController extends Controller
         ]);
 
         $origin = Warehouse::query()->findOrFail($data['warehouse_asal_id']);
+        $destination = Warehouse::query()->findOrFail($data['warehouse_tujuan_id']);
         abort_unless($request->user()->canOperateWarehouse($origin, 'operate_warehouse'), 403);
+        abort_unless($request->user()->mitra_id === null || $destination->mitra_id === $request->user()->mitra_id, 403);
 
         $suratJalan = $service->issueDirect($request->user(), $data);
 
@@ -118,11 +164,14 @@ class SuratJalanController extends Controller
 
     public function transit(): Response
     {
+        $warehouseIds = $this->assignedWarehouses(request())->modelKeys();
+
         return response()->view('warehouse.transit', [
             'stocks' => MaterialStok::query()
                 ->with(['material.unit', 'warehouse'])
                 ->where('lokasi_tipe', 'transit')
                 ->where('qty', '>', 0)
+                ->whereIn('warehouse_id', $warehouseIds)
                 ->orderBy('lokasi_id')
                 ->get(),
         ]);
@@ -133,16 +182,19 @@ class SuratJalanController extends Controller
         return Rule::exists('warehouses', 'id')->where('aktif', true);
     }
 
-    private function activeMaterialRule(): Exists
+    private function activeMaterialRule(): ActiveMaterial
     {
-        return Rule::exists('materials', 'id')->where(function (Builder $query): void {
-            $query->where('aktif', true)->whereExists(function (Builder $units): void {
-                $units->selectRaw('1')
-                    ->from('units')
-                    ->whereColumn('units.id', 'materials.unit_id')
-                    ->where('units.aktif', true);
-            });
-        });
+        return new ActiveMaterial;
+    }
+
+    private function assignedWarehouses(Request $request): Collection
+    {
+        return Warehouse::query()
+            ->with('mitra')
+            ->where('aktif', true)
+            ->whereHas('users', fn ($query) => $query->whereKey($request->user()->id))
+            ->orderBy('nama')
+            ->get();
     }
 
     private function ensureAssigned(Request $request, int $warehouseId): void

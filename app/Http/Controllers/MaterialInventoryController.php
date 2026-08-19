@@ -2,18 +2,55 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Drum;
 use App\Models\Material;
+use App\Models\MaterialStok;
+use App\Models\MaterialTransaksi;
 use App\Models\Warehouse;
+use App\Rules\ActiveMaterial;
 use App\Services\MaterialInventoryService;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class MaterialInventoryController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $warehouses = $this->assignedWarehouses($request);
+        $warehouseIds = $warehouses->modelKeys();
+
+        return view('warehouse.index', [
+            'warehouses' => $warehouses,
+            'destinationWarehouses' => $this->destinationWarehouses($request),
+            'materials' => $this->activeMaterials(),
+            'stocks' => MaterialStok::query()
+                ->with(['warehouse', 'material.unit'])
+                ->whereIn('warehouse_id', $warehouseIds)
+                ->where('lokasi_tipe', 'warehouse')
+                ->where('qty', '>', 0)
+                ->orderBy('warehouse_id')
+                ->orderBy('material_id')
+                ->get(),
+            'drums' => Drum::query()
+                ->with('material.unit')
+                ->where('lokasi_tipe', 'warehouse')
+                ->whereIn('lokasi_id', $warehouseIds)
+                ->where('sisa', '>', 0)
+                ->orderBy('drum_id')
+                ->get(),
+            'transactions' => MaterialTransaksi::query()
+                ->with(['warehouse', 'material.unit', 'actor'])
+                ->whereIn('warehouse_id', $warehouseIds)
+                ->latest()
+                ->limit(20)
+                ->get(),
+        ]);
+    }
+
     public function receive(Request $request, MaterialInventoryService $inventory): RedirectResponse
     {
         $data = $request->validate([
@@ -67,16 +104,38 @@ class MaterialInventoryController extends Controller
         return back()->with('status', 'Potongan drum dicatat.');
     }
 
-    private function activeMaterialRule(): Exists
+    private function activeMaterialRule(): ActiveMaterial
     {
-        return Rule::exists('materials', 'id')->where(function (Builder $query): void {
-            $query->where('aktif', true)->whereExists(function (Builder $units): void {
-                $units->selectRaw('1')
-                    ->from('units')
-                    ->whereColumn('units.id', 'materials.unit_id')
-                    ->where('units.aktif', true);
-            });
-        });
+        return new ActiveMaterial;
+    }
+
+    private function activeMaterials(): Collection
+    {
+        return Material::query()
+            ->with('unit')
+            ->activeWithUnit()
+            ->orderBy('nama')
+            ->get();
+    }
+
+    private function assignedWarehouses(Request $request): Collection
+    {
+        return Warehouse::query()
+            ->with('mitra')
+            ->where('aktif', true)
+            ->whereHas('users', fn ($query) => $query->whereKey($request->user()->id))
+            ->orderBy('nama')
+            ->get();
+    }
+
+    private function destinationWarehouses(Request $request): Collection
+    {
+        return Warehouse::query()
+            ->with('mitra')
+            ->where('aktif', true)
+            ->when($request->user()->mitra_id !== null, fn ($query) => $query->where('mitra_id', $request->user()->mitra_id))
+            ->orderBy('nama')
+            ->get();
     }
 
     private function validateIdentityFields(string $jenis, array $data): void

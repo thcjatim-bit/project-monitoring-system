@@ -6,6 +6,7 @@ use App\Models\Material;
 use App\Models\PemakaianMaterial;
 use App\Models\Project;
 use App\Models\Warehouse;
+use App\Rules\ActiveMaterial;
 use App\Services\MaterialUsageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class MaterialUsageController extends Controller
             'usages' => PemakaianMaterial::query()->with(['project', 'warehouse', 'material.unit', 'requester', 'decider'])->latest()->get(),
             'projects' => Project::query()->latest()->get(),
             'warehouses' => Warehouse::query()->orderBy('nama')->get(),
-            'materials' => Material::query()->with('unit')->where('aktif', true)->whereHas('unit', fn ($query) => $query->where('aktif', true))->orderBy('nama')->get(),
+            'materials' => Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get(),
         ]);
     }
 
@@ -28,7 +29,7 @@ class MaterialUsageController extends Controller
     {
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('mitra_id', $request->user()->mitra_id)],
-            'material_id' => ['required', 'integer', Rule::exists('materials', 'id')->where('aktif', true)],
+            'material_id' => ['required', 'integer', new ActiveMaterial],
             'material_sn_id' => ['nullable', 'integer', 'exists:material_sns,id'],
             'drum_id' => ['nullable', 'integer', 'exists:drums,id'],
             'qty' => ['required', 'numeric', 'gt:0'],
