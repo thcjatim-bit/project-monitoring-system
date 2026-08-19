@@ -45,8 +45,9 @@ class AuthenticateApiKey
                 return $this->fail($request, 'invalid_format', 401, 'API Key tidak valid.');
             }
 
-            if ($this->authenticationRateLimited($request)) {
-                return ApiResponse::error($request, 'rate_limited', 429, 'Terlalu banyak kegagalan autentikasi.');
+            $authenticationRetryAfter = $this->authenticationRateLimitRetryAfter($request);
+            if ($authenticationRetryAfter !== null) {
+                return $this->rateLimitedResponse($request, 'Terlalu banyak kegagalan autentikasi.', $authenticationRetryAfter);
             }
 
             $apiKey = ApiKey::query()->where('key_hash', hash('sha256', $token))->first();
@@ -80,8 +81,9 @@ class AuthenticateApiKey
                 return ApiResponse::error($request, 'not_acceptable', 406, 'API hanya menyediakan media type application/json.');
             }
 
-            if ($this->rateLimited($request, $apiKey)) {
-                return ApiResponse::error($request, 'rate_limited', 429, 'Batas permintaan API tercapai.');
+            $apiRetryAfter = $this->apiRateLimitRetryAfter($request, $apiKey);
+            if ($apiRetryAfter !== null) {
+                return $this->rateLimitedResponse($request, 'Batas permintaan API tercapai.', $apiRetryAfter);
             }
 
             $principal = new ApiKeyPrincipal($apiKey);
@@ -118,20 +120,30 @@ class AuthenticateApiKey
         return false;
     }
 
-    private function rateLimited(Request $request, ApiKey $apiKey): bool
+    private function apiRateLimitRetryAfter(Request $request, ApiKey $apiKey): ?int
     {
         $minuteKey = 'api-key:minute:'.$apiKey->getKey();
         $burstKey = 'api-key:burst:'.$apiKey->getKey();
-        if ($this->rateLimiter->tooManyAttempts($minuteKey, 60) || $this->rateLimiter->tooManyAttempts($burstKey, 20)) {
+        $minuteLimited = $this->rateLimiter->tooManyAttempts($minuteKey, 60);
+        $burstLimited = $this->rateLimiter->tooManyAttempts($burstKey, 20);
+        if ($minuteLimited || $burstLimited) {
             $this->apiKeyService->audit($apiKey, 'rate_limited', null, [], ApiResponse::requestId($request));
 
-            return true;
+            $retryAfter = 1;
+            if ($minuteLimited) {
+                $retryAfter = max($retryAfter, $this->rateLimiter->availableIn($minuteKey));
+            }
+            if ($burstLimited) {
+                $retryAfter = max($retryAfter, $this->rateLimiter->availableIn($burstKey));
+            }
+
+            return $retryAfter;
         }
 
         $this->rateLimiter->hit($minuteKey, 60);
         $this->rateLimiter->hit($burstKey, 1);
 
-        return false;
+        return null;
     }
 
     private function failureKey(Request $request): string
@@ -139,15 +151,16 @@ class AuthenticateApiKey
         return 'api-key:failed-ip:'.($request->ip() ?? 'unknown');
     }
 
-    private function authenticationRateLimited(Request $request): bool
+    private function authenticationRateLimitRetryAfter(Request $request): ?int
     {
-        if (! $this->rateLimiter->tooManyAttempts($this->failureKey($request), 10)) {
-            return false;
+        $failureKey = $this->failureKey($request);
+        if (! $this->rateLimiter->tooManyAttempts($failureKey, 10)) {
+            return null;
         }
 
         $this->apiKeyService->audit(null, 'rate_limited', null, ['reason' => 'authentication_failures'], ApiResponse::requestId($request));
 
-        return true;
+        return max(1, $this->rateLimiter->availableIn($failureKey));
     }
 
     private function inactiveReason(ApiKey $apiKey): string
@@ -175,8 +188,9 @@ class AuthenticateApiKey
     private function fail(Request $request, string $reason, int $status, string $message): Response
     {
         if ($status === 401) {
-            if ($this->authenticationRateLimited($request)) {
-                return ApiResponse::error($request, 'rate_limited', 429, 'Terlalu banyak kegagalan autentikasi.');
+            $authenticationRetryAfter = $this->authenticationRateLimitRetryAfter($request);
+            if ($authenticationRetryAfter !== null) {
+                return $this->rateLimitedResponse($request, 'Terlalu banyak kegagalan autentikasi.', $authenticationRetryAfter);
             }
 
             $this->rateLimiter->hit($this->failureKey($request), 60);
@@ -184,5 +198,11 @@ class AuthenticateApiKey
         }
 
         return ApiResponse::error($request, $status === 429 ? 'rate_limited' : 'api_key_invalid', $status, $message);
+    }
+
+    private function rateLimitedResponse(Request $request, string $message, int $retryAfter): Response
+    {
+        return ApiResponse::error($request, 'rate_limited', 429, $message)
+            ->header('Retry-After', (string) max(1, $retryAfter));
     }
 }

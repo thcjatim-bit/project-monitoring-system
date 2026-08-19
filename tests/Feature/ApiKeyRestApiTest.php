@@ -346,8 +346,12 @@ class ApiKeyRestApiTest extends TestCase
         $minuteKey = 'api-key:minute:'.$apiKey->getKey();
         $burstKey = 'api-key:burst:'.$apiKey->getKey();
 
-        $rateLimiter->hit($minuteKey, 60);
-        $rateLimiter->hit($burstKey, 1);
+        for ($attempt = 0; $attempt < 60; $attempt++) {
+            $rateLimiter->hit($minuteKey, 60);
+        }
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $rateLimiter->hit($burstKey, 1);
+        }
         $expectedRetryAfter = max(1, $rateLimiter->availableIn($minuteKey), $rateLimiter->availableIn($burstKey));
 
         $response = $this->withHeader('Authorization', 'Bearer '.$plaintext)
