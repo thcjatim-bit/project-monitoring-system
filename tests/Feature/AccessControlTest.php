@@ -33,6 +33,62 @@ class AccessControlTest extends TestCase
             ->assertSee('Project');
     }
 
+    public function test_thc_app_shell_exposes_variant_a_domain_navigation_by_izin_aksi(): void
+    {
+        $grup = Grup::factory()->create();
+        $grup->izins()->attach(array_map(
+            fn (string $kode): int => Izin::factory()->create(['kode' => $kode])->id,
+            [
+                'read_dashboard',
+                'read_project',
+                'manage_users',
+                'manage_mitras',
+                'manage_warehouses',
+                'read_master_data',
+                'operate_warehouse',
+                'read_material_request',
+                'read_material_usage',
+                'read_material_rekon',
+            ],
+        ));
+        $user = User::factory()->create(['grup_id' => $grup->id]);
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('app-shell__sidebar', false)
+            ->assertSee('Pusat kerja', false)
+            ->assertSee('Mitra &amp; User', false)
+            ->assertSee('Material &amp; Unit', false)
+            ->assertSee('Warehouse', false)
+            ->assertSee('Pemakaian Material', false)
+            ->assertSee('Rekon Material tersedia dari detail Project', false)
+            ->assertSee('aria-current="page"', false);
+    }
+
+    public function test_mitra_app_shell_hides_thc_navigation_and_keeps_own_domain_scope(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $grup = Grup::factory()->create();
+        $grup->izins()->attach(array_map(
+            fn (string $kode): int => Izin::factory()->create(['kode' => $kode])->id,
+            ['read_project', 'read_material_request', 'read_material_usage', 'read_material_rekon'],
+        ));
+        $user = User::factory()->create(['mitra_id' => $mitra->id, 'grup_id' => $grup->id]);
+
+        $this->actingAs($user)
+            ->get('/projects')
+            ->assertOk()
+            ->assertSee('app-shell__sidebar', false)
+            ->assertSee('Project', false)
+            ->assertSee('Request Material', false)
+            ->assertSee('Pemakaian Material', false)
+            ->assertSee('Rekon Material tersedia dari detail Project', false)
+            ->assertDontSee('Mitra &amp; User', false)
+            ->assertDontSee('href="'.route('dashboard').'"', false)
+            ->assertDontSee('href="'.route('admin.users').'"', false);
+    }
+
     public function test_active_user_can_sign_in_with_their_credentials(): void
     {
         $user = User::factory()->create(['password' => 'rahasia-benar']);
