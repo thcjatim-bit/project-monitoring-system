@@ -157,6 +157,10 @@ class SuratJalanTransferTest extends TestCase
             ->get(route('warehouse.transfers.show', $suratJalanId))
             ->assertForbidden();
 
+        $this->actingAs($withoutTransit)
+            ->get(route('warehouse.transfers.print', $suratJalanId))
+            ->assertForbidden();
+
         $otherMitra = Mitra::factory()->create();
         $otherReader = $this->userWithPermission($otherMitra, 'read_transit');
 
