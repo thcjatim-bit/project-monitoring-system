@@ -64,7 +64,9 @@ class ProjectControlRoomQuery
             && $viewer->mitra_id !== null
             && (int) $viewer->mitra_id === (int) $project->mitra_id
             && $viewer->hasIzin('report_project_progress');
-        $canReadInstallation = $canReportInstallation;
+        $canReadInstallation = $viewer === null
+            || $viewer->hasIzin('read_project_material')
+            || $viewer->hasIzin('report_project_progress');
         $installationStocks = $canReportInstallation
             ? MaterialStok::query()
                 ->where('lokasi_tipe', 'project')
