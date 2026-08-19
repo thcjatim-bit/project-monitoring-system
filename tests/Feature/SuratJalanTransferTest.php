@@ -138,6 +138,34 @@ class SuratJalanTransferTest extends TestCase
             ->assertSee('QR');
     }
 
+    public function test_read_transit_grants_own_transfer_detail_and_print_without_dashboard_permission(): void
+    {
+        [$origin] = $this->issueOrdinaryTransfer();
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $reader = $this->userWithPermission(Mitra::query()->findOrFail($origin->mitra_id), 'read_transit');
+        $withoutTransit = User::factory()->create(['mitra_id' => $origin->mitra_id]);
+
+        $this->actingAs($reader)
+            ->get(route('warehouse.transfers.show', $suratJalanId))
+            ->assertOk();
+
+        $this->actingAs($reader)
+            ->get(route('warehouse.transfers.print', $suratJalanId))
+            ->assertOk();
+
+        $this->actingAs($withoutTransit)
+            ->get(route('warehouse.transfers.show', $suratJalanId))
+            ->assertForbidden();
+
+        $otherMitra = Mitra::factory()->create();
+        $otherReader = $this->userWithPermission($otherMitra, 'read_transit');
+
+        $this->actingAs($otherReader)
+            ->get(route('warehouse.transfers.show', $suratJalanId))
+            ->assertNotFound();
+
+    }
+
     public function test_direct_transfer_moves_serial_number_and_drum_identities_without_consuming_them(): void
     {
         $mitra = Mitra::factory()->create();
@@ -466,6 +494,17 @@ class SuratJalanTransferTest extends TestCase
         $group->izins()->attach(Izin::query()->firstOrCreate(
             ['kode' => 'operate_warehouse'],
             ['nama' => 'Operate warehouse'],
+        ));
+
+        return User::factory()->create(['mitra_id' => $mitra->id, 'grup_id' => $group->id]);
+    }
+
+    private function userWithPermission(Mitra $mitra, string $permission): User
+    {
+        $group = Grup::factory()->create();
+        $group->izins()->attach(Izin::query()->firstOrCreate(
+            ['kode' => $permission],
+            ['nama' => $permission],
         ));
 
         return User::factory()->create(['mitra_id' => $mitra->id, 'grup_id' => $group->id]);

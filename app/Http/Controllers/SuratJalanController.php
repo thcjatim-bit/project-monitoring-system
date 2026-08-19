@@ -45,7 +45,7 @@ class SuratJalanController extends Controller
         $canOperateOrigin = $request->user()->canOperateWarehouse($suratJalan->origin, 'operate_warehouse');
         $canOperateDestination = $request->user()->canOperateWarehouse($suratJalan->destination, 'operate_warehouse');
 
-        abort_unless($canOperateOrigin || $canOperateDestination || $request->user()->hasIzin('read_dashboard'), 403);
+        abort_unless($canOperateOrigin || $canOperateDestination || $request->user()->hasIzin('read_transit'), 403);
 
         return view('warehouse.transfer-show', [
             'suratJalan' => $suratJalan,
