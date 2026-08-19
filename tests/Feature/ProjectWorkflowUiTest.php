@@ -73,6 +73,19 @@ class ProjectWorkflowUiTest extends TestCase
             ->assertSee('value="'.$price->id.'"', false);
     }
 
+    public function test_project_control_room_hides_installation_panel_without_report_permission(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'read_project', 'read_project_material');
+        $project = $this->projectFor($mitra);
+
+        $this->actingAs($user)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertDontSee('id="project-material-installation"', false)
+            ->assertDontSee('Material Installation');
+    }
+
     public function test_mitra_can_open_project_material_usage_list_and_each_usage_has_a_detail_link(): void
     {
         $mitra = Mitra::factory()->create();

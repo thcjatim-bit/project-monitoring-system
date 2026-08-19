@@ -5,11 +5,17 @@
         <p>Rekon aktif dan koreksi historis tetap dibedakan. Persetujuan THC menulis hasil ke buku transaksi append-only.</p>
 
         @if (session('status')) <p>{{ session('status') }}</p> @endif
+        @if ($errors->any())
+            <div role="alert">
+                <strong>Periksa data Rekon Material.</strong>
+                <ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+            </div>
+        @endif
 
         @if (auth()->user()->mitra_id === null && auth()->user()->hasIzin('create_material_rekon'))
             <form method="POST" action="{{ route('projects.rekons.store', $project) }}">
                 @csrf
-                <label>Catatan pembukaan <input name="catatan" maxlength="2000"></label>
+                <label>Catatan pembukaan <input name="catatan" value="{{ old('catatan') }}" maxlength="2000"></label>
                 <button type="submit">Buka Rekon Manual</button>
             </form>
         @endif
