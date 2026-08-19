@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\ApiKeyService;
 use App\Support\TenantDatabaseContext;
 use Closure;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\RefreshDatabase;
@@ -325,10 +326,46 @@ class ApiKeyRestApiTest extends TestCase
                 ->assertUnauthorized();
         }
 
-        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])
+        $response = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])
             ->getJson('/api/v1/projects')
             ->assertStatus(429)
-            ->assertJsonPath('errors.0.code', 'rate_limited');
+            ->assertJsonPath('errors.0.code', 'rate_limited')
+            ->assertJsonPath('errors.0.message', 'Terlalu banyak kegagalan autentikasi.');
+
+        $retryAfter = $response->headers->get('Retry-After');
+        $this->assertNotNull($retryAfter);
+        $this->assertMatchesRegularExpression('/^[1-9]\d*$/', (string) $retryAfter);
+        $this->assertStringNotContainsString('198.51.100.77', $response->getContent());
+        $this->assertStringNotContainsString('pms_live_', $response->getContent());
+    }
+
+    public function test_authenticated_api_rate_limit_returns_longest_retry_after_without_secrets(): void
+    {
+        [$plaintext, $apiKey] = $this->credential();
+        $rateLimiter = app(RateLimiter::class);
+        $minuteKey = 'api-key:minute:'.$apiKey->getKey();
+        $burstKey = 'api-key:burst:'.$apiKey->getKey();
+
+        for ($attempt = 0; $attempt < 60; $attempt++) {
+            $rateLimiter->hit($minuteKey, 60);
+        }
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $rateLimiter->hit($burstKey, 1);
+        }
+        $expectedRetryAfter = max(1, $rateLimiter->availableIn($minuteKey), $rateLimiter->availableIn($burstKey));
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$plaintext)
+            ->getJson('/api/v1/projects')
+            ->assertStatus(429)
+            ->assertJsonPath('errors.0.code', 'rate_limited')
+            ->assertJsonPath('errors.0.message', 'Batas permintaan API tercapai.');
+
+        $retryAfter = $response->headers->get('Retry-After');
+        $this->assertNotNull($retryAfter);
+        $this->assertMatchesRegularExpression('/^[1-9]\d*$/', (string) $retryAfter);
+        $this->assertGreaterThanOrEqual($expectedRetryAfter, (int) $retryAfter);
+        $this->assertStringNotContainsString($plaintext, $response->getContent());
+        $this->assertStringNotContainsString('api-key:', $response->getContent());
     }
 
     /** @return array{string,ApiKey,User} */
