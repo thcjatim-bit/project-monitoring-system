@@ -164,7 +164,10 @@ class MitraDashboardTest extends TestCase
     {
         $mitra ??= Mitra::factory()->create();
         $grup = Grup::factory()->create(['nama' => 'Mitra '.Str::random(4)]);
-        $grup->izins()->attach(collect($permissions)->map(fn (string $kode): int => Izin::factory()->create(['kode' => $kode])->id)->all());
+        $grup->izins()->attach(collect($permissions)->map(fn (string $kode): int => Izin::query()->firstOrCreate(
+            ['kode' => $kode],
+            ['nama' => $kode],
+        )->id)->all());
 
         return User::factory()->create([
             'mitra_id' => $mitra->id,
