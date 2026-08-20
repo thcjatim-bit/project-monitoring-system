@@ -1,50 +1,25 @@
 <x-layouts.app>
-<main>
-    <h1>Tambah Project</h1>
+    <x-ui.page>
+        <x-ui.page-header eyebrow="Project" title="Tambah Project" subtitle="Buat Project baru dan tetapkan tepat satu Mitra aktif.">
+            <x-slot:actions><a class="ui-button ui-button--muted" href="{{ route('projects.index') }}">Kembali ke Project</a></x-slot:actions>
+        </x-ui.page-header>
 
-    <form method="POST" action="{{ route('projects.store') }}">
-        @csrf
-        @if ($errors->any())
-            <div role="alert">
-                <p>Project belum dapat disimpan. Periksa kembali isian berikut:</p>
-                <ul>
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
+        <x-ui.panel>
+            <x-form-errors />
+            <form class="ui-form" method="POST" action="{{ route('projects.store') }}" data-submit-loading>
+                @csrf
+                <label>ID Project <span class="ui-help">Kosongkan untuk kode otomatis PRJ-YYMM-NNNN.</span><input name="id_project" value="{{ old('id_project') }}" maxlength="255"></label>
+                <label>Nama<input name="nama" value="{{ old('nama') }}" required maxlength="255"></label>
+                <x-ui.search target="#mitra_id option[data-searchable]" label="Cari Mitra" placeholder="Ketik kode atau nama Mitra" data-mitra-search />
+                <label for="mitra_id">Mitra</label>
+                <select id="mitra_id" name="mitra_id" required size="5">
+                    <option value="">Pilih Mitra aktif</option>
+                    @foreach ($mitras as $mitra)
+                        <option value="{{ $mitra->id }}" data-searchable data-search-text="{{ $mitra->kode }} {{ $mitra->nama }}" @selected((string) old('mitra_id') === (string) $mitra->id)>{{ $mitra->kode }} - {{ $mitra->nama }}</option>
                     @endforeach
-                </ul>
-            </div>
-        @endif
-        <label>ID Project (kosongkan untuk otomatis)
-            <input name="id_project" value="{{ old('id_project') }}" maxlength="255">
-        </label>
-        <label>Nama
-            <input name="nama" value="{{ old('nama') }}" required maxlength="255">
-        </label>
-        <label for="mitra-search">Cari Mitra (kode atau nama)</label>
-        <input id="mitra-search" type="search" data-mitra-search placeholder="Ketik kode atau nama Mitra" autocomplete="off">
-        <label for="mitra_id">Mitra</label>
-        <select id="mitra_id" name="mitra_id" required size="5">
-            <option value="">Pilih Mitra aktif</option>
-            @foreach ($mitras as $mitra)
-                <option value="{{ $mitra->id }}" data-search-text="{{ $mitra->kode }} {{ $mitra->nama }}" @selected((string) old('mitra_id') === (string) $mitra->id)>
-                    {{ $mitra->kode }} - {{ $mitra->nama }}
-                </option>
-            @endforeach
-        </select>
-        <button type="submit">Simpan</button>
-    </form>
-</main>
-<script>
-    (() => {
-        const search = document.querySelector('[data-mitra-search]');
-        const select = document.querySelector('#mitra_id');
-        if (!search || !select) return;
-        search.addEventListener('input', () => {
-            const query = search.value.trim().toLowerCase();
-            for (const option of select.options) {
-                option.hidden = option.value !== '' && !option.dataset.searchText.toLowerCase().includes(query);
-            }
-        });
-    })();
-</script>
+                </select>
+                <button class="ui-button" type="submit">Simpan Project</button>
+            </form>
+        </x-ui.panel>
+    </x-ui.page>
 </x-layouts.app>

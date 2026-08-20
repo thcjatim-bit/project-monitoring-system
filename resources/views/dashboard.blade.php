@@ -19,6 +19,15 @@
         .command-center__nav { border-bottom: 1px solid #dbe2ea; display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 28px 0; padding-bottom: 14px; }
         .command-center__nav a { border-radius: 6px; padding: 7px 4px; text-decoration: none; }
         .command-center__nav a[aria-current="page"] { background: #e0f2fe; font-weight: 700; padding-left: 9px; padding-right: 9px; }
+        .command-center__layout { align-items: start; display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(280px, .38fr); }
+        .command-center__main { min-width: 0; }
+        .command-center__activity-column { grid-column: 2; grid-row: 1; min-width: 0; position: sticky; top: 18px; }
+        .command-center__activity-column .command-center__panel { padding: 18px; }
+        .command-center__activity-column .command-center__panel h2 { font-size: 1.05rem; }
+        .command-center__activity-column .command-center__list { max-height: min(620px, calc(100vh - 150px)); overflow-y: auto; }
+        .command-center__activity-column .command-center__item { border-width: 0 0 1px; border-radius: 0; padding: 12px 0; }
+        .command-center__activity-column .command-center__item:last-child { border-bottom: 0; }
+        .command-center__main > .command-center__panel + .command-center__panel { margin-top: 20px; }
         .command-center__panel { background: #fff; border: 1px solid #dbe2ea; border-radius: 14px; box-shadow: 0 8px 24px rgb(23 32 51 / 6%); padding: 22px; }
         .command-center > .command-center__panel + .command-center__panel { margin-top: 20px; }
         .command-center__panel-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
@@ -46,6 +55,10 @@
         .command-center__item--start { align-items: flex-start; }
         @media (max-width: 680px) {
             .command-center { padding: 24px 14px 36px; }
+            .command-center__layout { display: block; }
+            .command-center__activity-column { position: static; }
+            .command-center__activity-column .command-center__list { max-height: none; }
+            .command-center__main { margin-top: 20px; }
             .command-center__header, .command-center__panel-header, .command-center__item { align-items: stretch; flex-direction: column; }
             .command-center__logout, .command-center__logout button, .command-center__metric { width: 100%; }
             .command-center__metrics { justify-content: stretch; width: 100%; }
@@ -91,6 +104,8 @@
             @endif
         </nav>
 
+        <div class="command-center__layout">
+            <aside class="command-center__activity-column" aria-label="Aktivitas terbaru">
         <section id="activity-feed-panel" class="command-center__panel" aria-labelledby="activity-feed-title" aria-busy="false">
             <div class="command-center__panel-header">
                 <div>
@@ -113,7 +128,7 @@
                     Belum ada aktivitas lintas operasional yang dapat ditampilkan.
                 </div>
             @else
-                <ul class="command-center__list" data-dashboard-state="ready">
+                <ul class="command-center__list command-center__activity-list" data-dashboard-state="ready">
                     @foreach ($activityFeed as $activity)
                         <li class="command-center__item command-center__item--start" data-activity-source="{{ $activity['source'] }}" data-activity-entity="{{ $activity['entity'] }}">
                             <div>
@@ -143,6 +158,9 @@
                 })();
             </script>
         </section>
+            </aside>
+
+            <div class="command-center__main">
 
         @if ($user->hasIzin('manage_users'))
             <section id="active-user-panel" class="command-center__panel" aria-labelledby="active-user-title" aria-busy="false">
@@ -559,5 +577,7 @@
                 </script>
             </section>
         @endif
+            </div>
+        </div>
     </main>
 </x-layouts.app>

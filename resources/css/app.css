@@ -19,6 +19,12 @@
 .ui-page p { color: #687684; line-height: 1.5; }
 .ui-page__subtitle { color: #687684; margin: 0; }
 .ui-page__actions, .ui-form__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-section-head { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 14px; }
+.ui-section-head h2 { margin-bottom: 4px; }
+.ui-toolbar { align-items: center; display: flex; gap: 10px; justify-content: space-between; margin: 0 0 14px; }
+.ui-search { display: block; margin: 0; width: min(100%, 360px); }
+.ui-search input { width: 100%; }
+.ui-sr-only { height: 1px; margin: -1px; overflow: hidden; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); }
 .ui-button { background: #087f8c; border: 1px solid #087f8c; border-radius: 8px; color: #fff; cursor: pointer; display: inline-block; font-size: .84rem; font-weight: 700; padding: 10px 14px; text-decoration: none; }
 .ui-button--muted { background: #fff; border-color: #cbd6dc; color: #15324b; }
 .ui-button--danger { background: #fff; border-color: #b34444; color: #9b3d3d; }
@@ -36,6 +42,9 @@
 .ui-state--loading { background: #f0f9ff; color: #155e75; }
 .ui-state--success { background: #effaf5; color: #11664f; }
 .ui-state ul { margin: 7px 0 0; padding-left: 20px; }
+.ui-empty-state { display: grid; gap: 4px; }
+.ui-empty-state strong { color: #15324b; }
+.ui-empty-state span { display: block; }
 .ui-table-wrap { overflow-x: auto; }
 .ui-table { border-collapse: collapse; min-width: 620px; width: 100%; }
 .ui-table th, .ui-table td { border-bottom: 1px solid #e8edef; padding: 11px 9px; text-align: left; vertical-align: top; }
@@ -50,7 +59,12 @@
 .ui-badge--pending { background: #fff0d5; color: #a86314; }
 .ui-badge--done { background: #dff3ed; color: #11664f; }
 .ui-badge--cancelled { background: #fbe4e4; color: #9b3d3d; }
+.ui-badge--neutral { background: #e8edf1; color: #526071; }
+.ui-badge--done { background: #dff3ed; color: #11664f; }
+.ui-badge--warning { background: #fff0d5; color: #a86314; }
 .ui-inline { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
 .ui-muted { color: #687684; font-size: .78rem; }
+.ui-stock-summary { display: grid; gap: 4px; color: #526071; font-size: .78rem; }
+.ui-stock-summary strong { color: #15324b; }
 .ui-form [aria-invalid="true"] { border-color: #b34444; }
-@media (max-width: 780px) { .ui-page { padding: 24px 16px 50px; } .ui-page__header { align-items: flex-start; flex-direction: column; } .ui-grid, .ui-form__grid { grid-template-columns: 1fr; } }
+@media (max-width: 780px) { .ui-page { padding: 24px 16px 50px; } .ui-page__header, .ui-section-head { align-items: flex-start; flex-direction: column; } .ui-grid, .ui-form__grid { grid-template-columns: 1fr; } .ui-search { width: 100%; } }
