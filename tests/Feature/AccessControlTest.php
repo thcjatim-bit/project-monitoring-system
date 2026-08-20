@@ -110,6 +110,7 @@ class AccessControlTest extends TestCase
 
         $this->assertNull($thc->mitra_id);
         $this->assertTrue($thc->hasIzin('read_dashboard'));
+        $this->assertTrue($thc->hasIzin('read_project_progress'));
         $this->assertNotNull($mitra->mitra_id);
         $this->assertTrue($mitra->hasIzin('read_dashboard'));
 

@@ -1,0 +1,212 @@
+export function filterSearchableOptions(options, query = '') {
+    const normalizedQuery = String(query).trim().toLocaleLowerCase();
+
+    return Array.from(options ?? []).filter((option) => {
+        if (!normalizedQuery) {
+            return true;
+        }
+
+        const searchableText = [option.label, option.searchText]
+            .filter((value) => value !== undefined && value !== null)
+            .join(' ')
+            .toLocaleLowerCase();
+
+        return searchableText.includes(normalizedQuery);
+    });
+}
+
+function optionElements(root) {
+    return Array.from(root.querySelectorAll('[data-ui-select-option]'));
+}
+
+function visibleOptionElements(root) {
+    return optionElements(root).filter((option) => !option.hidden);
+}
+
+function setActiveOption(root, option) {
+    optionElements(root).forEach((candidate) => {
+        candidate.classList.toggle('is-active', candidate === option);
+    });
+
+    option?.focus();
+}
+
+function updateSelectedState(root, value) {
+    const selectedOption = optionElements(root).find(
+        (option) => option.dataset.value === String(value),
+    );
+    const valueInput = root.querySelector('[data-ui-select-value]');
+    const label = root.querySelector('[data-ui-select-label]');
+    const placeholder = root.dataset.placeholder || 'Pilih';
+
+    if (valueInput) {
+        valueInput.value = selectedOption?.dataset.value || '';
+    }
+
+    if (label) {
+        label.textContent = selectedOption?.dataset.label || placeholder;
+        label.classList.toggle('is-placeholder', !selectedOption);
+    }
+
+    optionElements(root).forEach((option) => {
+        const selected = option === selectedOption;
+        option.classList.toggle('is-selected', selected);
+        option.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+
+    root.querySelector('[data-ui-select-clear]')?.toggleAttribute(
+        'hidden',
+        !selectedOption || root.dataset.clearable !== 'true',
+    );
+}
+
+function filterOptions(root, query) {
+    const options = optionElements(root).map((option) => ({
+        label: option.dataset.label || '',
+        searchText: option.dataset.searchText || '',
+    }));
+    const matches = new Set(filterSearchableOptions(options, query));
+
+    optionElements(root).forEach((option, index) => {
+        option.hidden = !matches.has(options[index]);
+    });
+
+    const empty = root.querySelector('[data-ui-select-empty]');
+    if (empty) {
+        empty.hidden = matches.size > 0;
+    }
+}
+
+function closeSelect(root) {
+    root.dataset.open = 'false';
+    root.querySelector('[data-ui-select-popup]')?.setAttribute('hidden', 'hidden');
+    root.querySelector('[data-ui-select-trigger]')?.setAttribute('aria-expanded', 'false');
+}
+
+function openSelect(root) {
+    if (root.dataset.disabled === 'true') {
+        return;
+    }
+
+    root.dataset.open = 'true';
+    root.querySelector('[data-ui-select-popup]')?.removeAttribute('hidden');
+    root.querySelector('[data-ui-select-trigger]')?.setAttribute('aria-expanded', 'true');
+
+    const search = root.querySelector('[data-ui-select-search]');
+    if (search) {
+        search.focus();
+        return;
+    }
+
+    const selected = optionElements(root).find((option) => option.classList.contains('is-selected'));
+    setActiveOption(root, selected || visibleOptionElements(root)[0]);
+}
+
+function chooseOption(root, option) {
+    if (!option || option.hidden) {
+        return;
+    }
+
+    updateSelectedState(root, option.dataset.value || '');
+    closeSelect(root);
+    root.querySelector('[data-ui-select-trigger]')?.focus();
+}
+
+function bindSearchableSelect(root, document) {
+    if (root.dataset.uiSelectBound === 'true') {
+        return;
+    }
+
+    const trigger = root.querySelector('[data-ui-select-trigger]');
+    const popup = root.querySelector('[data-ui-select-popup]');
+    if (!trigger || !popup) {
+        return;
+    }
+
+    root.dataset.uiSelectBound = 'true';
+    updateSelectedState(root, root.querySelector('[data-ui-select-value]')?.value || '');
+
+    trigger.addEventListener('click', () => {
+        root.dataset.open === 'true' ? closeSelect(root) : openSelect(root);
+    });
+
+    trigger.addEventListener('keydown', (event) => {
+        if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+            event.preventDefault();
+            openSelect(root);
+        }
+    });
+
+    root.querySelector('[data-ui-select-clear]')?.addEventListener('click', () => {
+        updateSelectedState(root, '');
+        closeSelect(root);
+        trigger.focus();
+    });
+
+    optionElements(root).forEach((option) => {
+        option.addEventListener('click', () => chooseOption(root, option));
+        option.addEventListener('keydown', (event) => {
+            const visible = visibleOptionElements(root);
+            const index = visible.indexOf(option);
+
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1;
+                setActiveOption(root, visible[Math.max(0, Math.min(nextIndex, visible.length - 1))]);
+            } else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                chooseOption(root, option);
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                closeSelect(root);
+                trigger.focus();
+            }
+        });
+    });
+
+    root.querySelector('[data-ui-select-search]')?.addEventListener('input', (event) => {
+        filterOptions(root, event.currentTarget.value);
+        setActiveOption(root, visibleOptionElements(root)[0]);
+    });
+
+    root.querySelector('[data-ui-select-search]')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeSelect(root);
+            trigger.focus();
+        } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setActiveOption(root, visibleOptionElements(root)[0]);
+        }
+    });
+
+    root.closest('form')?.addEventListener('reset', () => {
+        window.setTimeout(() => {
+            updateSelectedState(root, root.querySelector('[data-ui-select-value]')?.defaultValue || '');
+            closeSelect(root);
+        });
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!root.contains(event.target)) {
+            closeSelect(root);
+        }
+    });
+}
+
+export function initializeSearchableSelects(document = globalThis.document) {
+    if (!document?.querySelectorAll) {
+        return;
+    }
+
+    const bind = () => document.querySelectorAll('[data-ui-select]').forEach(
+        (root) => bindSearchableSelect(root, document),
+    );
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind, { once: true });
+        return;
+    }
+
+    bind();
+}

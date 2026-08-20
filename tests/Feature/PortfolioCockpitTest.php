@@ -316,6 +316,34 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('<strong data-kpi="verified-percent">0.00%</strong>', false);
     }
 
+    public function test_portfolio_filters_use_the_reusable_searchable_select_and_keep_authorized_options(): void
+    {
+        $this->projectFor(Mitra::factory()->create(), 'PRJ-2608-0091', 'Project Searchable');
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('data-ui-select', false)
+            ->assertSee('data-ui-select-option', false)
+            ->assertSee('data-search-text="PRJ-2608-0091 Project Searchable"', false)
+            ->assertSee('data-ui-select-search', false)
+            ->assertSee('id="filter-periode-listbox"', false)
+            ->assertSee('id="filter-risiko-listbox"', false)
+            ->assertSee('Project Searchable');
+    }
+
+    public function test_portfolio_keeps_risk_select_disabled_without_progress_permission(): void
+    {
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('data-disabled="true"', false)
+            ->assertSee('Status risiko membutuhkan izin Progres jasa');
+    }
+
     public function test_portfolio_includes_a_scoped_trend_health_matrix_status_distribution_and_public_activity(): void
     {
         CarbonImmutable::setTestNow('2026-08-15 09:00:00');

@@ -114,42 +114,57 @@
                 <div class="portfolio__filters">
                     <div class="portfolio__field">
                         <label for="filter-project">Project</label>
-                        <select id="filter-project" name="project">
-                            <option value="">Semua Project</option>
-                            @foreach ($options['projects'] as $option)
-                                <option value="{{ $option->id }}" @selected($filters['project'] === (int) $option->id)>{{ $option->id_project }} — {{ $option->nama }}</option>
-                            @endforeach
-                        </select>
+                        <x-ui.searchable-select
+                            id="filter-project"
+                            name="project"
+                            placeholder="Semua Project"
+                            :value="$filters['project'] ?? ''"
+                            :options="collect(['' => 'Semua Project'])->merge($options['projects']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->id_project.' — '.$option->nama, 'search' => $option->id_project.' '.$option->nama]]))->all()"
+                            :clearable="true"
+                        />
                     </div>
                     <div class="portfolio__field">
                         <label for="filter-mitra">Mitra</label>
-                        <select id="filter-mitra" name="mitra">
-                            <option value="">Semua Mitra</option>
-                            @foreach ($options['mitras'] as $option)
-                                <option value="{{ $option->id }}" @selected($filters['mitra'] === (int) $option->id)>{{ $option->nama }}</option>
-                            @endforeach
-                        </select>
+                        <x-ui.searchable-select
+                            id="filter-mitra"
+                            name="mitra"
+                            placeholder="Semua Mitra"
+                            :value="$filters['mitra'] ?? ''"
+                            :options="collect(['' => 'Semua Mitra'])->merge($options['mitras']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->nama, 'search' => $option->nama]]))->all()"
+                            :clearable="true"
+                        />
                     </div>
                     <div class="portfolio__field">
                         <label for="filter-periode">Periode</label>
-                        <select id="filter-periode" name="periode">
-                            @foreach ($options['periodes'] as $value => $label)
-                                <option value="{{ $value }}" @selected($filters['periode'] === $value)>{{ $label }}</option>
-                            @endforeach
-                        </select>
+                        <x-ui.searchable-select
+                            id="filter-periode"
+                            name="periode"
+                            placeholder="Periode"
+                            :value="$filters['periode']"
+                            :options="$options['periodes']"
+                            :searchable="false"
+                        />
                     </div>
                     <div class="portfolio__field">
                         <label for="filter-risiko">Status risiko</label>
                         @if ($canReadProgress)
-                            <select id="filter-risiko" name="risiko">
-                                @foreach ($options['risikos'] as $value => $label)
-                                    <option value="{{ $value }}" @selected($filters['risiko'] === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
+                            <x-ui.searchable-select
+                                id="filter-risiko"
+                                name="risiko"
+                                placeholder="Status risiko"
+                                :value="$filters['risiko']"
+                                :options="$options['risikos']"
+                                :searchable="false"
+                            />
                         @else
-                            <select id="filter-risiko" disabled>
-                                <option>Status risiko membutuhkan izin Progres jasa</option>
-                            </select>
+                            <x-ui.searchable-select
+                                id="filter-risiko"
+                                name="risiko"
+                                placeholder="Status risiko membutuhkan izin Progres jasa"
+                                :options="['' => 'Status risiko membutuhkan izin Progres jasa']"
+                                :disabled="true"
+                                :searchable="false"
+                            />
                         @endif
                     </div>
                 </div>
