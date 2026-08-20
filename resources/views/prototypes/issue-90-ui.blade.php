@@ -4,6 +4,9 @@
     shared UI foundation across dashboard, master, project, mitra, user, and
     warehouse surfaces without changing permissions or domain behavior?
     Three read-only mock variants are switchable via ?variant=a|b|c.
+    Decision: Variant A (Workspace table) is selected as the starting point
+    for the production TDD implementation; B and C remain comparison references
+    on this throwaway branch.
     This route is intentionally not registered in production.
 --}}
 <!doctype html>
