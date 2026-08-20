@@ -637,8 +637,8 @@ class PortfolioCockpitQuery
         return [
             'projects' => Project::query()->orderBy('id_project')->get(['id', 'id_project', 'nama']),
             'mitras' => $viewer->mitra_id === null
-                ? Mitra::query()->orderBy('nama')->get(['id', 'nama'])
-                : Mitra::query()->whereKey($viewer->mitra_id)->get(['id', 'nama']),
+                ? Mitra::query()->orderBy('nama')->get(['id', 'kode', 'nama'])
+                : Mitra::query()->whereKey($viewer->mitra_id)->get(['id', 'kode', 'nama']),
             'periodes' => $this->periodeOptions($now),
             'risikos' => $viewer->hasIzin('read_project_progress')
                 ? self::RISK_LABELS
