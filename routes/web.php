@@ -69,6 +69,15 @@ if (! app()->environment('production')) {
             VerifyCsrfToken::class,
         ])
         ->name('prototype.gelombang-3');
+
+    Route::get('/prototype/issue-90-ui', fn () => view('prototypes.issue-90-ui'))
+        ->withoutMiddleware([
+            SetTenantDatabaseContext::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            VerifyCsrfToken::class,
+        ])
+        ->name('prototype.issue-90-ui');
 }
 
 Route::middleware('auth')->group(function (): void {
