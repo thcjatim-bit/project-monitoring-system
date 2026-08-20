@@ -335,6 +335,22 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('Project Searchable');
     }
 
+    public function test_portfolio_searchable_options_submit_their_original_project_and_mitra_ids(): void
+    {
+        $this->projectFor(Mitra::factory()->create(), 'PRJ-2608-0090', 'Project Noise');
+        $mitra = Mitra::factory()->create(['kode' => 'MTR-2608-0091', 'nama' => 'Mitra Searchable']);
+        $project = $this->projectFor($mitra, 'PRJ-2608-0091', 'Project Searchable');
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('data-value="'.$project->id.'"', false)
+            ->assertSee('data-label="PRJ-2608-0091', false)
+            ->assertSee('data-value="'.$mitra->id.'"', false)
+            ->assertSee('data-label="Mitra Searchable', false);
+    }
+
     public function test_portfolio_keeps_risk_select_disabled_without_progress_permission(): void
     {
         $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project');

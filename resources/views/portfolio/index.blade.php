@@ -119,7 +119,7 @@
                             name="project"
                             placeholder="Semua Project"
                             :value="$filters['project'] ?? ''"
-                            :options="collect(['' => 'Semua Project'])->merge($options['projects']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->id_project.' — '.$option->nama, 'search' => $option->id_project.' '.$option->nama]]))->all()"
+                            :options="collect(['' => 'Semua Project'])->union($options['projects']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->id_project.' — '.$option->nama, 'search' => $option->id_project.' '.$option->nama]]))->all()"
                             :clearable="true"
                         />
                     </div>
@@ -130,7 +130,7 @@
                             name="mitra"
                             placeholder="Semua Mitra"
                             :value="$filters['mitra'] ?? ''"
-                            :options="collect(['' => 'Semua Mitra'])->merge($options['mitras']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->nama.' — '.$option->kode, 'search' => $option->kode.' '.$option->nama]]))->all()"
+                            :options="collect(['' => 'Semua Mitra'])->union($options['mitras']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->nama.' — '.$option->kode, 'search' => $option->kode.' '.$option->nama]]))->all()"
                             :clearable="true"
                         />
                     </div>
