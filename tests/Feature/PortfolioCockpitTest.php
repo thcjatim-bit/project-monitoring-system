@@ -318,7 +318,8 @@ class PortfolioCockpitTest extends TestCase
 
     public function test_portfolio_filters_use_the_reusable_searchable_select_and_keep_authorized_options(): void
     {
-        $this->projectFor(Mitra::factory()->create(), 'PRJ-2608-0091', 'Project Searchable');
+        $mitra = Mitra::factory()->create(['kode' => 'MTR-2608-0091', 'nama' => 'Mitra Searchable']);
+        $this->projectFor($mitra, 'PRJ-2608-0091', 'Project Searchable');
         $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project', 'read_project_progress');
 
         $this->actingAs($thc)
@@ -327,6 +328,7 @@ class PortfolioCockpitTest extends TestCase
             ->assertSee('data-ui-select', false)
             ->assertSee('data-ui-select-option', false)
             ->assertSee('data-search-text="PRJ-2608-0091 Project Searchable"', false)
+            ->assertSee('data-search-text="MTR-2608-0091 Mitra Searchable"', false)
             ->assertSee('data-ui-select-search', false)
             ->assertSee('id="filter-periode-listbox"', false)
             ->assertSee('id="filter-risiko-listbox"', false)

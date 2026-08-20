@@ -130,7 +130,7 @@
                             name="mitra"
                             placeholder="Semua Mitra"
                             :value="$filters['mitra'] ?? ''"
-                            :options="collect(['' => 'Semua Mitra'])->merge($options['mitras']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->nama, 'search' => $option->nama]]))->all()"
+                            :options="collect(['' => 'Semua Mitra'])->merge($options['mitras']->mapWithKeys(fn ($option) => [$option->id => ['label' => $option->nama, 'search' => $option->kode.' '.$option->nama]]))->all()"
                             :clearable="true"
                         />
                     </div>
