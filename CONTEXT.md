@@ -17,6 +17,13 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Reset password** — mitra bisa self-service (sistem generate password baru, kirim otomatis lewat WA seperti onboarding); THC juga bisa memicu reset paksa dari panel.
 - **Nonaktifkan user mitra** — manual oleh THC, tidak otomatis dari tanggal berakhir PKS. User nonaktif tidak bisa login; data historis (project, foto, linimasa) tetap ada dan tetap terlihat THC, sesuai pola "nonaktif bukan hapus". Project aktif milik mitra yang dinonaktifkan **tidak dicegah** — tetap bisa ditutup administratif oleh THC tanpa akses mitra.
 - **Penugasan Gudang** — satu user dapat ditugaskan ke lebih dari satu gudang via tabel pivot.
+## Master Data
+
+- **Kode Master dan Warehouse** — pengenal manusia untuk Material, Unit, PoP, Pekerjaan Jasa, dan Warehouse. Kode otomatis memakai `MAT-YYMM-NNNN`, `UNT-YYMM-NNNN`, `POP-YYMM-NNNN`, `JAS-YYMM-NNNN`, atau `WH-YYMM-NNNN`; sequence berjalan terpisah per entitas dan per bulan.
+- **Kode Otomatis** — kode yang diterbitkan sistem ketika field kode dikosongkan saat membuat entitas. Kode ini dinormalisasi uppercase, immutable setelah terbit, dan tidak pernah digunakan kembali.
+- **Kode Manual** — kode lama atau kode yang diberikan THC sendiri. Setelah `trim` dan uppercase, formatnya bebas selama unik dan tidak menyamai pola Kode Otomatis yang belum diterbitkan.
+- **Ledger Kode Terbit** — catatan permanen bahwa suatu Kode Otomatis pernah diterbitkan, termasuk bila record pemiliknya kemudian tidak aktif atau dihapus melalui prosedur administratif.
+
 ## Proyek
 
 - **Project** — satu pekerjaan instalasi yang dimonitor. Dimiliki tepat satu Mitra.
@@ -67,9 +74,19 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 ## Konvensi lintas domain
 
 - **Nomor WhatsApp** — disimpan dalam format E.164 tanpa `+` (`628123456789`), ditampilkan sebagai tautan `wa.me` yang bisa diklik.
+- **Bulan Kode Otomatis** — `YYMM` mengikuti timezone bisnis `Asia/Jakarta`, bukan pergantian bulan UTC.
 - **Master data** — tabel nyata per entitas, di-CRUD dari UI. **Bukan** tabel serba-guna / EAV. Lihat `docs/adr/0002-master-data-tabel-nyata.md`.
 - **Nonaktif, bukan hapus** — baris master yang sudah dipakai transaksi tidak dihapus; ditandai `aktif = false`.
 - **Cloudflare Tunnel** — Pendekatan infrastruktur untuk mendapatkan domain dan HTTPS tanpa perlu *port-forward* di MikroTik.
 - **Build Artifact Git** — Aset statis (*frontend build*) dihasilkan di mesin lokal *developer* lalu di-*commit* ke repositori agar instalasi *server* tetap ringkas tanpa dependensi Node.js.
 - **Foto pekerjaan** — dokumentasi lapangan (hanya JPEG, maks 10/unggahan, maks 5 MB mentah). Dikompres client-side ke 1920×1080 sebelum upload. Disimpan di disk server, lalu disalin ke Google Drive via `rclone` tiap jam. Retensi server 90 hari; setelahnya Google Drive = sumber kebenaran. Lihat `docs/adr/0012-alur-foto-pekerjaan-dan-sinkronisasi-google-drive.md`.
 - **Folder Master** — satu folder Google Drive publik View-Only yang berisi semua foto project dalam struktur `ProjectID / Step / Tanggal`. Mitra mengaksesnya lewat tombol di aplikasi web.
+
+## Review kualitas
+
+- **Review QC Produksi** — pemeriksaan terarah terhadap aplikasi yang sedang berjalan di lingkungan produksi untuk menemukan perilaku yang perlu direvisi atau diputuskan.
+- **Temuan QC** — satu observasi Review QC Produksi yang dapat ditindaklanjuti, baik berupa bug, masalah UX/teks, maupun saran penyempurnaan.
+- **ID Temuan QC** — pengenal global dan tidak digunakan ulang untuk satu Temuan QC; formatnya `QC-NNNN` dan menjadi identitas yang sama pada judul laporan serta folder buktinya.
+- **Bukti QC** — screenshot atau artefak pendukung yang menunjukkan konteks dan kondisi Temuan QC. Bukti yang mengandung data sensitif harus disensor sebelum dibagikan.
+- **Status QC** — keadaan tindak lanjut Temuan QC: `open`, `in_progress`, `fixed`, `verified`, atau `wont_fix`.
+- **Severity QC** — tingkat dampak Temuan QC: `blocker`, `major`, `minor`, atau `suggestion`.

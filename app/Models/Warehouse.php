@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasImmutableMasterCode;
 use Database\Factories\WarehouseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +14,13 @@ class Warehouse extends Model
 {
     /** @use HasFactory<WarehouseFactory> */
     use HasFactory;
+
+    use HasImmutableMasterCode;
+
+    public function masterCodeEntity(): string
+    {
+        return 'warehouse';
+    }
 
     protected $fillable = ['kode', 'nama', 'mitra_id', 'aktif'];
 

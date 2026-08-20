@@ -11,16 +11,19 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WhatsappSessionStatus;
+use App\Services\MasterCodeGenerator;
 use App\Services\MitraCodeGenerator;
 use App\Services\MitraDeletionService;
 use App\Services\MitraOnboardingService;
 use App\Services\UserDeletionService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AdminController extends Controller
@@ -163,24 +166,30 @@ class AdminController extends Controller
         ]);
     }
 
-    public function createMaterial(Request $request): RedirectResponse
+    public function createMaterial(Request $request, MasterCodeGenerator $codes): RedirectResponse
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:255', 'unique:materials,kode'],
+            'kode' => ['nullable', 'string', 'max:255'],
             'nama' => ['required', 'string', 'max:255'],
             'unit_id' => ['required', Rule::exists('units', 'id')->where('aktif', true)],
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
             'ambang_minimum' => ['nullable', 'numeric', 'min:0'],
         ]);
-        Material::create($data);
+        $data['kode'] = $codes->normalize($data['kode'] ?? null);
+        $this->assertManualCodeIsAllowed($codes, 'material', $data['kode']);
+        $this->assertCodeIsUnique(Material::class, $data['kode']);
+        DB::transaction(function () use ($data, $codes): void {
+            $data['kode'] ??= $codes->generate('material', CarbonImmutable::now('Asia/Jakarta'));
+            Material::create($data);
+        });
 
         return back()->with('status', 'Material dibuat.');
     }
 
-    public function updateMaterial(Request $request, Material $material): RedirectResponse
+    public function updateMaterial(Request $request, Material $material, MasterCodeGenerator $codes): RedirectResponse
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:255', Rule::unique('materials', 'kode')->ignore($material->id)],
+            'kode' => ['required', 'string', 'max:255'],
             'nama' => ['required', 'string', 'max:255'],
             'unit_id' => ['required', Rule::exists('units', 'id')->where(
                 fn ($query) => $query->where('aktif', true)->orWhere('id', $material->unit_id)
@@ -188,6 +197,13 @@ class AdminController extends Controller
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
             'ambang_minimum' => ['nullable', 'numeric', 'min:0'],
         ]);
+        $data['kode'] = $codes->normalize($data['kode']);
+        $original = $codes->normalize($material->kode);
+        if ($data['kode'] !== $original && $original !== null && $codes->wasIssued('material', $original)) {
+            throw ValidationException::withMessages(['kode' => 'Kode otomatis tidak dapat diubah setelah diterbitkan.']);
+        }
+        $this->assertManualCodeIsAllowed($codes, 'material', $data['kode'], $original);
+        $this->assertCodeIsUnique(Material::class, $data['kode'], $material->id);
         $material->update($data);
 
         return back()->with('status', 'Material diperbarui.');
@@ -200,25 +216,38 @@ class AdminController extends Controller
         return back()->with('status', 'Material dinonaktifkan.');
     }
 
-    public function createWarehouse(Request $request): RedirectResponse
+    public function createWarehouse(Request $request, MasterCodeGenerator $codes): RedirectResponse
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:255', 'unique:warehouses,kode'],
+            'kode' => ['nullable', 'string', 'max:255'],
             'nama' => ['required', 'string', 'max:255'],
             'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where('aktif', true)],
         ]);
-        Warehouse::create([...$data, 'aktif' => true]);
+        $data['kode'] = $codes->normalize($data['kode'] ?? null);
+        $this->assertManualCodeIsAllowed($codes, 'warehouse', $data['kode']);
+        $this->assertCodeIsUnique(Warehouse::class, $data['kode']);
+        DB::transaction(function () use ($data, $codes): void {
+            $data['kode'] ??= $codes->generate('warehouse', CarbonImmutable::now('Asia/Jakarta'));
+            Warehouse::create([...$data, 'aktif' => true]);
+        });
 
         return back()->with('status', 'Warehouse dibuat.');
     }
 
-    public function updateWarehouse(Request $request, Warehouse $warehouse): RedirectResponse
+    public function updateWarehouse(Request $request, Warehouse $warehouse, MasterCodeGenerator $codes): RedirectResponse
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:255', Rule::unique('warehouses', 'kode')->ignore($warehouse->id)],
+            'kode' => ['required', 'string', 'max:255'],
             'nama' => ['required', 'string', 'max:255'],
             'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where('aktif', true)],
         ]);
+        $data['kode'] = $codes->normalize($data['kode']);
+        $original = $codes->normalize($warehouse->kode);
+        if ($data['kode'] !== $original && $original !== null && $codes->wasIssued('warehouse', $original)) {
+            throw ValidationException::withMessages(['kode' => 'Kode otomatis tidak dapat diubah setelah diterbitkan.']);
+        }
+        $this->assertManualCodeIsAllowed($codes, 'warehouse', $data['kode'], $original);
+        $this->assertCodeIsUnique(Warehouse::class, $data['kode'], $warehouse->id);
         $warehouse->update($data);
 
         return back()->with('status', 'Warehouse diperbarui.');
@@ -258,5 +287,27 @@ class AdminController extends Controller
         }
 
         return response()->noContent();
+    }
+
+    private function assertManualCodeIsAllowed(MasterCodeGenerator $codes, string $entity, ?string $code, ?string $original = null): void
+    {
+        if ($code !== null && $code !== $original && $codes->isAutomaticCode($entity, $code)) {
+            throw ValidationException::withMessages(['kode' => 'Kode dengan pola otomatis hanya boleh diterbitkan generator.']);
+        }
+    }
+
+    private function assertCodeIsUnique(string $model, ?string $code, ?int $ignoreId = null): void
+    {
+        if ($code === null) {
+            return;
+        }
+
+        $query = $model::query()->where('kode', $code);
+        if ($ignoreId !== null) {
+            $query->where('id', '!=', $ignoreId);
+        }
+        if ($query->exists()) {
+            throw ValidationException::withMessages(['kode' => 'Kode sudah digunakan.']);
+        }
     }
 }

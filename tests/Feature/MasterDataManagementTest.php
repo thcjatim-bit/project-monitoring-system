@@ -11,6 +11,7 @@ use App\Models\Pop;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
+use Carbon\CarbonImmutable;
 use Database\Seeders\AccessControlSeeder;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -168,6 +169,109 @@ class MasterDataManagementTest extends TestCase
             ->assertOk()
             ->assertSee('value="'.$activeUnit->id.'"', false)
             ->assertDontSee('value="'.$inactiveUnit->id.'"', false);
+    }
+
+    public function test_each_master_create_endpoint_generates_its_agreed_code(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 10:00:00');
+
+        try {
+            $admin = User::factory()->create([
+                'grup_id' => $this->groupWith('manage_master_data', 'manage_materials', 'manage_warehouses')->id,
+            ]);
+            $unit = Unit::query()->create(['kode' => 'PCS', 'nama' => 'Pieces']);
+
+            $this->actingAs($admin)->post('/admin/master/units', ['kode' => '', 'nama' => 'Meter'])->assertRedirect();
+            $this->actingAs($admin)->post('/admin/master/pops', ['kode' => '', 'nama' => 'PoP Surabaya'])->assertRedirect();
+            $this->actingAs($admin)->post('/admin/master/pekerjaan-jasa', ['kode' => '', 'nama' => 'Tarik Kabel'])->assertRedirect();
+            $this->actingAs($admin)->post('/admin/materials', [
+                'kode' => '', 'nama' => 'Kabel', 'unit_id' => $unit->id, 'jenis' => 'biasa',
+            ])->assertRedirect();
+            $this->actingAs($admin)->post('/admin/warehouses', [
+                'kode' => '', 'nama' => 'Gudang Utama',
+            ])->assertRedirect();
+
+            $this->assertDatabaseHas('units', ['kode' => 'UNT-2608-0001']);
+            $this->assertDatabaseHas('pops', ['kode' => 'POP-2608-0001']);
+            $this->assertDatabaseHas('pekerjaan_jasas', ['kode' => 'JAS-2608-0001']);
+            $this->assertDatabaseHas('materials', ['kode' => 'MAT-2608-0001']);
+            $this->assertDatabaseHas('warehouses', ['kode' => 'WH-2608-0001']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_manual_codes_are_normalized_and_automatic_shaped_manual_codes_are_rejected(): void
+    {
+        $admin = User::factory()->create(['grup_id' => $this->groupWith('manage_master_data')->id]);
+
+        $this->actingAs($admin)->post('/admin/master/units', [
+            'kode' => '  meter-lama  ', 'nama' => 'Meter',
+        ])->assertRedirect()->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('units', ['kode' => 'METER-LAMA']);
+
+        $this->actingAs($admin)->from('/admin/master/units')->post('/admin/master/units', [
+            'kode' => 'UNT-2608-0001', 'nama' => 'Kode Menyamar',
+        ])->assertRedirect('/admin/master/units')->assertSessionHasErrors('kode');
+
+        $this->assertDatabaseMissing('units', ['nama' => 'Kode Menyamar']);
+    }
+
+    public function test_automatic_shaped_manual_codes_are_rejected_for_every_master_entity(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 10:00:00');
+
+        try {
+            $admin = User::factory()->create([
+                'grup_id' => $this->groupWith('manage_master_data', 'manage_materials', 'manage_warehouses')->id,
+            ]);
+            $unit = Unit::query()->create(['kode' => 'PCS', 'nama' => 'Pieces']);
+            $requests = [
+                ['/admin/master/units', ['kode' => 'UNT-2608-0991', 'nama' => 'Unit Menyamar']],
+                ['/admin/master/pops', ['kode' => 'POP-2608-0991', 'nama' => 'PoP Menyamar']],
+                ['/admin/master/pekerjaan-jasa', ['kode' => 'JAS-2608-0991', 'nama' => 'Jasa Menyamar']],
+                ['/admin/materials', ['kode' => 'MAT-2608-0991', 'nama' => 'Material Menyamar', 'unit_id' => $unit->id, 'jenis' => 'biasa']],
+                ['/admin/warehouses', ['kode' => 'WH-2608-0991', 'nama' => 'Warehouse Menyamar']],
+            ];
+
+            foreach ($requests as [$url, $payload]) {
+                $this->actingAs($admin)
+                    ->from($url)
+                    ->post($url, $payload)
+                    ->assertRedirect($url)
+                    ->assertSessionHasErrors('kode');
+            }
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_automatic_code_cannot_be_changed_but_manual_code_can_be_changed(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-20 10:00:00');
+
+        try {
+            $admin = User::factory()->create(['grup_id' => $this->groupWith('manage_master_data')->id]);
+
+            $this->actingAs($admin)->post('/admin/master/units', [
+                'kode' => '', 'nama' => 'Meter',
+            ])->assertRedirect();
+            $automatic = Unit::query()->where('kode', 'UNT-2608-0001')->firstOrFail();
+
+            $this->actingAs($admin)->patch("/admin/master/units/{$automatic->id}", [
+                'kode' => 'UNT-2608-9999', 'nama' => 'Meter Revisi',
+            ])->assertRedirect()->assertSessionHasErrors('kode');
+            $this->assertDatabaseHas('units', ['id' => $automatic->id, 'kode' => 'UNT-2608-0001', 'nama' => 'Meter']);
+
+            $manual = Unit::query()->create(['kode' => 'M-LAMA', 'nama' => 'Meter Lama']);
+            $this->actingAs($admin)->patch("/admin/master/units/{$manual->id}", [
+                'kode' => ' m-baru ', 'nama' => 'Meter Baru',
+            ])->assertRedirect()->assertSessionDoesntHaveErrors();
+            $this->assertDatabaseHas('units', ['id' => $manual->id, 'kode' => 'M-BARU', 'nama' => 'Meter Baru']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
     }
 
     private function groupWith(string ...$permissions): Grup

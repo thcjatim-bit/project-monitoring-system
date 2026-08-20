@@ -41,12 +41,12 @@ class MaterialOperationalUiTest extends TestCase
                 'jenis' => 'biasa',
             ])
             ->assertRedirect()
-            ->assertSessionHasErrors(['kode', 'nama']);
+            ->assertSessionHasErrors(['nama'])
+            ->assertSessionDoesntHaveErrors(['kode']);
 
         $this->actingAs($admin)
             ->get('/admin/materials')
             ->assertOk()
-            ->assertSee('The kode field is required.')
             ->assertSee('The nama field is required.');
     }
 

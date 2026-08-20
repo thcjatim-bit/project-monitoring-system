@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasImmutableMasterCode;
 use Database\Factories\MaterialFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,13 @@ class Material extends Model
 {
     /** @use HasFactory<MaterialFactory> */
     use HasFactory;
+
+    use HasImmutableMasterCode;
+
+    public function masterCodeEntity(): string
+    {
+        return 'material';
+    }
 
     protected $fillable = ['kode', 'nama', 'unit_id', 'jenis', 'ambang_minimum', 'aktif'];
 
