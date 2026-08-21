@@ -146,6 +146,49 @@ class SuratJalanTransferTest extends TestCase
             ->assertSee('<td>4</td>', false);
     }
 
+    public function test_transit_status_is_calculated_per_item_for_multi_item_transfers(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $first = Material::factory()->create(['jenis' => 'biasa']);
+        $second = Material::factory()->create(['jenis' => 'biasa']);
+        $user = $this->userWithWarehousePermission($mitra);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+
+        foreach ([$first, $second] as $material) {
+            $this->actingAs($user)->post('/warehouse/stock/receive', [
+                'warehouse_id' => $origin->id,
+                'material_id' => $material->id,
+                'qty' => '10',
+                'reason' => 'Penerimaan awal',
+            ])->assertRedirect();
+        }
+
+        $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $first->id, 'qty' => '4'],
+                ['material_id' => $second->id, 'qty' => '5'],
+            ],
+        ])->assertRedirect();
+
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $firstItemId = DB::table('surat_jalan_items')->where('material_id', $first->id)->value('id');
+
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive", [
+            'items' => [['surat_jalan_item_id' => $firstItemId, 'qty' => '1']],
+        ])->assertRedirect();
+
+        $response = $this->actingAs($user)->get('/warehouse/transit')->assertOk();
+        $response->assertSee('Sebagian diterima')->assertSee('Dalam Transit');
+        $this->assertSame(1, substr_count($response->getContent(), 'Sebagian diterima'));
+        $this->assertSame(1, substr_count($response->getContent(), 'Dalam Transit'));
+    }
+
     public function test_read_transit_grants_own_transfer_detail_and_print_without_dashboard_permission(): void
     {
         [$origin] = $this->issueOrdinaryTransfer();

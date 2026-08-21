@@ -12,4 +12,9 @@ final class QuantityDisplayFormatter
 
         return $fraction === '' ? $integer : $integer.','.$fraction;
     }
+
+    public static function formatInput(string|int|float $quantity): string
+    {
+        return rtrim(rtrim(number_format((float) $quantity, 3, '.', ''), '0'), '.');
+    }
 }

@@ -181,20 +181,43 @@ class SuratJalanController extends Controller
             && ! $user->hasIzin('operate_warehouse');
         $warehouseIds = $readOnlyTransit ? [] : $this->assignedWarehouses(request())->modelKeys();
 
+        $stocks = MaterialStok::query()
+            ->with(['material.unit', 'warehouse', 'suratJalan.origin', 'suratJalan.destination', 'suratJalan.items'])
+            ->where('lokasi_tipe', 'transit')
+            ->where('qty', '>', 0)
+            ->when(
+                $readOnlyTransit,
+                fn ($query) => $query->where('mitra_id', $user->mitra_id),
+                fn ($query) => $query->whereIn('warehouse_id', $warehouseIds),
+            )
+            ->orderBy('lokasi_id')
+            ->get();
+
         return response()->view('warehouse.transit', [
             'readOnlyTransit' => $readOnlyTransit,
-            'stocks' => MaterialStok::query()
-                ->with(['material.unit', 'warehouse', 'suratJalan.origin', 'suratJalan.destination', 'suratJalan.items'])
-                ->where('lokasi_tipe', 'transit')
-                ->where('qty', '>', 0)
-                ->when(
-                    $readOnlyTransit,
-                    fn ($query) => $query->where('mitra_id', $user->mitra_id),
-                    fn ($query) => $query->whereIn('warehouse_id', $warehouseIds),
-                )
-                ->orderBy('lokasi_id')
-                ->get(),
+            'stocks' => $this->transitRows($stocks),
         ]);
+    }
+
+    private function transitRows(Collection $stocks): Collection
+    {
+        return $stocks->flatMap(function (MaterialStok $stock): Collection {
+            $items = $stock->suratJalan?->items;
+            $items = $items?->where('material_id', $stock->material_id)
+                ->filter(fn ($item): bool => (float) $item->qty > (float) $item->qty_diterima);
+
+            if ($items === null || $items->isEmpty()) {
+                return collect([$stock->setAttribute('transit_status', 'Dalam Transit')]);
+            }
+
+            return $items->map(function ($item) use ($stock): MaterialStok {
+                $row = clone $stock;
+                $row->setAttribute('qty', max(0, (float) $item->qty - (float) $item->qty_diterima));
+                $row->setAttribute('transit_status', (float) $item->qty_diterima > 0 ? 'Sebagian diterima' : 'Dalam Transit');
+
+                return $row;
+            });
+        });
     }
 
     private function activeWarehouseRule(): Exists
