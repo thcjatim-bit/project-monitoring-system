@@ -14,7 +14,7 @@
                 <td>{{ $transfer?->origin?->kode }} — {{ $transfer?->origin?->nama }} → {{ $transfer?->destination?->kode }} — {{ $transfer?->destination?->nama }}</td>
                 <td>{{ $stock->material->kode }} — {{ $stock->material->nama }}<div class="ui-muted">{{ $stock->material->unit?->nama }}</div></td>
                 <td>{{ \App\Support\QuantityDisplayFormatter::format($stock->qty) }}</td>
-                <td><x-ui.badge :tone="$stock->transit_status === 'Sebagian diterima' ? 'warning' : 'info'" :label="$stock->transit_status" /></td>
+                <td><x-ui.badge :tone="$stock->transit_label === 'Sebagian diterima' ? 'warning' : 'info'" :label="$stock->transit_label" /></td>
                 <td class="ui-inline"><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.show', $transfer) }}">Detail</a><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.print', $transfer) }}" target="_blank" rel="noopener noreferrer">Cetak</a></td>
             </tr>
         @empty
