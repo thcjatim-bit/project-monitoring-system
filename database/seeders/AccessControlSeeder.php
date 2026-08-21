@@ -29,11 +29,16 @@ class AccessControlSeeder extends Seeder
             'edit_project_comment' => 'Mengedit Komentar Project',
             'mention_project_user' => 'Mention User Project',
             'manage_users' => 'Mengelola User',
+            'manage_mitra_users' => 'Mengelola User Mitra sendiri',
             'manage_grups' => 'Mengelola Grup',
             'manage_mitras' => 'Mengelola Mitra',
             'manage_warehouses' => 'Mengelola Warehouse',
             'manage_materials' => 'Mengelola Material',
             'operate_warehouse' => 'Mengoperasikan Warehouse',
+            'manage_mitra_warehouse' => 'Mengelola assignment Warehouse Mitra sendiri',
+            'manage_mitra_project' => 'Mengelola operasional Project Mitra sendiri',
+            'manage_mitra_prices' => 'Mengajukan Harga Jasa Mitra sendiri',
+            'approve_mitra_price' => 'Menyetujui Harga Jasa Mitra',
             'read_transit' => 'Membaca Transit',
             'manage_master_data' => 'Mengelola Master Data',
             'read_master_data' => 'Melihat Master Data',
@@ -59,6 +64,7 @@ class AccessControlSeeder extends Seeder
             'waspang' => ['nama' => 'Waspang', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon']],
             'viewer' => ['nama' => 'Viewer', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'read_project_material', 'read_project_timeline', 'read_master_data']],
             'mitra' => ['nama' => 'Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'create_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon', 'read_transit']],
+            'admin_mitra' => ['nama' => 'Admin Mitra', 'izins' => ['read_dashboard', 'read_project', 'read_project_progress', 'report_project_progress', 'update_project_step', 'read_project_material', 'upload_project_photo', 'read_project_timeline', 'create_project_comment', 'edit_project_comment', 'mention_project_user', 'read_master_data', 'read_material_request', 'create_material_request', 'read_material_usage', 'create_material_usage', 'read_material_rekon', 'read_transit', 'operate_warehouse', 'manage_mitra_users', 'manage_mitra_warehouse', 'manage_mitra_project', 'manage_mitra_prices']],
         ];
 
         foreach ($matriks as $preset => $definition) {

@@ -32,7 +32,7 @@ class MitraOnboardingService
                 'email' => $attributes['admin_email'],
                 'no_wa' => $attributes['no_wa'],
                 'password' => $password,
-                'grup_id' => Grup::query()->where('preset', 'mitra')->value('id'),
+                'grup_id' => Grup::query()->where('preset', 'admin_mitra')->value('id'),
                 'aktif' => true,
             ]);
             $this->waha->sendText($attributes['no_wa'], "Akun Project Monitoring System\nEmail: {$user->email}\nKata sandi: {$password}");

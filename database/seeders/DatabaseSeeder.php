@@ -40,7 +40,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'User Mitra Demo',
                 'password' => $password,
-                'grup_id' => Grup::query()->where('preset', 'mitra')->value('id'),
+                'grup_id' => Grup::query()->where('preset', 'admin_mitra')->value('id'),
                 'mitra_id' => $mitra->id,
                 'aktif' => true,
             ],

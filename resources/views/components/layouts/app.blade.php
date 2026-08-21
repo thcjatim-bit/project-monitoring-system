@@ -281,11 +281,14 @@
                 $canViewProjects = $authenticatedUser->hasIzin('read_project');
                 $canManageMitras = $isThcUser && $authenticatedUser->hasIzin('manage_mitras');
                 $canManageUsers = $isThcUser && $authenticatedUser->hasIzin('manage_users');
+                $canManageMitraUsers = $isMitraUser && $authenticatedUser->hasIzin('manage_mitra_users');
                 $canManageApiKeys = $isThcUser && $authenticatedUser->hasIzin('manage_api_keys');
-                $canViewMitraUsers = $canManageUsers || $canManageMitras;
+                $canViewMitraUsers = $canManageUsers || $canManageMitras || $canManageMitraUsers;
                 $canViewMasterData = $authenticatedUser->hasIzin('read_master_data');
                 $canManageWarehouses = $isThcUser && $authenticatedUser->hasIzin('manage_warehouses');
                 $canOperateWarehouse = $authenticatedUser->hasIzin('operate_warehouse');
+                $canManageMitraWarehouse = $isMitraUser && $authenticatedUser->hasIzin('manage_mitra_warehouse');
+                $canManageMitraPrices = $isMitraUser && $authenticatedUser->hasIzin('manage_mitra_prices');
                 $canReadTransit = $isMitraUser && $authenticatedUser->hasIzin('read_transit');
                 $canViewTransfers = $canOperateWarehouse || $canReadTransit;
                 $canViewWarehouse = $canManageWarehouses || $canOperateWarehouse || $canReadTransit;
@@ -301,6 +304,7 @@
                     $canManageUsers => route('admin.users'),
                     $canManageApiKeys => route('admin.api-keys.index'),
                     $canViewMasterData => route('admin.materials'),
+                    $canManageMitraPrices => route('mitra.prices.index'),
                     $canManageWarehouses => route('admin.warehouses'),
                     $canOperateWarehouse => route('warehouse.transit'),
                     $canViewMaterialRequest => route('material-requests.index'),
@@ -318,6 +322,7 @@
                     request()->routeIs('admin.users', 'admin.mitras') => 'Mitra & User',
                     request()->routeIs('admin.api-keys.*') => 'API Key',
                     request()->routeIs('admin.materials', 'admin.master.*') => 'Master Data',
+                    request()->routeIs('mitra.prices.*') => 'Harga Jasa Mitra',
                     request()->routeIs('admin.warehouses', 'warehouse.*') => 'Warehouse',
                     request()->routeIs('material-requests.*') => 'Request Material',
                     request()->routeIs('material-usages.*') => 'Pemakaian Material',
@@ -381,6 +386,11 @@
                                         <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">USR</span>User</span>
                                     </a>
                                 @endif
+                                @if ($canManageMitraUsers)
+                                    <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.users')]) href="{{ route('admin.users') }}" @if (request()->routeIs('admin.users')) aria-current="page" @endif>
+                                        <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">USR</span>Kelola User Mitra</span>
+                                    </a>
+                                @endif
                             </div>
                         @endif
 
@@ -408,6 +418,18 @@
                                 <a @class(['app-shell__nav-link', 'is-active' => $activeMasterEntity === 'pekerjaan-jasa']) href="{{ route('admin.master.index', ['entity' => 'pekerjaan-jasa']) }}" @if ($activeMasterEntity === 'pekerjaan-jasa') aria-current="page" @endif>
                                     <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">JS</span>Pekerjaan Jasa</span>
                                 </a>
+                                @if ($canManageMitraPrices)
+                                    <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('mitra.prices.*')]) href="{{ route('mitra.prices.index') }}" @if (request()->routeIs('mitra.prices.*')) aria-current="page" @endif>
+                                        <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">Rp</span>Harga Jasa Mitra</span>
+                                    </a>
+                                @endif
+                            </div>
+                        @elseif ($canManageMitraPrices)
+                            <div class="app-shell__nav-group">
+                                <span class="app-shell__nav-label">Harga Jasa</span>
+                                <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('mitra.prices.*')]) href="{{ route('mitra.prices.index') }}" @if (request()->routeIs('mitra.prices.*')) aria-current="page" @endif>
+                                    <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">Rp</span>Harga Jasa Mitra</span>
+                                </a>
                             </div>
                         @endif
 
@@ -417,6 +439,11 @@
                                 @if ($canManageWarehouses)
                                     <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('admin.warehouses')]) href="{{ route('admin.warehouses') }}" @if (request()->routeIs('admin.warehouses')) aria-current="page" @endif>
                                         <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">WH</span>Penugasan Warehouse</span>
+                                    </a>
+                                @endif
+                                @if ($canManageMitraWarehouse)
+                                    <a @class(['app-shell__nav-link', 'is-active' => request()->routeIs('mitra.warehouses.*')]) href="{{ route('mitra.warehouses.index') }}" @if (request()->routeIs('mitra.warehouses.*')) aria-current="page" @endif>
+                                        <span class="app-shell__nav-link-copy"><span class="app-shell__nav-link-mark">ASG</span>Assignment User</span>
                                     </a>
                                 @endif
                                 @if ($canOperateWarehouse)

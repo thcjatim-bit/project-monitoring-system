@@ -17,7 +17,9 @@ class ProjectPlanningController extends Controller
     public function index(Project $project): View
     {
         $viewer = request()->user();
-        $canManage = $viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan');
+        $canManage = ($viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan'))
+            || ($viewer->mitra_id !== null && $viewer->hasIzin('manage_mitra_project'));
+        $canApproveVariationOrder = $viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan');
 
         return view('projects.planning', [
             'project' => $project->loadMissing('mitra'),
@@ -46,6 +48,7 @@ class ProjectPlanningController extends Controller
                 ->orderByDesc('id')
                 ->get(),
             'canManage' => $canManage,
+            'canApproveVariationOrder' => $canApproveVariationOrder,
         ]);
     }
 

@@ -44,7 +44,14 @@ class MitraDashboardQuery
                 'active' => $projects->where('status_project', 'aktif')->count(),
                 'completed' => $projects->where('status_project', 'selesai')->count(),
             ],
-            'stocks' => $actor->hasIzin('read_master_data') ? $this->stocks() : collect(),
+            'warehouseCount' => $actor->hasIzin('read_master_data')
+                ? Warehouse::query()->where('mitra_id', $actor->mitra_id)->where('aktif', true)->count()
+                : null,
+            'activeUserCount' => $actor->hasIzin('manage_mitra_users')
+                ? User::query()->where('mitra_id', $actor->mitra_id)->where('aktif', true)->count()
+                : null,
+            'requestCount' => $actor->hasIzin('read_material_request') ? MaterialRequest::query()->count() : 0,
+            'stocks' => $actor->hasIzin('read_master_data') ? $this->stocks($actor->mitra_id) : collect(),
             'requests' => $actor->hasIzin('read_material_request')
                 ? MaterialRequest::query()->with(['project', 'items.material.unit'])->latest()->limit(8)->get()
                 : new EloquentCollection,
@@ -66,11 +73,12 @@ class MitraDashboardQuery
     }
 
     /** @return Collection<int, array{warehouse: Warehouse, material: object, qty: float}> */
-    private function stocks(): Collection
+    private function stocks(int $mitraId): Collection
     {
         $stocks = collect();
 
         MaterialStok::query()
+            ->where('mitra_id', $mitraId)
             ->where('lokasi_tipe', 'warehouse')
             ->where('qty', '>', 0)
             ->whereHas('material', fn ($query) => $query->where('jenis', 'biasa'))
@@ -82,8 +90,9 @@ class MitraDashboardQuery
                 $stocks->push(['warehouse' => $stock->warehouse, 'material' => $stock->material, 'qty' => (float) $stock->qty]);
             });
 
-        $warehouses = Warehouse::query()->where('aktif', true)->get()->keyBy('id');
+        $warehouses = Warehouse::query()->where('mitra_id', $mitraId)->where('aktif', true)->get()->keyBy('id');
         MaterialSn::query()
+            ->where('mitra_id', $mitraId)
             ->where('lokasi_tipe', 'warehouse')
             ->where('status', 'tersedia')
             ->with('material.unit')
@@ -98,6 +107,7 @@ class MitraDashboardQuery
             });
 
         Drum::query()
+            ->where('mitra_id', $mitraId)
             ->where('lokasi_tipe', 'warehouse')
             ->where('sisa', '>', 0)
             ->with('material.unit')

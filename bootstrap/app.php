@@ -2,9 +2,11 @@
 
 use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnsureMitraUser;
+use App\Http\Middleware\EnsureProjectPlanningAccess;
 use App\Http\Middleware\EnsureThcUser;
 use App\Http\Middleware\EnsureTransitReadAccess;
 use App\Http\Middleware\EnsureUserHasIzin;
+use App\Http\Middleware\EnsureUserManagementAccess;
 use App\Http\Middleware\EnsureWarehouseAssignment;
 use App\Http\Middleware\SetTenantDatabaseContext;
 use Illuminate\Console\Scheduling\Schedule;
@@ -30,8 +32,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'izin' => EnsureUserHasIzin::class,
             'thc' => EnsureThcUser::class,
             'mitra' => EnsureMitraUser::class,
+            'project-planning' => EnsureProjectPlanningAccess::class,
             'transit.read' => EnsureTransitReadAccess::class,
             'warehouse' => EnsureWarehouseAssignment::class,
+            'user-management' => EnsureUserManagementAccess::class,
             'api.key' => AuthenticateApiKey::class,
         ]);
     })

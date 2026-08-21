@@ -18,6 +18,9 @@ class MitraDashboardController extends Controller
             $data = [
                 'projects' => collect(),
                 'projectCounts' => ['active' => 0, 'completed' => 0],
+                'warehouseCount' => 0,
+                'activeUserCount' => 0,
+                'requestCount' => 0,
                 'stocks' => collect(),
                 'requests' => collect(),
                 'usages' => collect(),

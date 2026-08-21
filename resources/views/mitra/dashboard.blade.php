@@ -6,6 +6,22 @@
             <div class="ui-state ui-state--error" role="alert">Ringkasan belum dapat dimuat. Coba lagi atau buka modul sumber.</div>
         @endif
 
+        <section class="ui-grid" data-dashboard-kpis aria-label="KPI Dashboard Mitra">
+            @if ($user->hasIzin('read_project'))
+                <x-ui.panel><div class="ui-section-head"><div><p class="ui-help">Project aktif</p><strong>{{ $projectCounts['active'] }}</strong></div><x-ui.badge tone="done" label="Operasional" /></div></x-ui.panel>
+                <x-ui.panel><div class="ui-section-head"><div><p class="ui-help">Project selesai</p><strong>{{ $projectCounts['completed'] }}</strong></div><x-ui.badge tone="neutral" label="Historis" /></div></x-ui.panel>
+            @endif
+            @if ($user->hasIzin('read_material_request'))
+                <x-ui.panel><div class="ui-section-head"><div><p class="ui-help">Request Material</p><strong>{{ $requestCount }}</strong></div><x-ui.badge tone="warning" label="Alur material" /></div></x-ui.panel>
+            @endif
+            @if ($warehouseCount !== null)
+                <x-ui.panel><div class="ui-section-head"><div><p class="ui-help">Warehouse aktif</p><strong>{{ $warehouseCount }}</strong></div><x-ui.badge tone="neutral" label="Tenant" /></div></x-ui.panel>
+            @endif
+            @if ($activeUserCount !== null)
+                <x-ui.panel><div class="ui-section-head"><div><p class="ui-help">User aktif</p><strong>{{ $activeUserCount }}</strong></div><x-ui.badge tone="neutral" label="Mitra" /></div></x-ui.panel>
+            @endif
+        </section>
+
         @if ($user->hasIzin('read_project'))
             <x-ui.panel>
                 <div class="ui-section-head"><div><h2 id="project-summary-title">Project</h2><p class="ui-help">Project aktif: <strong>{{ $projectCounts['active'] }}</strong> · Project selesai: <strong>{{ $projectCounts['completed'] }}</strong></p></div><x-ui.badge tone="neutral" label="{{ $projectCounts['active'] + $projectCounts['completed'] }} Project" /></div>
@@ -23,7 +39,7 @@
             <x-ui.panel>
                 <div class="ui-section-head"><div><h2 id="stock-summary-title">Saldo Stok Gudang Mitra</h2><p class="ui-help">Diringkas per Material, Unit, dan Warehouse; kuantitas lintas Unit tidak dijumlahkan.</p></div></div>
                 @forelse ($stocks as $stock)
-                    <p class="ui-list__item">{{ $stock['material']->nama }} · {{ $stock['material']->unit?->nama }} · {{ $stock['warehouse']->nama }}: <strong>{{ number_format($stock['qty'], 3, ',', '.') }}</strong></p>
+                    <p class="ui-list__item">{{ $stock['material']->nama }} · {{ $stock['material']->unit?->nama }} · {{ $stock['warehouse']->nama }}: <strong>{{ \App\Support\QuantityDisplayFormatter::format($stock['qty']) }}</strong></p>
                 @empty
                     <x-ui.empty-state title="Belum ada Saldo Stok Gudang Mitra." />
                 @endforelse

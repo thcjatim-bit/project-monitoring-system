@@ -9,6 +9,8 @@ use App\Http\Controllers\MaterialInventoryController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\MaterialUsageController;
 use App\Http\Controllers\MitraDashboardController;
+use App\Http\Controllers\MitraPriceController;
+use App\Http\Controllers\MitraWarehouseController;
 use App\Http\Controllers\PortfolioCockpitController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMaterialController;
@@ -87,6 +89,15 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/mitra/dashboard', [MitraDashboardController::class, 'index'])
             ->middleware('izin:read_dashboard')
             ->name('mitra.dashboard');
+        Route::middleware('izin:manage_mitra_warehouse')->group(function (): void {
+            Route::get('/mitra/warehouses', [MitraWarehouseController::class, 'index'])->name('mitra.warehouses.index');
+            Route::post('/mitra/warehouses/{warehouse}/users', [MitraWarehouseController::class, 'assign'])->name('mitra.warehouses.assign');
+            Route::delete('/mitra/warehouses/{warehouse}/users/{user}', [MitraWarehouseController::class, 'unassign'])->name('mitra.warehouses.unassign');
+        });
+        Route::middleware('izin:manage_mitra_prices')->group(function (): void {
+            Route::get('/mitra/harga-jasa', [MitraPriceController::class, 'index'])->name('mitra.prices.index');
+            Route::post('/mitra/harga-jasa', [MitraPriceController::class, 'store'])->name('mitra.prices.store');
+        });
     });
     Route::get('/dashboard', [CommandCenterController::class, 'index'])
         ->middleware(['thc', 'izin:read_dashboard'])
@@ -113,10 +124,12 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/projects/{project}/comments/{timeline}', [ProjectTimelineController::class, 'update'])
         ->middleware('izin:edit_project_comment')
         ->name('projects.comments.update');
-    Route::middleware(['thc', 'izin:manage_project_plan'])->group(function (): void {
+    Route::middleware('project-planning')->group(function (): void {
         Route::post('/projects/{project}/rab-jasa', [ProjectPlanningController::class, 'storeRabJasa'])->name('projects.rab-jasa.store');
         Route::put('/projects/{project}/plan', [ProjectPlanningController::class, 'updatePlan'])->name('projects.plan.update');
         Route::post('/projects/{project}/variation-orders', [ProjectPlanningController::class, 'storeVariationOrder'])->name('projects.variation-orders.store');
+    });
+    Route::middleware(['thc', 'izin:manage_project_plan'])->group(function (): void {
         Route::patch('/projects/{project}/variation-orders/{variationOrder}/approve', [ProjectPlanningController::class, 'approveVariationOrder'])->name('projects.variation-orders.approve');
     });
     Route::post('/projects/{project}/progress', [ProjectProgressController::class, 'store'])->middleware('izin:report_project_progress')->name('projects.progress.store');
@@ -156,7 +169,7 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->middleware('izin:update_project')->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->middleware('izin:delete_project')->name('projects.destroy');
     Route::post('/keluar', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-    Route::middleware(['thc', 'izin:manage_users'])->group(function (): void {
+    Route::middleware('user-management')->group(function (): void {
         Route::get('/admin/users', [AdminController::class, 'users'])->name('admin.users');
         Route::post('/admin/users', [AdminController::class, 'createUser'])->name('admin.users.create');
         Route::patch('/admin/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
@@ -169,6 +182,10 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/admin/api-keys', [ApiKeyController::class, 'store'])->name('admin.api-keys.store');
         Route::patch('/admin/api-keys/{apiKey}/revoke', [ApiKeyController::class, 'revoke'])->name('admin.api-keys.revoke');
         Route::post('/admin/api-keys/{apiKey}/rotate', [ApiKeyController::class, 'rotate'])->name('admin.api-keys.rotate');
+    });
+    Route::middleware(['thc', 'izin:approve_mitra_price'])->group(function (): void {
+        Route::patch('/admin/harga-jasa/{price}/approve', [MitraPriceController::class, 'approve'])->name('admin.prices.approve');
+        Route::patch('/admin/harga-jasa/{price}/reject', [MitraPriceController::class, 'reject'])->name('admin.prices.reject');
     });
     Route::get('/admin/mitras', [AdminController::class, 'mitras'])
         ->middleware(['thc', 'izin:manage_mitras'])
