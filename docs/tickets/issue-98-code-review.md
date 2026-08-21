@@ -81,6 +81,47 @@ Temuan selama review ulang tentang atomic ordering, fallback native, coverage
 race/lifecycle, pemisahan seam concurrency, provenance publikasi Baseline, dan
 regression proposal sudah diperbaiki sebelum verifikasi final.
 
+## Audit pasca-commit 2026-08-21
+
+Audit dua sumbu terbaru dilakukan hanya terhadap perubahan yang sudah di-commit
+pada rentang berikut:
+
+```text
+e1c6ac93c1b88ce8d48b96ff4b7789605bdddc3c...27dcad10d242993ea3a0417d232639b7fa27aaa9
+```
+
+Perubahan working tree yang belum di-commit tidak termasuk dalam audit. Audit
+ini mencatat temuan yang masih ada pada hasil akhir commit dan tidak mengubah
+catatan historis verifikasi sebelum commit di bagian sebelumnya.
+
+### Standards
+
+1. **Pelanggaran istilah domain** — `resources/views/projects/planning.blade.php`
+   masih memakai istilah singkat atau bahasa Inggris seperti "Harga Jasa",
+   "Original/Revised", dan "freeze". `CONTEXT.md` mewajibkan istilah domain
+   persis pada teks UI: **Harga Jasa Mitra**, **Original Baseline/Revised
+   Baseline**, **RAB Jasa**, dan **dibekukan**.
+
+Tidak ditemukan code smell tambahan dari baseline review.
+
+### Spec
+
+1. **Medium — sequence kode habis menghasilkan error publik yang salah.** Desain
+   mewajibkan `ValidationException` pada field `kode`, tetapi
+   `CodedMasterLifecycle::create()` membiarkan `OverflowException` dari
+   `MasterCodeGenerator::generate()` keluar. Test baru juga mengunci perilaku
+   tersebut dengan mengharapkan `OverflowException`, sehingga caller HTTP dapat
+   menerima respons 500 alih-alih validation error pada field.
+2. **Medium — policy Kode Otomatis belum menjadi satu sumber kebenaran.** Desain
+   mewajibkan lifecycle dan model hook memanggil policy internal yang sama.
+   `CodedMasterLifecycle` dan trait `HasImmutableMasterCode` masih menerapkan
+   aturan immutability serta penolakan pola otomatis secara terpisah, sehingga
+   keduanya dapat berubah tidak serempak.
+
+Tidak ditemukan scope creep. Ringkasan audit terbaru: **1 temuan Standards dan
+2 temuan Spec masih terbuka**; dampak terburuk adalah sequence habis yang dapat
+muncul sebagai HTTP 500.
+
 ## Bukti verifikasi
 
 - `npm run test:js`: 8 passed.

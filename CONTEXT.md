@@ -10,14 +10,17 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Isolasi mitra** — jaminan bahwa user mitra mustahil membaca atau mengubah baris milik mitra lain. Ditegakkan di database lewat Row-Level Security, bukan di kode aplikasi. Lihat `docs/adr/0001-isolasi-mitra-row-level-security.md`.
 - **Tabel bertenant** — tabel yang punya kolom `mitra_id` dan tunduk pada RLS.
 - **Tabel bersama** — master data lintas mitra (Material, Unit, PoP, Pekerjaan Jasa). Tidak punya `mitra_id`; boleh dibaca semua, hanya bisa ditulis THC.
-- **Grup** — kumpulan hak akses (matriks centang menu) yang dipasang ke User. Preset peran bawaan disediakan, tapi matriksnya bebas.
-- **Izin Aksi (Permissions)** — izin granular spesifik per aksi (seperti CRUD dan persetujuan/approve). Izin beroperasi di level aplikasi dan mengkondisikan elemen antarmuka (menu disembunyikan jika tidak ada akses). Lihat `docs/adr/0006-model-hak-akses-matriks-aksi.md`.
+- **Grup** — kumpulan hak akses (matriks centang menu) yang dipasang ke User. Preset peran bawaan disediakan, tapi matriksnya bebas untuk dikelola THC; pilihan Grup oleh Admin Mitra tetap dibatasi pada capability operasional Mitra.
+- **Grup Operasional Mitra** — Grup yang dapat dipasang Admin Mitra kepada User Mitra dalam tenantnya sendiri. Grup ini tidak boleh membuka capability THC-only, mengubah `mitra_id`, atau mengubah matriks izin global.
+- **Izin Aksi (Permissions)** — izin granular spesifik per aksi (seperti CRUD dan persetujuan/approve). Izin menentukan capability aplikasi, bukan kepemilikan data: authorization server-side tetap memeriksa tipe User dan cakupan Mitra, sementara elemen antarmuka menyembunyikan menu jika tidak ada akses. Lihat `docs/adr/0006-model-hak-akses-matriks-aksi.md`.
 - **User THC vs User Mitra** — dibedakan dari isi `mitra_id` pada entitas User; `null` berarti internal THC.
 - **Admin Mitra** — User Mitra dengan kewenangan super user dalam satu Mitra. Dapat menjalankan seluruh capability operasional yang tersedia bagi User Mitra lain, termasuk mengelola User, Warehouse, Project, Material, dan komentar, tetapi tidak dapat melakukan keputusan yang menjadi kewenangan THC atau melewati isolasi mitra.
+- **Workspace Admin Mitra** — kumpulan halaman operasional untuk User Mitra dalam satu tenant, meliputi Dashboard Mitra, User Mitra, Warehouse, Project, dan Harga Jasa Mitra. Ini adalah cara mengelompokkan jalur kerja, bukan entitas baru, kepemilikan baru, atau izin gabungan; setiap halaman tetap tunduk pada Izin Aksi dan isolasi mitra.
+- **Dashboard Mitra** — ringkasan baca-saja atas Project, Warehouse, Material, Request Material, Transit, dan aktivitas dalam cakupan Mitra User yang sedang masuk. Dashboard Mitra tidak menjadi jalur mutasi dan bukan pengganti Portfolio Cockpit.
 - **Onboarding Mitra** — satu form THC yang membuat entitas Mitra + user admin-mitra pertamanya sekaligus. Password awal (dan password hasil reset) dikirim **otomatis** lewat WA gateway sebagai teks polos ke nomor WA terdaftar milik mitra — bukan link token. Setelah onboarding, Admin Mitra dapat mengelola User Mitra dalam tenantnya sendiri.
 - **Reset password** — mitra bisa self-service (sistem generate password baru, kirim otomatis lewat WA seperti onboarding); THC juga bisa memicu reset paksa dari panel.
 - **Nonaktifkan user mitra** — manual oleh THC atau Admin Mitra dalam tenantnya sendiri, tidak otomatis dari tanggal berakhir PKS. User nonaktif tidak bisa login; data historis (project, foto, linimasa) tetap ada dan tetap terlihat THC, sesuai pola "nonaktif bukan hapus". Admin Mitra tidak boleh menonaktifkan dirinya sendiri atau Admin Mitra terakhir. Project aktif milik mitra yang dinonaktifkan **tidak dicegah** — tetap bisa ditutup administratif oleh THC tanpa akses mitra.
-- **Penugasan Gudang** — satu user dapat ditugaskan ke lebih dari satu gudang via tabel pivot.
+- **Penugasan Gudang** — hubungan operasional antara User dan satu atau lebih Warehouse melalui tabel pivot. Penugasan bukan kepemilikan Warehouse; Admin Mitra hanya dapat mengatur penugasan User aktif ke Warehouse aktif milik Mitranya sendiri.
 ## Master Data
 
 - **Kode Master dan Warehouse** — pengenal manusia untuk Material, Unit, PoP, Pekerjaan Jasa, dan Warehouse. Kode otomatis memakai `MAT-YYMM-NNNN`, `UNT-YYMM-NNNN`, `POP-YYMM-NNNN`, `JAS-YYMM-NNNN`, atau `WH-YYMM-NNNN`; sequence berjalan terpisah per entitas dan per bulan.
@@ -28,6 +31,7 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 ## Proyek
 
 - **Project** — satu pekerjaan instalasi yang dimonitor. Dimiliki tepat satu Mitra.
+- **Workspace Perencanaan Project** — ruang kerja untuk menyusun RAB Jasa, mengajukan Usulan Baseline, dan mengajukan Variation Order pada satu Project. Bukan Project baru dan bukan kewenangan untuk melewati approval THC.
 - **ID Project** — pengenal yang dibaca manusia, format `PRJ-YYMM-NNNN`. Diisi manual atau dibentuk otomatis saat dikosongkan; tidak pernah berubah setelah terbit.
 - **Status Project** — `aktif` / `selesai`, terpisah dari Step. Bukan penanda progres fase (itu tugas Step); ini penanda penutupan administratif, ditentukan dari Rekon Material. Lihat `docs/adr/0013-alur-pemakaian-material-dan-rekon.md`.
 - **PoP** — Point of Presence, lokasi simpul jaringan yang jadi acuan project.
@@ -39,8 +43,9 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Kurva S** — kurva progres berbobot rupiah jasa (bukan material).
 - **SPI** — Schedule Performance Index, rasio progres aktual terhadap baseline. (Ditampilkan `N/A` jika kumulatif baseline 0%).
 - **TOC** — Target Operation Complete, tanggal target selesai project.
-- **Original & Revised Baseline** — Jika TOC diundur, kurva S awal dibekukan (Original), dan kurva baru (Revised) dicetak. Kinerja diukur terhadap Revised Baseline.
-- **Variation Order** — Perubahan (tambah/kurang) RAB Jasa di tengah jalan. Bobot 100% dihitung ulang (*recalculated*) berdasarkan *grand total* baru. Harga PKS baru hanya berlaku pada *item* tambahan.
+- **Usulan Baseline** — TOC dan rencana persentase yang diajukan Admin Mitra untuk satu Project. Usulan belum menjadi sumber pengukuran sampai disahkan THC.
+- **Original & Revised Baseline** — baseline yang telah disahkan THC. Baseline pertama menjadi Original dan tidak ditimpa; jika TOC diundur, kurva baru menjadi Revised. Kinerja diukur terhadap Revised Baseline.
+- **Variation Order** — usulan perubahan (tambah/kurang) RAB Jasa di tengah jalan. Perubahan belum mengubah RAB efektif sampai disetujui THC; setelah disetujui, bobot 100% dihitung ulang (*recalculated*) berdasarkan *grand total* baru. Harga PKS baru hanya berlaku pada *item* tambahan dan snapshot historis tidak berubah.
 - **Linimasa Gabungan** — Satu riwayat aktivitas project yang mencampur log sistem otomatis (surat jalan, pindah step) dan komentar diskusi antar user.
 - **Komentar Project** — komentar reguler pada Linimasa Gabungan yang dapat dibaca dan dibuat oleh User yang memiliki akses ke Project. Tidak boleh dihapus; hanya pembuatnya yang boleh mengedit, dan hasil edit ditandai.
 - **Komentar Internal** — Tipe komentar di linimasa yang hanya bisa dibaca oleh user THC, tersembunyi dari Mitra. Tidak boleh dihapus, hanya boleh diedit.
