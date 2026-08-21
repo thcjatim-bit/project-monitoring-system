@@ -1,0 +1,496 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PROTOTYPE #104 — Pemilih SN &amp; Drum ID</title><style>
+.ui-page { color: #172033; margin: 0 auto; max-width: 1320px; padding: 34px 24px 72px; }
+.ui-page__header { align-items: flex-end; display: flex; gap: 24px; justify-content: space-between; margin-bottom: 24px; }
+.ui-page__eyebrow { color: #087f8c; font-size: .76rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 8px; text-transform: uppercase; }
+.ui-page h1 { color: #15324b; font-size: clamp(1.8rem, 4vw, 2.8rem); letter-spacing: -.05em; line-height: 1.05; margin: 0 0 9px; }
+.ui-page h2 { color: #15324b; font-size: 1.08rem; margin: 0 0 8px; }
+.ui-page p { color: #687684; line-height: 1.5; }
+.ui-page__subtitle { color: #687684; margin: 0; }
+.ui-page__actions, .ui-form__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-section-head { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 14px; }
+.ui-section-head h2 { margin-bottom: 4px; }
+.ui-toolbar { align-items: center; display: flex; gap: 10px; justify-content: space-between; margin: 0 0 14px; }
+.ui-search { display: block; margin: 0; width: min(100%, 360px); }
+.ui-search input { width: 100%; }
+.ui-sr-only { height: 1px; margin: -1px; overflow: hidden; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); }
+.ui-button { background: #087f8c; border: 1px solid #087f8c; border-radius: 8px; color: #fff; cursor: pointer; display: inline-block; font-size: .84rem; font-weight: 700; padding: 10px 14px; text-decoration: none; }
+.ui-button--muted { background: #fff; border-color: #cbd6dc; color: #15324b; }
+.ui-button--danger { background: #fff; border-color: #b34444; color: #9b3d3d; }
+.ui-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ui-panel { background: #fff; border: 1px solid #dce4e8; border-radius: 14px; padding: 21px; }
+.ui-panel--wide { grid-column: 1 / -1; }
+.ui-form { display: grid; gap: 12px; }
+.ui-form__grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ui-form label { color: #526071; display: grid; font-size: .78rem; font-weight: 650; gap: 5px; }
+.ui-form input, .ui-form select, .ui-form textarea { background: #fff; border: 1px solid #cbd6dc; border-radius: 7px; min-height: 38px; padding: 8px 10px; width: 100%; }
+.ui-form textarea { min-height: 76px; }
+.ui-form small, .ui-help { color: #687684; font-size: .76rem; font-weight: 400; line-height: 1.45; }
+.ui-state { background: #f6f8f9; border-radius: 10px; color: #687684; margin: 12px 0; padding: 14px 16px; }
+.ui-state--error { background: #fef2f2; color: #991b1b; }
+.ui-state--loading { background: #f0f9ff; color: #155e75; }
+.ui-state--success { background: #effaf5; color: #11664f; }
+.ui-state ul { margin: 7px 0 0; padding-left: 20px; }
+.ui-empty-state { display: grid; gap: 4px; }
+.ui-empty-state strong { color: #15324b; }
+.ui-empty-state span { display: block; }
+.ui-table-wrap { overflow-x: auto; }
+.ui-table { border-collapse: collapse; min-width: 620px; width: 100%; }
+.ui-table th, .ui-table td { border-bottom: 1px solid #e8edef; padding: 11px 9px; text-align: left; vertical-align: top; }
+.ui-table th { color: #687684; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
+.ui-table td { color: #172033; font-size: .84rem; }
+.ui-list { display: grid; gap: 9px; list-style: none; margin: 0; padding: 0; }
+.ui-list__item { background: #f6f8f9; border-left: 3px solid #cbd6dc; border-radius: 0 8px 8px 0; padding: 11px 13px; }
+.ui-list__item--pending { border-color: #d79c38; }
+.ui-list__item--done { border-color: #58a98c; }
+.ui-list__item--cancelled { border-color: #b34444; }
+.ui-badge { background: #e8edf1; border-radius: 999px; color: #526071; display: inline-block; font-size: .72rem; padding: 4px 8px; }
+.ui-badge--pending { background: #fff0d5; color: #a86314; }
+.ui-badge--done { background: #dff3ed; color: #11664f; }
+.ui-badge--cancelled { background: #fbe4e4; color: #9b3d3d; }
+.ui-badge--neutral { background: #e8edf1; color: #526071; }
+.ui-badge--done { background: #dff3ed; color: #11664f; }
+.ui-badge--warning { background: #fff0d5; color: #a86314; }
+.ui-badge--info { background: #e0f2fe; color: #155e75; }
+.ui-inline { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-muted { color: #687684; font-size: .78rem; }
+.ui-stock-summary { display: grid; gap: 4px; color: #526071; font-size: .78rem; }
+.ui-stock-summary strong { color: #15324b; }
+.ui-form [aria-invalid="true"] { border-color: #b34444; }
+.ui-select { min-width: 0; position: relative; }
+.ui-select__control { align-items: stretch; display: flex; position: relative; }
+.ui-select__trigger { align-items: center; background: #fff; border: 1px solid #cbd6dc; border-radius: 8px; color: #172033; cursor: pointer; display: flex; font: inherit; justify-content: space-between; min-height: 40px; overflow: hidden; padding: 8px 11px; text-align: left; width: 100%; }
+.ui-select__trigger:focus { border-color: #4656d8; box-shadow: 0 0 0 3px #edf0ff; outline: 0; }
+.ui-select__trigger:disabled { cursor: not-allowed; opacity: .7; }
+.ui-select__trigger span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select__trigger .is-placeholder { color: #687684; }
+.ui-select__chevron { color: #526071; flex: 0 0 auto; margin-left: 8px; }
+.ui-select__clear { align-items: center; background: transparent; border: 0; color: #687684; cursor: pointer; display: flex; font-size: 1.2rem; height: 100%; justify-content: center; padding: 0 10px; position: absolute; right: 25px; top: 0; z-index: 1; }
+.ui-select__clear:hover { color: #9b3d3d; }
+.ui-select__popup { background: #fff; border: 1px solid #b9c3d0; border-radius: 8px; box-shadow: 0 14px 30px rgb(23 32 51 / 16%); left: 0; max-height: min(360px, 50vh); min-width: 100%; overflow: auto; padding: 8px; position: absolute; top: calc(100% + 5px); z-index: 100; }
+.ui-select__search { display: block; margin: 0 0 7px; }
+.ui-select__search input { background: #fff; border: 1px solid #cbd6dc; border-radius: 6px; min-height: 36px; padding: 7px 9px; width: 100%; }
+.ui-select__search input:focus { border-color: #4656d8; box-shadow: 0 0 0 3px #edf0ff; outline: 0; }
+.ui-select__options { display: grid; gap: 2px; }
+.ui-select__option { background: #fff; border: 0; border-radius: 6px; color: #172033; cursor: pointer; display: block; font: inherit; padding: 9px 10px; text-align: left; width: 100%; }
+.ui-select__option:hover, .ui-select__option:focus, .ui-select__option.is-active { background: #edf0ff; outline: 0; }
+.ui-select__option.is-selected { background: #e8edf1; font-weight: 750; }
+.ui-select__option.is-selected:focus, .ui-select__option.is-selected:hover { background: #dfe5ff; }
+.ui-select__state { color: #687684; padding: 9px 10px; }
+@media (max-width: 780px) { .ui-page { padding: 24px 16px 50px; } .ui-page__header, .ui-section-head { align-items: flex-start; flex-direction: column; } .ui-grid, .ui-form__grid { grid-template-columns: 1fr; } .ui-search { width: 100%; } }
+body { background:#f1f5f7; font-family: ui-sans-serif, system-ui, sans-serif; margin:0; }
+.pt-bar { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#15324b; color:#fff; border-radius:999px; display:flex; align-items:center; gap:14px; padding:8px 10px; box-shadow:0 8px 24px rgba(0,0,0,.25); z-index:99; font-size:.82rem; }
+.pt-bar button { background:#087f8c; border:0; color:#fff; border-radius:999px; width:30px; height:30px; cursor:pointer; font-size:1rem; }
+.pt-warn { background:#fff0d5; color:#a86314; border-radius:8px; padding:10px 12px; font-size:.78rem; line-height:1.5; }
+.pt-err { background:#fef2f2; color:#991b1b; border-radius:8px; padding:10px 12px; font-size:.78rem; line-height:1.5; }
+.pt-ok { background:#dff3ed; color:#11664f; border-radius:8px; padding:10px 12px; font-size:.78rem; line-height:1.5; }
+.pt-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.pt-metric { background:#f6f8f9; border-radius:10px; padding:10px 12px; }
+.pt-metric b { display:block; color:#15324b; font-size:1.25rem; letter-spacing:-.03em; }
+.pt-metric span { color:#687684; font-size:.72rem; }
+.pt-row { background:#f6f8f9; border-left:3px solid #cbd6dc; border-radius:0 8px 8px 0; padding:11px 13px; display:grid; gap:8px; margin-bottom:8px; }
+.pt-row.is-hole { border-color:#d79c38; background:#fffaf0; }
+.pt-row.is-bad { border-color:#b34444; background:#fef6f6; }
+.pt-row.is-deviant { border-color:#7c5cbf; }
+pre.pt-json { background:#15324b; color:#d7e6f0; border-radius:10px; padding:12px; font-size:.72rem; overflow:auto; max-height:280px; }
+.ui-select { position:relative; }
+.ui-select__popup { position:absolute; z-index:20; background:#fff; border:1px solid #cbd6dc; border-radius:8px; width:100%; box-shadow:0 8px 20px rgba(0,0,0,.12); }
+.ui-select__options { max-height:220px; overflow:auto; display:grid; }
+.ui-select__option { background:#fff; border:0; text-align:left; padding:8px 10px; cursor:pointer; font-size:.8rem; }
+.ui-select__option:hover { background:#eef4f6; }
+.ui-select__option[disabled] { color:#a7b3bd; cursor:not-allowed; text-decoration:line-through; }
+.ui-select__trigger { width:100%; min-height:38px; background:#fff; border:1px solid #cbd6dc; border-radius:7px; display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; font-size:.84rem; }
+.ui-select__search input { width:100%; }
+.pt-scroll { max-height:320px; overflow:auto; border:1px solid #dce4e8; border-radius:10px; padding:8px; }
+.pt-check { display:flex; gap:8px; align-items:center; padding:6px 8px; border-radius:6px; font-size:.8rem; }
+.pt-check:hover { background:#f6f8f9; }
+.pt-check input { width:auto; min-height:auto; }
+</style></head><body><div class="ui-page">
+<header class="ui-page__header">
+  <div>
+    <p class="ui-page__eyebrow">PROTOTYPE — buang setelah dipakai · issue #104</p>
+    <h1>Pemilih Serial Number &amp; Drum ID</h1>
+    <p class="ui-page__subtitle">Tiga varian pemilih identitas per baris item pada form <strong>Terbitkan Surat Jalan</strong>, ditambah pengukur volume data. Data di sini <strong>sintetis</strong> — DB lokal tidak punya kredensial, jadi ukurannya diatur lewat tombol "Ukuran data" dan dibaca dari panel Ukuran.</p>
+  </div>
+</header>
+
+<section class="ui-panel ui-panel--wide" style="margin-bottom:18px">
+  <h2>Kendali prototype</h2>
+  <div class="ui-form__grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <label>Warehouse asal<select id="ctl-origin"></select></label>
+    <label>Ukuran data<select id="ctl-size">
+      <option value="kecil">Kecil — gudang mitra biasa</option>
+      <option value="sedang" selected>Sedang — gudang THC pusat</option>
+      <option value="besar">Besar — kalau bisnis tumbuh 10×</option>
+    </select></label>
+    <label>Prefill Request Material<select id="ctl-prefill">
+      <option value="1" selected>Ya — REQ-2608-0007</option>
+      <option value="0">Tidak — Surat Jalan langsung</option>
+    </select></label>
+  </div>
+</section>
+
+<section class="ui-panel ui-panel--wide" style="margin-bottom:18px">
+  <h2>Ukuran — jawaban untuk "serialisasi vs endpoint"</h2>
+  <div class="pt-metrics" id="metrics"></div>
+  <p class="ui-help" id="metrics-note" style="margin-top:10px"></p>
+</section>
+
+<div id="variant-root"></div>
+
+<section class="ui-panel ui-panel--wide" style="margin-top:18px">
+  <h2>Payload &amp; verdict server</h2>
+  <p class="ui-help">Yang akan dikirim ke <code>POST /warehouse/transfers</code>, divalidasi ulang di sini memakai aturan <code>SuratJalanService::createItem()</code> yang sebenarnya.</p>
+  <div id="verdict"></div>
+  <pre class="pt-json" id="payload"></pre>
+</section>
+
+<div class="pt-bar">
+  <button type="button" id="pt-prev" aria-label="Varian sebelumnya">‹</button>
+  <span id="pt-label">A</span>
+  <button type="button" id="pt-next" aria-label="Varian berikutnya">›</button>
+</div>
+</div>
+<script>
+(() => {
+'use strict';
+// PROTOTYPE #104 — tiga varian pemilih identitas pada satu "route", ditukar lewat ?variant=.
+
+const WAREHOUSES = [
+  { id: 1, kode: 'GD-THC-01', nama: 'Gudang Pusat Sidoarjo' },
+  { id: 2, kode: 'GD-MTR-04', nama: 'Gudang Mitra Jaya Abadi' },
+];
+
+const MATERIALS = [
+  { id: 11, kode: 'MTL-0011', nama: 'Tiang Besi 7m', jenis: 'biasa', unit: 'batang' },
+  { id: 12, kode: 'MTL-0012', nama: 'SFP 1G Bidi 20km', jenis: 'ber_sn', unit: 'pcs' },
+  { id: 13, kode: 'MTL-0013', nama: 'Modem GPON HG8145', jenis: 'ber_sn', unit: 'pcs' },
+  { id: 14, kode: 'MTL-0014', nama: 'Kabel FO 24 Core ADSS', jenis: 'drum_kabel', unit: 'meter' },
+  { id: 15, kode: 'MTL-0015', nama: 'Kabel FO 12 Core ADSS', jenis: 'drum_kabel', unit: 'meter' },
+  { id: 16, kode: 'MTL-0016', nama: 'Klem Sling 4mm', jenis: 'biasa', unit: 'pcs' },
+];
+
+const SIZES = {
+  kecil:  { sn: { 12: [6, 2],   13: [4, 1] },   drum: { 14: [3, 1],  15: [2, 1] } },
+  sedang: { sn: { 12: [140, 18], 13: [70, 9] }, drum: { 14: [16, 3], 15: [11, 2] } },
+  besar:  { sn: { 12: [900, 120], 13: [430, 60] }, drum: { 14: [64, 12], 15: [41, 8] } },
+};
+
+const pad = (n, w) => String(n).padStart(w, '0');
+const fmt = (n) => (Math.round(n * 1000) / 1000).toLocaleString('id-ID');
+
+function buildFixture(size) {
+  const conf = SIZES[size];
+  const sns = [];
+  const drums = [];
+  let seq = 1;
+  for (const [materialId, counts] of Object.entries(conf.sn)) {
+    WAREHOUSES.forEach((w, i) => {
+      for (let n = 0; n < counts[i]; n += 1) {
+        sns.push({ material_id: Number(materialId), warehouse_id: w.id, serial_number: `SN${materialId}-${pad(seq++, 6)}` });
+      }
+    });
+  }
+  let drumSeq = 1;
+  for (const [materialId, counts] of Object.entries(conf.drum)) {
+    WAREHOUSES.forEach((w, i) => {
+      for (let n = 0; n < counts[i]; n += 1) {
+        const awal = [1000, 2000, 4000][drumSeq % 3];
+        // Sebagian drum sudah pernah dipotong, jadi sisanya bukan angka bulat cantik.
+        const sisa = drumSeq % 4 === 0 ? awal : Math.round(awal * (0.35 + ((drumSeq * 37) % 60) / 100));
+        drums.push({ material_id: Number(materialId), warehouse_id: w.id, drum_id: `DRM-${pad(drumSeq, 5)}${drumSeq % 5 === 0 ? '-1' : ''}`, panjang_awal: awal, sisa });
+        drumSeq += 1;
+      }
+    });
+  }
+  return { sns, drums };
+}
+
+// Baris Request Material: material + qty, tidak pernah menyebut SN atau Drum. Dua di antaranya
+// bertabrakan dengan aturan createItem() dan itulah yang harus terlihat di layar.
+const REQUEST = {
+  nomor: 'REQ-2608-0007',
+  items: [
+    { material_id: 11, sisa: 40 },
+    { material_id: 12, sisa: 3 },
+    { material_id: 14, sisa: 500 },
+  ],
+};
+
+const state = { origin: 1, size: 'sedang', prefill: true, rows: [], variant: 'A' };
+const fixtureCache = {};
+const fixture = () => (fixtureCache[state.size] ??= buildFixture(state.size));
+const material = (id) => MATERIALS.find((m) => m.id === id);
+const snsFor = (materialId) => fixture().sns.filter((s) => s.material_id === materialId && s.warehouse_id === state.origin);
+const drumsFor = (materialId) => fixture().drums.filter((d) => d.material_id === materialId && d.warehouse_id === state.origin && d.sisa > 0);
+const takenSns = (exceptKey) => new Set(state.rows.filter((r) => r.key !== exceptKey && r.serial_number).map((r) => r.serial_number));
+const takenDrums = (exceptKey) => new Set(state.rows.filter((r) => r.key !== exceptKey && r.drum_id).map((r) => r.drum_id));
+
+let rowSeq = 0;
+function newRow(patch = {}) {
+  return { key: `r${rowSeq++}`, material_id: '', qty: '', serial_number: null, drum_id: null, from_request: false, ...patch };
+}
+
+function resetRows() {
+  rowSeq = 0;
+  if (!state.prefill) { state.rows = [newRow()]; return; }
+  const rows = [];
+  REQUEST.items.forEach((item) => {
+    const m = material(item.material_id);
+    if (m.jenis === 'ber_sn') {
+      // qty request 3 pcs tidak bisa jadi satu baris: createItem() memaksa qty ber-SN = 1.
+      for (let i = 0; i < item.sisa; i += 1) rows.push(newRow({ material_id: m.id, qty: 1, from_request: true }));
+    } else {
+      rows.push(newRow({ material_id: m.id, qty: item.sisa, from_request: true }));
+    }
+  });
+  state.rows = rows;
+}
+
+// Cerminan SuratJalanService::createItem() — satu-satunya sumber "benar/salah" di prototype ini.
+function verdictFor(row) {
+  if (!row.material_id) return { level: 'hole', text: 'Material belum dipilih.' };
+  const m = material(row.material_id);
+  const qty = Number(row.qty);
+  if (!(qty > 0)) return { level: 'hole', text: 'Qty belum diisi.' };
+  if (m.jenis === 'biasa') {
+    return { level: 'ok', text: `Saldo gudang asal dicek server (${fmt(qty)} ${m.unit}).` };
+  }
+  if (m.jenis === 'ber_sn') {
+    if (!row.serial_number) return { level: 'hole', text: 'Lubang identitas: Serial Number belum dipilih.' };
+    if (qty !== 1) return { level: 'bad', text: 'Ditolak server: material ber-SN wajib qty tepat 1.' };
+    if (!snsFor(m.id).some((s) => s.serial_number === row.serial_number)) return { level: 'bad', text: 'Ditolak server: Serial Number tidak tersedia di Warehouse asal.' };
+    if (takenSns(row.key).has(row.serial_number)) return { level: 'bad', text: 'Ditolak server: Serial Number yang sama dipakai dua baris.' };
+    return { level: 'ok', text: `SN ${row.serial_number} siap dikirim.` };
+  }
+  if (!row.drum_id) return { level: 'hole', text: 'Lubang identitas: Drum ID belum dipilih.' };
+  const drum = drumsFor(m.id).find((d) => d.drum_id === row.drum_id);
+  if (!drum) return { level: 'bad', text: 'Ditolak server: Drum tidak tersedia di Warehouse asal.' };
+  if (takenDrums(row.key).has(row.drum_id)) return { level: 'bad', text: 'Ditolak server: Drum yang sama dipakai dua baris.' };
+  if (Number(drum.sisa) !== qty) return { level: 'bad', text: `Ditolak server: transfer harus membawa seluruh sisa Drum (${fmt(drum.sisa)} ${m.unit}). Potong Drum terlebih dahulu.` };
+  return { level: 'ok', text: `Drum ${drum.drum_id} dikirim utuh ${fmt(drum.sisa)} ${m.unit}.` };
+}
+
+function isDeviant(row) {
+  if (!state.prefill || !row.material_id) return false;
+  const req = REQUEST.items.find((i) => i.material_id === row.material_id);
+  if (!req) return true;
+  const totalSame = state.rows.filter((r) => r.material_id === row.material_id).reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+  return totalSame > req.sisa;
+}
+
+function renderMetrics() {
+  const f = fixture();
+  const originSns = f.sns.filter((s) => s.warehouse_id === state.origin);
+  const originDrums = f.drums.filter((d) => d.warehouse_id === state.origin && d.sisa > 0);
+  const perMaterial = MATERIALS.map((m) => (m.jenis === 'ber_sn' ? snsFor(m.id).length : m.jenis === 'drum_kabel' ? drumsFor(m.id).length : 0));
+  const largest = Math.max(...perMaterial);
+  const payloadOrigin = JSON.stringify({ sns: originSns, drums: originDrums });
+  const payloadAll = JSON.stringify(f);
+  const rowsWithIdentity = state.rows.filter((r) => { const m = material(r.material_id); return m && m.jenis !== 'biasa'; }).length;
+  const domNodes = largest * Math.max(rowsWithIdentity, 1);
+  const kb = (s) => `${(new Blob([s]).size / 1024).toFixed(1)} KB`;
+  const cards = [
+    [originSns.length, 'SN tersedia di gudang asal'],
+    [originDrums.length, 'Drum bersisa di gudang asal'],
+    [largest, 'daftar terpanjang (1 material × gudang)'],
+    [kb(payloadOrigin), 'JSON identitas gudang asal saja'],
+    [kb(payloadAll), 'JSON identitas semua gudang'],
+    [domNodes.toLocaleString('id-ID'), 'node opsi kalau tiap baris merender penuh'],
+  ];
+  document.getElementById('metrics').innerHTML = cards.map(([v, l]) => `<div class="pt-metric"><b>${v}</b><span>${l}</span></div>`).join('');
+  const bytes = new Blob([payloadAll]).size;
+  document.getElementById('metrics-note').textContent = bytes < 30 * 1024
+    ? `Serialisasi seluruh identitas ke dalam halaman = ${kb(payloadAll)} sebelum gzip — di bawah ambang yang layak diperdebatkan. Endpoint JSON baru belum berbayar.`
+    : `Serialisasi seluruh identitas = ${kb(payloadAll)} sebelum gzip, dan halaman ini dimuat setiap kali petugas membuka Warehouse. Di ukuran ini endpoint yang di-fetch saat material dipilih mulai berbayar.`;
+}
+
+const identityOptions = (m) => (m.jenis === 'ber_sn'
+  ? snsFor(m.id).map((s) => ({ value: s.serial_number, label: s.serial_number, qty: 1 }))
+  : drumsFor(m.id).map((d) => ({ value: d.drum_id, label: `${d.drum_id} — sisa ${fmt(d.sisa)} ${m.unit}`, qty: d.sisa })));
+
+const materialSelect = (row) => `<select data-field="material_id" data-key="${row.key}"><option value="">Pilih Material</option>${MATERIALS.map((m) => `<option value="${m.id}"${m.id === row.material_id ? ' selected' : ''}>${m.kode} — ${m.nama} (${m.unit})</option>`).join('')}</select>`;
+
+function rowClass(row) {
+  const v = verdictFor(row);
+  return `pt-row${v.level === 'hole' ? ' is-hole' : ''}${v.level === 'bad' ? ' is-bad' : ''}${isDeviant(row) ? ' is-deviant' : ''}`;
+}
+
+function rowFooter(row) {
+  const v = verdictFor(row);
+  const tone = v.level === 'ok' ? 'pt-ok' : v.level === 'bad' ? 'pt-err' : 'pt-warn';
+  const dev = isDeviant(row) ? ' <strong>· Baris Menyimpang — wajib catatan.</strong>' : '';
+  const req = row.from_request ? '<span class="ui-badge">dari Request</span> ' : '';
+  return `<div class="${tone}">${req}${v.text}${dev}</div>`;
+}
+
+// ── Varian A — dropdown identitas inline, qty dikunci oleh identitas ───────────
+const VARIANTS = {};
+VARIANTS.A = {
+  nama: 'Dropdown identitas inline',
+  render() {
+    const rows = state.rows.map((row) => {
+      const m = row.material_id ? material(row.material_id) : null;
+      const kind = m?.jenis ?? '';
+      let identity = '<div class="ui-help">Material biasa tidak memakai identitas.</div>';
+      let qtyLocked = false;
+      if (kind === 'ber_sn' || kind === 'drum_kabel') {
+        const opts = identityOptions(m);
+        const taken = kind === 'ber_sn' ? takenSns(row.key) : takenDrums(row.key);
+        const current = kind === 'ber_sn' ? row.serial_number : row.drum_id;
+        qtyLocked = true;
+        identity = `<label>${kind === 'ber_sn' ? 'Serial Number' : 'Drum ID'} <select data-field="identity" data-key="${row.key}"><option value="">${opts.length ? `Pilih — ${opts.length} tersedia` : 'Tidak ada stok teridentifikasi di gudang asal'}</option>${opts.map((o) => `<option value="${o.value}"${o.value === current ? ' selected' : ''}${taken.has(o.value) ? ' disabled' : ''}>${o.label}${taken.has(o.value) ? ' — sudah dipakai baris lain' : ''}</option>`).join('')}</select></label>`;
+      }
+      const splitHint = kind === 'drum_kabel'
+        ? '<div class="ui-help">Butuh sebagian saja? Pakai panel <strong>Split drum</strong> di halaman yang sama, lalu pilih Drum turunannya di sini.</div>'
+        : '';
+      return `<div class="${rowClass(row)}">
+        <div class="ui-form__grid"><label>Material ${materialSelect(row)}</label><label>Qty <input type="number" step="0.001" data-field="qty" data-key="${row.key}" value="${row.qty}"${qtyLocked ? ' readonly' : ''}>${qtyLocked ? '<small>Terkunci oleh identitas yang dipilih.</small>' : ''}</label></div>
+        ${identity}${splitHint}${rowFooter(row)}
+        <div><button class="ui-button ui-button--muted" type="button" data-remove="${row.key}">Hapus item</button></div>
+      </div>`;
+    }).join('');
+    return `<section class="ui-panel ui-panel--wide"><h2>A — Dropdown identitas inline</h2>
+      <p class="ui-help">Kotak teks bebas diganti <code>&lt;select&gt;</code> yang tersaring per (material × gudang asal). Qty terisi otomatis dan <em>readonly</em>: 1 untuk ber-SN, sisa Drum untuk drum kabel. SN/Drum yang sudah dipakai baris lain tampil <em>disabled</em>. Perubahan paling kecil dari form hari ini.</p>
+      <div class="ui-form">${rows}<div><button class="ui-button ui-button--muted" type="button" data-add>Tambah item</button></div></div></section>`;
+  },
+};
+
+// ── Varian B — belanja dari stok gudang, baris lahir dari centang ──────────────
+VARIANTS.B = {
+  nama: 'Belanja dari stok gudang',
+  render() {
+    const identified = MATERIALS.filter((m) => m.jenis !== 'biasa');
+    const panels = identified.map((m) => {
+      const opts = identityOptions(m);
+      const chosen = new Set(state.rows.filter((r) => r.material_id === m.id).map((r) => r.serial_number ?? r.drum_id));
+      const req = REQUEST.items.find((i) => i.material_id === m.id);
+      const target = state.prefill && req ? `<span class="ui-badge ui-badge--pending">Request minta ${fmt(req.sisa)} ${m.unit} — terpilih ${fmt(state.rows.filter((r) => r.material_id === m.id).reduce((s, r) => s + (Number(r.qty) || 0), 0))}</span>` : '';
+      return `<div style="margin-bottom:14px"><strong>${m.kode} — ${m.nama}</strong> ${target}
+        <div class="pt-scroll">${opts.length ? opts.map((o) => `<label class="pt-check"><input type="checkbox" data-pick="${m.id}" value="${o.value}"${chosen.has(o.value) ? ' checked' : ''}> ${o.label}</label>`).join('') : '<div class="ui-select__state">Tidak ada stok teridentifikasi di gudang asal.</div>'}</div></div>`;
+    }).join('');
+    const plain = state.rows.filter((r) => !r.material_id || material(r.material_id).jenis === 'biasa').map((row) => `<div class="${rowClass(row)}">
+      <div class="ui-form__grid"><label>Material ${materialSelect(row)}</label><label>Qty <input type="number" step="0.001" data-field="qty" data-key="${row.key}" value="${row.qty}"></label></div>
+      ${rowFooter(row)}<div><button class="ui-button ui-button--muted" type="button" data-remove="${row.key}">Hapus item</button></div></div>`).join('');
+    const picked = state.rows.filter((r) => r.material_id && material(r.material_id).jenis !== 'biasa').map((row) => `<div class="${rowClass(row)}"><strong>${material(row.material_id).kode}</strong> · ${row.serial_number ?? row.drum_id} · ${fmt(row.qty)} ${material(row.material_id).unit}${rowFooter(row)}</div>`).join('') || '<div class="ui-state">Belum ada identitas dicentang.</div>';
+    return `<section class="ui-panel ui-panel--wide"><h2>B — Belanja dari stok gudang</h2>
+      <p class="ui-help">Untuk material teridentifikasi, operator tidak mengetik baris — ia <strong>mencentang barang</strong> dari daftar stok gudang asal, dan tiap centang melahirkan satu baris item dengan qty yang sudah pasti benar. Baris salah jadi mustahil karena tidak ada tempat mengetiknya. Material biasa tetap lewat baris manual.</p>
+      <div class="ui-grid"><div><h2 style="font-size:.9rem">Stok teridentifikasi di gudang asal</h2>${panels}</div>
+      <div><h2 style="font-size:.9rem">Material biasa</h2><div class="ui-form">${plain}<div><button class="ui-button ui-button--muted" type="button" data-add>Tambah item biasa</button></div></div>
+      <h2 style="font-size:.9rem;margin-top:16px">Item Surat Jalan (${state.rows.length})</h2>${picked}</div></div></section>`;
+  },
+};
+
+// ── Varian C — baris ringkas + laci pencarian (komponen x-ui.searchable-select) ─
+let openDrawer = null;
+VARIANTS.C = {
+  nama: 'Laci pencarian / scan',
+  render() {
+    const rows = state.rows.map((row) => {
+      const m = row.material_id ? material(row.material_id) : null;
+      const kind = m?.jenis ?? '';
+      let identity = '<div class="ui-help">Material biasa tidak memakai identitas.</div>';
+      if (kind === 'ber_sn' || kind === 'drum_kabel') {
+        const current = kind === 'ber_sn' ? row.serial_number : row.drum_id;
+        const opts = identityOptions(m);
+        const taken = kind === 'ber_sn' ? takenSns(row.key) : takenDrums(row.key);
+        const label = current ? (opts.find((o) => o.value === current)?.label ?? current) : `Pilih ${kind === 'ber_sn' ? 'Serial Number' : 'Drum'} — ${opts.length} tersedia`;
+        // Opsi hanya dirender ke DOM saat laci terbuka: satu laci hidup, bukan satu daftar per baris.
+        const popup = openDrawer === row.key
+          ? `<div class="ui-select__popup"><label class="ui-select__search"><input type="search" data-search="${row.key}" placeholder="Ketik atau scan..." autofocus></label>
+             <div class="ui-select__options" data-options="${row.key}">${opts.map((o) => `<button class="ui-select__option" type="button" data-choose="${row.key}" data-value="${o.value}"${taken.has(o.value) ? ' disabled' : ''}>${o.label}${taken.has(o.value) ? ' · dipakai baris lain' : ''}</button>`).join('') || '<div class="ui-select__state">Tidak ada stok teridentifikasi di gudang asal.</div>'}</div></div>`
+          : '';
+        identity = `<label>${kind === 'ber_sn' ? 'Serial Number' : 'Drum ID'}<div class="ui-select"><button class="ui-select__trigger" type="button" data-drawer="${row.key}"><span>${label}</span><span>▾</span></button>${popup}</div></label>`;
+      }
+      return `<div class="${rowClass(row)}">
+        <div class="ui-form__grid" style="grid-template-columns:2fr 1fr 2fr"><label>Material ${materialSelect(row)}</label><label>Qty <input type="number" step="0.001" data-field="qty" data-key="${row.key}" value="${row.qty}"${kind && kind !== 'biasa' ? ' readonly' : ''}></label>${identity}</div>
+        ${rowFooter(row)}<div><button class="ui-button ui-button--muted" type="button" data-remove="${row.key}">Hapus item</button></div></div>`;
+    }).join('');
+    return `<section class="ui-panel ui-panel--wide"><h2>C — Laci pencarian / scan</h2>
+      <p class="ui-help">Baris tetap satu garis. Identitas dipilih lewat laci ber-kolom-cari yang <strong>hanya merender opsi saat dibuka</strong> — hasil scan barcode masuk ke kotak cari yang sama. Ini persis komponen <code>&lt;x-ui.searchable-select&gt;</code> yang sudah ada di repo, jadi varian ini bukan komponen baru.</p>
+      <div class="ui-form">${rows}<div><button class="ui-button ui-button--muted" type="button" data-add>Tambah item</button></div></div></section>`;
+  },
+};
+
+const ORDER = ['A', 'B', 'C'];
+
+function renderPayload() {
+  const payload = { material_request_id: state.prefill ? 7 : null, warehouse_asal_id: state.origin, items: state.rows.map((r) => ({ material_id: r.material_id || null, qty: r.qty === '' ? null : Number(r.qty), serial_number: r.serial_number, drum_id: r.drum_id })) };
+  document.getElementById('payload').textContent = JSON.stringify(payload, null, 2);
+  const bad = state.rows.filter((r) => verdictFor(r).level === 'bad').length;
+  const hole = state.rows.filter((r) => verdictFor(r).level === 'hole').length;
+  const dev = state.rows.filter(isDeviant).length;
+  const box = document.getElementById('verdict');
+  box.className = bad ? 'pt-err' : hole ? 'pt-warn' : 'pt-ok';
+  box.innerHTML = bad ? `<strong>Server menolak.</strong> ${bad} baris melanggar aturan createItem().`
+    : hole ? `<strong>Belum bisa dikirim.</strong> ${hole} baris punya lubang yang harus diisi manusia${dev ? ` · ${dev} Baris Menyimpang` : ''}.`
+    : `<strong>Lolos createItem().</strong> ${state.rows.length} baris siap terbit${dev ? ` · ${dev} Baris Menyimpang, wajib catatan` : ''}.`;
+}
+
+function render() {
+  document.getElementById('variant-root').innerHTML = VARIANTS[state.variant].render();
+  document.getElementById('pt-label').textContent = `${state.variant} — ${VARIANTS[state.variant].nama}`;
+  renderMetrics();
+  renderPayload();
+}
+
+function applyIdentity(row, value) {
+  const m = material(row.material_id);
+  if (m.jenis === 'ber_sn') { row.serial_number = value || null; row.drum_id = null; row.qty = value ? 1 : ''; }
+  else { row.drum_id = value || null; row.serial_number = null; const d = drumsFor(m.id).find((x) => x.drum_id === value); row.qty = d ? d.sisa : ''; }
+}
+
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.id === 'ctl-origin') { state.origin = Number(t.value); state.rows.forEach((r) => { r.serial_number = null; r.drum_id = null; }); return render(); }
+  if (t.id === 'ctl-size') { state.size = t.value; state.rows.forEach((r) => { r.serial_number = null; r.drum_id = null; }); return render(); }
+  if (t.id === 'ctl-prefill') { state.prefill = t.value === '1'; resetRows(); return render(); }
+  const row = state.rows.find((r) => r.key === t.dataset.key);
+  if (row && t.dataset.field === 'material_id') { row.material_id = Number(t.value) || ''; row.serial_number = null; row.drum_id = null; row.qty = ''; return render(); }
+  if (row && t.dataset.field === 'qty') { row.qty = t.value; return render(); }
+  if (row && t.dataset.field === 'identity') { applyIdentity(row, t.value); return render(); }
+  if (t.dataset.pick) {
+    const m = material(Number(t.dataset.pick));
+    if (t.checked) { const r = newRow({ material_id: m.id }); applyIdentity(r, t.value); state.rows.push(r); }
+    else { state.rows = state.rows.filter((r) => (r.serial_number ?? r.drum_id) !== t.value || r.material_id !== m.id); }
+    return render();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-add],[data-remove],[data-drawer],[data-choose]');
+  if (!t) { if (openDrawer) { openDrawer = null; render(); } return; }
+  if (t.hasAttribute('data-add')) { state.rows.push(newRow()); return render(); }
+  if (t.dataset.remove) { state.rows = state.rows.filter((r) => r.key !== t.dataset.remove); return render(); }
+  if (t.dataset.drawer) { openDrawer = openDrawer === t.dataset.drawer ? null : t.dataset.drawer; return render(); }
+  if (t.dataset.choose) { const row = state.rows.find((r) => r.key === t.dataset.choose); applyIdentity(row, t.dataset.value); openDrawer = null; return render(); }
+});
+
+document.addEventListener('input', (e) => {
+  if (!e.target.dataset.search) return;
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll(`[data-options="${e.target.dataset.search}"] .ui-select__option`).forEach((o) => { o.hidden = !o.textContent.toLowerCase().includes(q); });
+});
+
+const go = (delta) => {
+  const i = (ORDER.indexOf(state.variant) + delta + ORDER.length) % ORDER.length;
+  state.variant = ORDER[i];
+  history.replaceState(null, '', `?variant=${state.variant}`);
+  openDrawer = null;
+  render();
+};
+document.getElementById('pt-prev').addEventListener('click', () => go(-1));
+document.getElementById('pt-next').addEventListener('click', () => go(1));
+document.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+});
+
+document.getElementById('ctl-origin').innerHTML = WAREHOUSES.map((w) => `<option value="${w.id}">${w.kode} — ${w.nama}</option>`).join('');
+const requested = new URLSearchParams(location.search).get('variant');
+state.variant = ORDER.includes(requested) ? requested : 'A';
+resetRows();
+render();
+})();
+</script>
+</body></html>
