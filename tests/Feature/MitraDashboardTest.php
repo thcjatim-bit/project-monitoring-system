@@ -110,6 +110,33 @@ class MitraDashboardTest extends TestCase
         $this->get(route('projects.show', $projectA))->assertOk();
     }
 
+    public function test_mitra_dashboard_shows_request_project_identity_and_nullable_state(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create();
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-0093',
+            'nama' => 'Project Mitra Dashboard',
+            'mitra_id' => $mitra->id,
+            'status_project' => 'aktif',
+        ]));
+        $user = $this->mitraUser(['read_dashboard', 'read_material_request', 'create_material_request'], $mitra);
+
+        $this->actingAs($user)->post('/material-requests', [
+            'project_id' => $project->id,
+            'items' => [['material_id' => $material->id, 'qty' => 4]],
+        ])->assertRedirect('/material-requests');
+        $this->actingAs($user)->post('/material-requests', [
+            'items' => [['material_id' => $material->id, 'qty' => 2]],
+        ])->assertRedirect('/material-requests');
+
+        $this->actingAs($user)
+            ->get(route('mitra.dashboard'))
+            ->assertOk()
+            ->assertSee('PRJ-2608-0093 — Project Mitra Dashboard')
+            ->assertSee('Tanpa Project');
+    }
+
     public function test_mitra_dashboard_lists_each_special_material_balance_once(): void
     {
         $mitra = Mitra::factory()->create();

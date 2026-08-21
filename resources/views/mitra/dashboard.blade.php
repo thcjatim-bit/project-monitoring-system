@@ -34,7 +34,21 @@
             <x-ui.panel>
                 <h2 id="request-summary-title">Request Material</h2>
                 @forelse ($requests as $request)
-                    <p class="ui-list__item"><a href="{{ route('material-requests.show', $request) }}">Request Material #{{ $request->id }}</a> · {{ $request->project?->nama ?? 'Tanpa Project' }} · <x-ui.badge tone="warning" :label="$request->status" /></p>
+                    <div class="ui-list__item">
+                        <a href="{{ route('material-requests.show', $request) }}">Request Material #{{ $request->id }}</a>
+                        <p class="ui-help">Project:
+                            @if ($request->project)
+                                @if ($user->hasIzin('read_project'))
+                                    <a href="{{ route('projects.show', $request->project) }}">{{ $request->project->id_project }} — {{ $request->project->nama }}</a>
+                                @else
+                                    {{ $request->project->id_project }} — {{ $request->project->nama }}
+                                @endif
+                            @else
+                                Tanpa Project
+                            @endif
+                        </p>
+                        <x-material-request-status :status="$request->status" />
+                    </div>
                 @empty
                     <x-ui.empty-state title="Belum ada Request Material." />
                 @endforelse

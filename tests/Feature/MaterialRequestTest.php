@@ -7,9 +7,12 @@ use App\Models\Izin;
 use App\Models\Material;
 use App\Models\MaterialRequest;
 use App\Models\Mitra;
+use App\Models\Project;
 use App\Models\User;
+use App\Support\TenantDatabaseContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Closure;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
@@ -63,6 +66,55 @@ class MaterialRequestTest extends TestCase
 
         $this->expectException(QueryException::class);
         DB::table('material_requests')->where('id', $requestA->id)->update(['mitra_id' => $mitraB->id]);
+    }
+
+    public function test_request_list_shows_project_context_and_explicitly_marks_requests_without_project(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $requester = $this->userWith('create_material_request', $mitra);
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-0093',
+            'nama' => 'Project Traceability',
+            'mitra_id' => $mitra->id,
+            'status_project' => 'aktif',
+        ]));
+
+        $this->asThc(function () use ($mitra, $requester, $project): void {
+            MaterialRequest::query()->create([
+                'mitra_id' => $mitra->id,
+                'project_id' => $project->id,
+                'requested_by' => $requester->id,
+                'status' => 'diajukan',
+            ]);
+            MaterialRequest::query()->create([
+                'mitra_id' => $mitra->id,
+                'project_id' => null,
+                'requested_by' => $requester->id,
+                'status' => 'diajukan',
+            ]);
+        });
+
+        $thc = User::factory()->create([
+            'mitra_id' => null,
+            'grup_id' => $this->groupWith('read_material_request')->id,
+        ]);
+
+        $this->actingAs($thc)
+            ->get('/material-requests')
+            ->assertOk()
+            ->assertSee('PRJ-2608-0093 — Project Traceability')
+            ->assertSee('Tanpa Project')
+            ->assertSee('ui-badge', false)
+            ->assertDontSee('href="'.route('projects.show', $project).'"', false);
+
+        $thcWithProjectRead = User::factory()->create([
+            'mitra_id' => null,
+            'grup_id' => $this->groupWith('read_material_request', 'read_project')->id,
+        ]);
+
+        $this->actingAs($thcWithProjectRead)
+            ->get('/material-requests')
+            ->assertSee('href="'.route('projects.show', $project).'"', false);
     }
 
     public function test_request_item_cannot_be_attached_to_another_mitras_request(): void
@@ -193,5 +245,16 @@ class MaterialRequestTest extends TestCase
         )->all());
 
         return $group;
+    }
+
+    private function asThc(Closure $callback): mixed
+    {
+        app(TenantDatabaseContext::class)->set(null, true);
+
+        try {
+            return $callback();
+        } finally {
+            app(TenantDatabaseContext::class)->set(null, false);
+        }
     }
 }

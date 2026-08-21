@@ -315,12 +315,23 @@
                             <li class="command-center__item" data-request-id="{{ $materialRequest->id }}">
                                 <div>
                                     <a href="{{ route('material-requests.show', $materialRequest) }}">Request Material #{{ $materialRequest->id }}</a>
+                                    <p>Project:
+                                        @if ($materialRequest->project)
+                                            @if ($user->hasIzin('read_project'))
+                                                <a href="{{ route('projects.show', $materialRequest->project) }}">{{ $materialRequest->project->id_project }} — {{ $materialRequest->project->nama }}</a>
+                                            @else
+                                                {{ $materialRequest->project->id_project }} — {{ $materialRequest->project->nama }}
+                                            @endif
+                                        @else
+                                            Tanpa Project
+                                        @endif
+                                    </p>
                                     <p>
                                         @if ($materialRequest->mitra) {{ $materialRequest->mitra->nama }} · @endif
                                         {{ $materialRequest->items->count() }} item material
                                     </p>
                                 </div>
-                                <span class="command-center__item-status">Menunggu keputusan</span>
+                                <x-material-request-status status="diajukan" class="command-center__item-status" />
                             </li>
                         @endforeach
                     </ul>

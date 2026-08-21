@@ -17,7 +17,7 @@ class MaterialRequestController extends Controller
     public function index(): View
     {
         return view('material-requests.index', [
-            'requests' => MaterialRequest::query()->with(['items.material.unit', 'requester', 'decider'])->latest()->get(),
+            'requests' => MaterialRequest::query()->with(['items.material.unit', 'mitra', 'project', 'requester', 'decider'])->latest()->get(),
             'materials' => Material::query()->with('unit')->activeWithUnit()->orderBy('nama')->get(),
             'projects' => Project::query()->latest()->get(),
         ]);

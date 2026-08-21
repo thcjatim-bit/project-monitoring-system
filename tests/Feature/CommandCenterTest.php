@@ -8,6 +8,7 @@ use App\Models\Material;
 use App\Models\MaterialRequest;
 use App\Models\MaterialTransaksi;
 use App\Models\Mitra;
+use App\Models\Project;
 use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
@@ -199,9 +200,36 @@ class CommandCenterTest extends TestCase
             ->assertOk()
             ->assertSee('<strong>1</strong>', false)
             ->assertSee('Request Material menunggu keputusan')
-            ->assertSee('Request Material #'.$submitted->id);
+            ->assertSee('Request Material #'.$submitted->id)
+            ->assertSee('Tanpa Project');
 
         $this->assertPanelDoesNotContain($response->getContent(), 'material-request-panel', 'Request Material #'.$approved->id);
+    }
+
+    public function test_command_center_pending_request_includes_its_project_context(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create();
+        $mitraUser = $this->userWithPermissions($mitra->id, 'read_material_request', 'create_material_request');
+        $project = $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-0093',
+            'nama' => 'Project Command Center',
+            'mitra_id' => $mitra->id,
+            'status_project' => 'aktif',
+        ]));
+
+        $this->actingAs($mitraUser)->post('/material-requests', [
+            'project_id' => $project->id,
+            'items' => [['material_id' => $material->id, 'qty' => 4]],
+        ])->assertRedirect('/material-requests');
+
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_material_request');
+
+        $this->actingAs($thc)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('PRJ-2608-0093 — Project Command Center')
+            ->assertDontSee('href="'.route('projects.show', $project).'"', false);
     }
 
     public function test_command_center_navigation_only_contains_modules_allowed_by_permissions(): void

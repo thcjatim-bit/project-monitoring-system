@@ -55,7 +55,7 @@ class CommandCenterQuery
     {
         return MaterialRequest::query()
             ->where('status', 'diajukan')
-            ->with(['mitra', 'items.material.unit'])
+            ->with(['mitra', 'project', 'items.material.unit'])
             ->latest()
             ->get();
     }
@@ -264,7 +264,7 @@ class CommandCenterQuery
 
         if ($actor->hasIzin('read_material_request')) {
             MaterialRequest::query()
-                ->with('mitra')
+                ->with(['mitra', 'project'])
                 ->latest('updated_at')
                 ->limit($limit)
                 ->get()
@@ -323,11 +323,16 @@ class CommandCenterQuery
             default => $request->updated_at,
         } ?? $request->created_at ?? CarbonImmutable::now();
 
+        $projectDescription = $request->project === null
+            ? 'Tanpa Project'
+            : $request->project->id_project.' — '.$request->project->nama;
+        $description = $projectDescription.' · '.($request->mitra?->nama ?? 'Mitra tidak tersedia');
+
         return $this->activity(
             source: 'Request Material',
             entity: 'Request Material',
             title: 'Request Material #'.$request->id,
-            description: $request->mitra?->nama ?? 'Mitra tidak tersedia',
+            description: $description,
             status: $this->materialRequestStatus($request->status),
             occurredAt: $occurredAt,
             url: route('material-requests.show', $request),
