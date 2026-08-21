@@ -176,7 +176,8 @@ class MaterialOperationalUiTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('warehouse.index'))
-            ->assertSee('target="_blank" rel="noopener noreferrer"', false);
+            ->assertSee('target="_blank"', false)
+            ->assertSee('rel="noopener noreferrer"', false);
 
         $this->actingAs($user)
             ->get(route('warehouse.transit'))

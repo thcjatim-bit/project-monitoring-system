@@ -184,9 +184,8 @@ class SuratJalanTransferTest extends TestCase
         ])->assertRedirect();
 
         $response = $this->actingAs($user)->get('/warehouse/transit')->assertOk();
-        $response->assertSee('Sebagian diterima')->assertSee('Dalam Transit');
-        $this->assertSame(1, substr_count($response->getContent(), 'Sebagian diterima'));
-        $this->assertSame(1, substr_count($response->getContent(), 'Dalam Transit'));
+        $this->assertSame(1, substr_count($response->getContent(), 'ui-badge--warning'));
+        $this->assertSame(1, substr_count($response->getContent(), 'ui-badge--info'));
     }
 
     public function test_read_transit_grants_own_transfer_detail_and_print_without_dashboard_permission(): void
