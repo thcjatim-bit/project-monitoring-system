@@ -72,7 +72,14 @@
         row.querySelector('[data-remove-item]').hidden = false; items.append(row); bindIdentity(row.querySelector('select'));
     });
     items?.addEventListener('click', (event) => { if (event.target.matches('[data-remove-item]')) event.target.closest('[data-transfer-row]').remove(); });
-    document.querySelectorAll('[data-submit-loading]').forEach((form) => form.addEventListener('submit', () => { form.querySelectorAll('button[type="submit"]').forEach((button) => { button.disabled = true; button.dataset.originalLabel = button.textContent; button.textContent = 'Ops…'; }); }));
+    const RESTORE_SUBMIT_AFTER_MS = 1000;
+    document.querySelectorAll('[data-submit-loading]').forEach((form) => form.addEventListener('submit', () => {
+        const buttons = [...form.querySelectorAll('button[type="submit"]')];
+        buttons.forEach((button) => { button.disabled = true; button.dataset.originalLabel = button.textContent; button.textContent = 'Ops…'; });
+        // Form bertarget tab baru tidak pernah memindahkan halaman ini, jadi tombolnya harus dipulihkan sendiri.
+        if (!form.target) return;
+        setTimeout(() => buttons.forEach((button) => { button.disabled = false; button.textContent = button.dataset.originalLabel ?? button.textContent; }), RESTORE_SUBMIT_AFTER_MS);
+    }));
 })();
 </script>
 </x-layouts.app>

@@ -39,7 +39,7 @@ const warehousePage = () => {
             ${identityFields('receive')}
             <button type="submit">Catat penerimaan</button>
         </form>
-        <form data-submit-loading data-transfer-form>
+        <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
             <div data-transfer-items>
                 <div class="ui-list__item" data-transfer-row>
                     <label>Material<select name="items[0][material_id]" required>
@@ -142,4 +142,53 @@ test('markup baris item Surat Jalan menyediakan opsi placeholder Pilih Material'
 
     assert.ok(row, 'baris item Surat Jalan tidak ditemukan');
     assert.match(row[1], /<option value="">Pilih Material<\/option>/);
+});
+
+/** Menunggu penjaga UI, tanpa mengikat test ke durasi pemulihan yang persis. */
+const waitFor = async (predicate, message) => {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+        if (predicate()) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    assert.fail(message);
+};
+
+test('tombol Terbitkan Surat Jalan bisa dipakai lagi setelah Surat Jalan terbit di tab baru', async () => {
+    const window = warehousePage();
+    const form = window.document.querySelector('[data-transfer-form]');
+    const submit = form.querySelector('button[type="submit"]');
+
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+    assert.equal(submit.disabled, true, 'tombol harus terkunci selama Surat Jalan dikirim');
+    assert.equal(submit.textContent, 'Ops…');
+
+    await waitFor(
+        () => submit.disabled === false,
+        'halaman tidak pernah berpindah karena Surat Jalan terbit di tab baru, jadi tombol terkunci selamanya',
+    );
+
+    assert.equal(submit.textContent, 'Terbitkan Surat Jalan', 'label semula harus dikembalikan');
+});
+
+test('form yang berpindah halaman tetap terkunci setelah dikirim', async () => {
+    const window = warehousePage();
+    const form = window.document.querySelector('[data-submit-loading]:not([data-transfer-form])');
+    const submit = form.querySelector('button[type="submit"]');
+
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+    assert.equal(submit.disabled, true);
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    assert.equal(
+        submit.disabled,
+        true,
+        'halaman sedang berpindah, jadi memulihkan tombol hanya membuka celah kirim ganda',
+    );
 });
