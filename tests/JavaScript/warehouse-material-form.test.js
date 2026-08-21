@@ -32,12 +32,19 @@ const warehousePage = () => {
     const window = new Window({ url: 'https://example.test/warehouse' });
 
     window.document.body.innerHTML = `
-        <form data-submit-loading>
+        <form data-submit-loading action="/warehouse/stock/receive">
             <label>Material<select name="material_id" data-material-select required>
                 <option value="">Pilih Material</option>${materialOptions}
             </select></label>
             ${identityFields('receive')}
             <button type="submit">Catat penerimaan</button>
+        </form>
+        <form data-submit-loading action="/warehouse/stock/issue">
+            <label>Material<select name="material_id" data-material-select required>
+                <option value="">Pilih Material</option>${materialOptions}
+            </select></label>
+            ${identityFields('issue')}
+            <button type="submit">Catat pengeluaran</button>
         </form>
         <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
             <div data-transfer-items>
@@ -63,6 +70,9 @@ const warehousePage = () => {
 const rows = (window) => [...window.document.querySelectorAll('[data-transfer-row]')];
 
 const identity = (row, name) => row.querySelector(`[data-identity="${name}"]`);
+
+/** Form Penerimaan/Pengeluaran memakai satu select tanpa baris item. */
+const stockForm = (window, action) => window.document.querySelector(`form[action="/warehouse/stock/${action}"]`);
 
 const choose = (window, select, value) => {
     select.value = value;
@@ -191,4 +201,62 @@ test('form yang berpindah halaman tetap terkunci setelah dikirim', async () => {
         true,
         'halaman sedang berpindah, jadi memulihkan tombol hanya membuka celah kirim ganda',
     );
+});
+
+test('memilih material ber-SN pada form Penerimaan membuka kotak Serial Number', () => {
+    const window = warehousePage();
+    const form = stockForm(window, 'receive');
+
+    choose(window, form.querySelector('[data-material-select]'), '2');
+
+    assert.equal(identity(form, 'serial_number').hidden, false);
+    assert.equal(identity(form, 'serial_number').querySelector('input').required, true);
+    assert.equal(identity(form, 'drum_id').hidden, true);
+});
+
+test('identitas form Penerimaan tidak bocor ke form Pengeluaran', () => {
+    const window = warehousePage();
+    const receive = stockForm(window, 'receive');
+    const issue = stockForm(window, 'issue');
+
+    choose(window, receive.querySelector('[data-material-select]'), '3');
+
+    assert.equal(identity(receive, 'drum_id').hidden, false);
+    assert.equal(identity(issue, 'drum_id').hidden, true, 'form lain harus tetap tertutup');
+    assert.equal(
+        identity(issue, 'drum_id').querySelector('input').required,
+        false,
+        'form lain tidak boleh ikut wajib diisi',
+    );
+});
+
+test('tombol Hapus item membuang baris item Surat Jalan tambahan', () => {
+    const window = warehousePage();
+    window.document.querySelector('[data-add-item]').click();
+    assert.equal(rows(window).length, 2, 'prasyarat: ada baris kedua untuk dibuang');
+
+    rows(window)[1].querySelector('[data-remove-item]').click();
+
+    assert.equal(rows(window).length, 1);
+    assert.equal(
+        rows(window)[0].querySelector('[data-remove-item]').hidden,
+        true,
+        'baris pertama tidak boleh bisa dibuang, Surat Jalan wajib punya minimal satu item',
+    );
+});
+
+test('baris item Surat Jalan baru tidak mewarisi isian baris sebelumnya', () => {
+    const window = warehousePage();
+    const first = rows(window)[0];
+    choose(window, first.querySelector('select'), '2');
+    first.querySelector('[name="items[0][qty]"]').value = '7';
+    first.querySelector('[name="items[0][serial_number]"]').value = 'SN-LAMA';
+
+    window.document.querySelector('[data-add-item]').click();
+    const clone = rows(window)[1];
+
+    assert.equal(clone.querySelector('select').value, '', 'material harus kembali ke placeholder');
+    assert.equal(clone.querySelector('[name="items[1][qty]"]').value, '');
+    assert.equal(clone.querySelector('[name="items[1][serial_number]"]').value, '');
+    assert.equal(identity(clone, 'serial_number').hidden, true, 'kotak identitas warisan harus tertutup');
 });
