@@ -15,12 +15,27 @@ use App\Models\ProjectVariationOrder;
 use App\Models\User;
 use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
 class ProjectPlanningTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_planning_service_rechecks_permission_before_mutating_a_project(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        $actor = User::factory()->create(['mitra_id' => $mitra->id]);
+
+        $this->expectException(HttpException::class);
+
+        app(ProjectPlanningService::class)->createVariationOrder($project, $actor, 'Tidak berwenang', [[
+            'quantity_delta' => '1',
+            'harga_jasa_id' => 1,
+        ]]);
+    }
 
     public function test_thc_adds_rab_jasa_with_frozen_approved_mitra_price(): void
     {
@@ -67,6 +82,41 @@ class ProjectPlanningTest extends TestCase
                 'total_nilai' => '1250000.00',
             ]);
         });
+    }
+
+    public function test_rab_rejects_an_approved_price_after_its_pks_has_ended(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        $job = $this->asThc(fn (): PekerjaanJasa => PekerjaanJasa::create([
+            'kode' => 'JASA-EXPIRED-PKS',
+            'nama' => 'Pekerjaan PKS Berakhir',
+            'aktif' => true,
+        ]));
+        $pks = $this->asThc(fn (): Pks => Pks::create([
+            'mitra_id' => $mitra->id,
+            'nomor' => 'PKS-EXPIRED',
+            'tanggal_mulai' => '2026-01-01',
+            'tanggal_berakhir' => '2026-08-01',
+        ]));
+        $price = $this->asThc(fn (): MitraHargaJasa => MitraHargaJasa::create([
+            'mitra_id' => $mitra->id,
+            'pks_id' => $pks->id,
+            'pekerjaan_jasa_id' => $job->id,
+            'harga' => '125000.00',
+            'status' => 'disetujui',
+            'berlaku_mulai' => '2026-01-01',
+        ]));
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->actingAs($thc)
+            ->post(route('projects.rab-jasa.store', $project), [
+                'harga_jasa_id' => $price->id,
+                'qty' => '10',
+            ])
+            ->assertSessionHasErrors('harga_jasa_id');
+
+        $this->assertDatabaseCount('project_rab_jasas', 0);
     }
 
     public function test_changing_toc_preserves_original_and_creates_revised_baseline(): void

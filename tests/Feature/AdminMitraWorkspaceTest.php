@@ -11,6 +11,7 @@ use App\Models\PekerjaanJasa;
 use App\Models\Pks;
 use App\Models\Project;
 use App\Models\ProjectBaseline;
+use App\Models\ProjectBaselineProposal;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\TenantDatabaseContext;
@@ -80,6 +81,22 @@ class AdminMitraWorkspaceTest extends TestCase
             'email' => 'user.baru@example.com',
             'mitra_id' => $mitraB->id,
         ]);
+    }
+
+    public function test_admin_mitra_cannot_select_a_group_with_an_unlisted_capability(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $admin = User::factory()->create([
+            'mitra_id' => $mitra->id,
+            'grup_id' => $this->groupWith('manage_mitra_users')->id,
+        ]);
+        $sensitiveGroup = Grup::factory()->create(['nama' => 'Grup Sensitif Baru']);
+        $sensitiveGroup->izins()->attach(Izin::factory()->create(['kode' => 'new_sensitive_capability']));
+
+        $this->actingAs($admin)
+            ->get(route('admin.users'))
+            ->assertOk()
+            ->assertDontSee('Grup Sensitif Baru');
     }
 
     public function test_admin_mitra_cannot_edit_another_tenants_user_by_direct_url(): void
@@ -269,7 +286,7 @@ class AdminMitraWorkspaceTest extends TestCase
         ]);
     }
 
-    public function test_admin_mitra_can_manage_baseline_without_overwriting_original_history(): void
+    public function test_admin_mitra_submits_baseline_proposals_that_only_thc_can_approve(): void
     {
         $mitra = Mitra::factory()->create();
         $project = $this->asThc(fn (): Project => Project::create([
@@ -292,6 +309,27 @@ class AdminMitraWorkspaceTest extends TestCase
             ])
             ->assertRedirect(route('projects.show', $project));
 
+        $this->assertDatabaseCount('project_baselines', 0);
+        $this->assertDatabaseHas('project_baseline_proposals', [
+            'project_id' => $project->id,
+            'status' => 'diajukan',
+            'toc' => '2026-09-30',
+        ]);
+        $this->assertNull($project->fresh()->toc);
+
+        $proposal = ProjectBaselineProposal::query()->firstOrFail();
+        $thc = User::factory()->create([
+            'mitra_id' => null,
+            'grup_id' => $this->groupWith('manage_project_plan')->id,
+        ]);
+
+        $this->actingAs($thc)
+            ->patch(route('projects.baseline-proposals.approve', [$project, $proposal]))
+            ->assertRedirect(route('projects.show', $project));
+
+        $this->assertSame(1, ProjectBaseline::query()->where('project_id', $project->id)->where('kind', 'original')->count());
+        $this->assertSame('2026-09-30', $project->fresh()->toc->toDateString());
+
         $this->actingAs($admin)
             ->put(route('projects.plan.update', $project), [
                 'toc' => '2026-10-15',
@@ -303,6 +341,14 @@ class AdminMitraWorkspaceTest extends TestCase
             ->assertRedirect(route('projects.show', $project));
 
         $this->assertSame(1, ProjectBaseline::query()->where('project_id', $project->id)->where('kind', 'original')->count());
+        $this->assertSame(1, ProjectBaselineProposal::query()->where('project_id', $project->id)->where('status', 'diajukan')->count());
+        $this->assertSame('2026-09-30', $project->fresh()->toc->toDateString());
+
+        $secondProposal = ProjectBaselineProposal::query()->where('status', 'diajukan')->firstOrFail();
+        $this->actingAs($thc)
+            ->patch(route('projects.baseline-proposals.approve', [$project, $secondProposal]))
+            ->assertRedirect(route('projects.show', $project));
+
         $this->assertSame(1, ProjectBaseline::query()->where('project_id', $project->id)->where('kind', 'revised')->count());
         $this->assertDatabaseHas('projects', ['id' => $project->id, 'toc' => '2026-10-15']);
     }

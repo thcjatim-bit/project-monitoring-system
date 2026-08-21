@@ -3,33 +3,26 @@
 namespace App\Http\Controllers;
 
 use App\Models\MitraHargaJasa;
-use App\Models\PekerjaanJasa;
-use App\Models\Pks;
+use App\Services\MitraPriceBook;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class MitraPriceController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, MitraPriceBook $priceBook): View
     {
-        $mitraId = $request->user()->mitra_id;
+        $catalog = $priceBook->catalogFor($request->user());
 
         return view('mitra.prices', [
-            'prices' => MitraHargaJasa::query()->with('pekerjaanJasa', 'pks')->latest()->get(),
-            'jobs' => PekerjaanJasa::query()->where('aktif', true)->orderBy('nama')->get(),
-            'pks' => Pks::query()
-                ->whereDate('tanggal_mulai', '<=', today())
-                ->where(fn ($query) => $query->whereNull('tanggal_berakhir')->orWhereDate('tanggal_berakhir', '>=', today()))
-                ->where('mitra_id', $mitraId)
-                ->orderByDesc('tanggal_mulai')
-                ->get(),
+            'prices' => $priceBook->priceBookFor($request->user()),
+            'jobs' => $catalog['jobs'],
+            'pks' => $catalog['pks'],
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, MitraPriceBook $priceBook): RedirectResponse
     {
         $data = $request->validate([
             'pks_id' => ['required', 'integer'],
@@ -38,58 +31,21 @@ class MitraPriceController extends Controller
             'berlaku_mulai' => ['required', 'date'],
             'revisi_dari_id' => ['nullable', 'integer'],
         ]);
-        $pks = Pks::query()
-            ->whereKey($data['pks_id'])
-            ->where('mitra_id', $request->user()->mitra_id)
-            ->whereDate('tanggal_mulai', '<=', $data['berlaku_mulai'])
-            ->where(fn ($query) => $query->whereNull('tanggal_berakhir')->orWhereDate('tanggal_berakhir', '>=', $data['berlaku_mulai']))
-            ->firstOrFail();
-        $revision = null;
-        if (! empty($data['revisi_dari_id'])) {
-            $revision = MitraHargaJasa::query()->whereKey($data['revisi_dari_id'])->firstOrFail();
-            abort_unless((int) $revision->mitra_id === (int) $request->user()->mitra_id, 404);
-        }
-
-        MitraHargaJasa::query()->create([
-            'mitra_id' => $request->user()->mitra_id,
-            'pks_id' => $pks->id,
-            'pekerjaan_jasa_id' => $data['pekerjaan_jasa_id'],
-            'harga' => $data['harga'],
-            'status' => 'diajukan',
-            'berlaku_mulai' => $data['berlaku_mulai'],
-            'diajukan_oleh' => $request->user()->id,
-            'revisi_dari_id' => $revision?->id,
-        ]);
+        $priceBook->submit($request->user(), $data);
 
         return back()->with('status', 'Harga Jasa Mitra diajukan untuk persetujuan THC.');
     }
 
-    public function approve(Request $request, MitraHargaJasa $price): RedirectResponse
+    public function approve(Request $request, MitraHargaJasa $price, MitraPriceBook $priceBook): RedirectResponse
     {
-        if ($price->status !== 'diajukan') {
-            throw ValidationException::withMessages(['status' => 'Harga Jasa Mitra sudah diputuskan.']);
-        }
-
-        $price->update([
-            'status' => 'disetujui',
-            'diputuskan_oleh' => $request->user()->id,
-            'diputuskan_at' => now(),
-        ]);
+        $priceBook->decide($request->user(), $price, 'disetujui');
 
         return back()->with('status', 'Harga Jasa Mitra disetujui.');
     }
 
-    public function reject(Request $request, MitraHargaJasa $price): RedirectResponse
+    public function reject(Request $request, MitraHargaJasa $price, MitraPriceBook $priceBook): RedirectResponse
     {
-        if ($price->status !== 'diajukan') {
-            throw ValidationException::withMessages(['status' => 'Harga Jasa Mitra sudah diputuskan.']);
-        }
-
-        $price->update([
-            'status' => 'ditolak',
-            'diputuskan_oleh' => $request->user()->id,
-            'diputuskan_at' => now(),
-        ]);
+        $priceBook->decide($request->user(), $price, 'ditolak');
 
         return back()->with('status', 'Harga Jasa Mitra ditolak.');
     }

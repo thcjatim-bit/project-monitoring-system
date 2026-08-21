@@ -29,7 +29,7 @@ class ProjectCurveTest extends TestCase
         $mitra = Mitra::factory()->create();
         [$project, $rab] = $this->rabFixture($mitra);
         $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'report_project_progress');
-        $thc = $this->userWithPermissions(null, 'read_project', 'verify_project_progress');
+        $thc = $this->userWithPermissions(null, 'read_project', 'verify_project_progress', 'manage_project_plan');
         $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-08-30', [
             ['date' => '2026-08-10', 'percent' => 50],
             ['date' => '2026-08-30', 'percent' => 100],

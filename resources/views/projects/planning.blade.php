@@ -97,6 +97,22 @@
                 @else
                     <table class="project-workspace__table"><thead><tr><th>Jenis / versi</th><th>TOC</th><th>Titik rencana</th></tr></thead><tbody>@foreach ($baselines as $baseline)<tr><td>{{ $baseline->kind === 'original' ? 'Original Baseline' : 'Revised Baseline' }} v{{ $baseline->version }}<br><details><summary>Detail Baseline / TOC</summary><small>Baseline #{{ $baseline->id }} · supersedes #{{ $baseline->supersedes_id ?? 'tidak ada' }}</small></details></td><td>{{ $baseline->toc->format('d M Y') }}</td><td>{{ $baseline->days->count() }} titik hingga {{ number_format((float) $baseline->days->last()?->cumulative_percent, 2, '.', '') }}%</td></tr>@endforeach</tbody></table>
                 @endif
+                @if ($baselineProposals->isNotEmpty())
+                    <h3>Usulan Baseline</h3>
+                    @foreach ($baselineProposals as $proposal)
+                        <div class="project-workspace__state">
+                            <strong>{{ $proposal->toc->format('d M Y') }}</strong>
+                            <span class="project-workspace__badge {{ $proposal->status === 'disetujui' ? 'project-workspace__badge--approved' : '' }}">{{ $proposal->status }}</span>
+                            <small>{{ $proposal->days->count() }} titik rencana</small>
+                            @if ($canApproveBaselineProposal && $proposal->status === 'diajukan')
+                                <form method="POST" action="{{ route('projects.baseline-proposals.approve', [$project, $proposal]) }}" style="margin-top:9px">
+                                    @csrf @method('PATCH')
+                                    <button class="project-workspace__button" type="submit">Setujui Usulan Baseline</button>
+                                </form>
+                            @endif
+                        </div>
+                    @endforeach
+                @endif
                 @if ($canManage)
                     <form class="project-workspace__form" method="POST" action="{{ route('projects.plan.update', $project) }}">
                         @csrf @method('PUT')

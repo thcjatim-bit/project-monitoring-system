@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\HasMitraScope;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ProjectBaselineProposalDay extends Model
+{
+    use HasMitraScope;
+
+    protected $fillable = ['mitra_id', 'project_baseline_proposal_id', 'plan_date', 'cumulative_percent'];
+
+    protected function casts(): array
+    {
+        return [
+            'plan_date' => 'date',
+            'cumulative_percent' => 'decimal:3',
+        ];
+    }
+
+    public function proposal(): BelongsTo
+    {
+        return $this->belongsTo(ProjectBaselineProposal::class, 'project_baseline_proposal_id');
+    }
+}

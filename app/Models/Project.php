@@ -63,6 +63,11 @@ class Project extends Model
         return $this->hasMany(ProjectBaseline::class);
     }
 
+    public function baselineProposals(): HasMany
+    {
+        return $this->hasMany(ProjectBaselineProposal::class);
+    }
+
     public function variationOrders(): HasMany
     {
         return $this->hasMany(ProjectVariationOrder::class);

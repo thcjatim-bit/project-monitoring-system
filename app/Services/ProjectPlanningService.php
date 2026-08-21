@@ -6,6 +6,8 @@ use App\Models\MitraHargaJasa;
 use App\Models\Project;
 use App\Models\ProjectBaseline;
 use App\Models\ProjectBaselineDay;
+use App\Models\ProjectBaselineProposal;
+use App\Models\ProjectBaselineProposalDay;
 use App\Models\ProjectRabJasa;
 use App\Models\ProjectTimeline;
 use App\Models\ProjectVariationOrder;
@@ -17,21 +19,16 @@ use Illuminate\Validation\ValidationException;
 
 class ProjectPlanningService
 {
+    public function __construct(private MitraPriceBook $priceBook) {}
+
     public function addRabJasa(Project $project, User $actor, int $hargaJasaId, string|int|float $qty): ProjectRabJasa
     {
+        $this->assertProjectAccess($project, $actor);
         $quantity = $this->positiveQuantity($qty);
 
         return DB::transaction(function () use ($project, $actor, $hargaJasaId, $quantity): ProjectRabJasa {
             $project = Project::query()->lockForUpdate()->findOrFail($project->id);
-            $price = MitraHargaJasa::query()
-                ->where('mitra_id', $project->mitra_id)
-                ->where('status', 'disetujui')
-                ->whereDate('berlaku_mulai', '<=', today())
-                ->find($hargaJasaId);
-
-            if ($price === null) {
-                throw ValidationException::withMessages(['harga_jasa_id' => 'Harga Jasa Mitra belum disetujui untuk Project ini.']);
-            }
+            $price = $this->priceBook->effectiveFor($project, $hargaJasaId, CarbonImmutable::today());
 
             $unitPrice = (string) $price->harga;
 
@@ -49,8 +46,9 @@ class ProjectPlanningService
     }
 
     /** @param array<int, array{date:string,percent:string|int|float}> $planDays */
-    public function savePlan(Project $project, User $actor, string $toc, array $planDays): ProjectBaseline
+    public function savePlan(Project $project, User $actor, string $toc, array $planDays): ProjectBaseline|ProjectBaselineProposal
     {
+        $this->assertProjectAccess($project, $actor);
         if ($planDays === []) {
             throw ValidationException::withMessages(['plan' => 'Baseline membutuhkan minimal satu rencana harian.']);
         }
@@ -71,6 +69,35 @@ class ProjectPlanningService
 
         if ((float) $normalizedDays->last()['percent'] !== 100.0) {
             throw ValidationException::withMessages(['plan' => 'Hari terakhir baseline harus mencapai 100%.']);
+        }
+
+        if ($actor->mitra_id !== null) {
+            return DB::transaction(function () use ($project, $actor, $tocDate, $normalizedDays): ProjectBaselineProposal {
+                $project = Project::query()->lockForUpdate()->findOrFail($project->id);
+                $proposal = ProjectBaselineProposal::query()->create([
+                    'mitra_id' => $project->mitra_id,
+                    'project_id' => $project->id,
+                    'status' => 'diajukan',
+                    'toc' => $tocDate,
+                    'diajukan_oleh' => $actor->id,
+                ]);
+
+                foreach ($normalizedDays as $day) {
+                    ProjectBaselineProposalDay::query()->create([
+                        'mitra_id' => $project->mitra_id,
+                        'project_baseline_proposal_id' => $proposal->id,
+                        'plan_date' => $day['date'],
+                        'cumulative_percent' => number_format($day['percent'], 3, '.', ''),
+                    ]);
+                }
+
+                ProjectTimeline::recordSystem($project, $actor, 'baseline_proposal_submitted', [
+                    'baseline_proposal_id' => $proposal->id,
+                    'toc' => $tocDate,
+                ]);
+
+                return $proposal->load('days');
+            });
         }
 
         return DB::transaction(function () use ($project, $actor, $tocDate, $normalizedDays): ProjectBaseline {
@@ -112,9 +139,65 @@ class ProjectPlanningService
         });
     }
 
+    public function approveBaselineProposal(Project $project, ProjectBaselineProposal $proposal, User $actor): ProjectBaseline
+    {
+        abort_unless($actor->mitra_id === null && $actor->hasIzin('manage_project_plan'), 403);
+
+        return DB::transaction(function () use ($project, $proposal, $actor): ProjectBaseline {
+            $project = Project::query()->lockForUpdate()->findOrFail($project->id);
+            $proposal = ProjectBaselineProposal::query()
+                ->where('project_id', $project->id)
+                ->with('days')
+                ->lockForUpdate()
+                ->findOrFail($proposal->id);
+            if ($proposal->status !== 'diajukan') {
+                throw ValidationException::withMessages(['status' => 'Usulan Baseline sudah diputuskan.']);
+            }
+
+            $previous = ProjectBaseline::query()
+                ->where('project_id', $project->id)
+                ->orderByDesc('version')
+                ->lockForUpdate()
+                ->first();
+            $baseline = ProjectBaseline::query()->create([
+                'mitra_id' => $project->mitra_id,
+                'project_id' => $project->id,
+                'kind' => $previous === null ? 'original' : 'revised',
+                'version' => ($previous?->version ?? 0) + 1,
+                'toc' => $proposal->toc,
+                'supersedes_id' => $previous?->id,
+                'dibuat_oleh' => $actor->id,
+            ]);
+
+            foreach ($proposal->days as $day) {
+                ProjectBaselineDay::query()->create([
+                    'mitra_id' => $project->mitra_id,
+                    'project_baseline_id' => $baseline->id,
+                    'plan_date' => $day->plan_date,
+                    'cumulative_percent' => $day->cumulative_percent,
+                ]);
+            }
+
+            $proposal->update([
+                'status' => 'disetujui',
+                'diputuskan_oleh' => $actor->id,
+                'diputuskan_at' => now(),
+            ]);
+            $project->update(['toc' => $proposal->toc]);
+            ProjectTimeline::recordSystem($project, $actor, 'baseline_proposal_approved', [
+                'baseline_proposal_id' => $proposal->id,
+                'baseline_id' => $baseline->id,
+                'baseline_kind' => $baseline->kind,
+            ]);
+
+            return $baseline->load('days');
+        });
+    }
+
     /** @param array<int, array{rab_jasa_id?:int|null,harga_jasa_id?:int|null,quantity_delta:string|int|float}> $items */
     public function createVariationOrder(Project $project, User $actor, string $reason, array $items): ProjectVariationOrder
     {
+        $this->assertProjectAccess($project, $actor);
         if ($items === []) {
             throw ValidationException::withMessages(['items' => 'Variation Order membutuhkan minimal satu baris.']);
         }
@@ -151,13 +234,10 @@ class ProjectPlanningService
                         throw ValidationException::withMessages(['items' => 'Pengurangan Variation Order melebihi qty RAB Jasa yang tersedia.']);
                     }
                 } elseif ($delta > 0 && ! empty($item['harga_jasa_id'])) {
-                    $price = MitraHargaJasa::query()
-                        ->where('mitra_id', $project->mitra_id)
-                        ->where('status', 'disetujui')
-                        ->whereDate('berlaku_mulai', '<=', today())
-                        ->find($item['harga_jasa_id']);
-                    if ($price === null) {
-                        throw ValidationException::withMessages(['items' => 'Penambahan RAB hanya boleh memakai Harga Jasa Mitra yang disetujui.']);
+                    try {
+                        $price = $this->priceBook->effectiveFor($project, (int) $item['harga_jasa_id'], CarbonImmutable::today());
+                    } catch (ValidationException) {
+                        throw ValidationException::withMessages(['items' => 'Penambahan RAB hanya boleh memakai Harga Jasa Mitra yang disetujui dan berlaku.']);
                     }
                 } else {
                     throw ValidationException::withMessages(['items' => 'Baris Variation Order harus menunjuk RAB atau Harga Jasa Mitra baru.']);
@@ -185,6 +265,8 @@ class ProjectPlanningService
 
     public function approveVariationOrder(Project $project, ProjectVariationOrder $variation, User $actor): ProjectVariationOrder
     {
+        abort_unless($actor->mitra_id === null && $actor->hasIzin('manage_project_plan'), 403);
+
         return DB::transaction(function () use ($project, $variation, $actor): ProjectVariationOrder {
             $variation = ProjectVariationOrder::query()
                 ->where('project_id', $project->id)
@@ -258,5 +340,14 @@ class ProjectPlanningService
     private function money(float $value): string
     {
         return number_format($value, 2, '.', '');
+    }
+
+    private function assertProjectAccess(Project $project, User $actor): void
+    {
+        $permission = $actor->mitra_id === null ? 'manage_project_plan' : 'manage_mitra_project';
+        abort_unless($actor->hasIzin($permission), 403);
+        if ($actor->mitra_id !== null) {
+            abort_unless((int) $project->mitra_id === (int) $actor->mitra_id, 404);
+        }
     }
 }

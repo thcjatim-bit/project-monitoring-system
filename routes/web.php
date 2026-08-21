@@ -131,6 +131,7 @@ Route::middleware('auth')->group(function (): void {
     });
     Route::middleware(['thc', 'izin:manage_project_plan'])->group(function (): void {
         Route::patch('/projects/{project}/variation-orders/{variationOrder}/approve', [ProjectPlanningController::class, 'approveVariationOrder'])->name('projects.variation-orders.approve');
+        Route::patch('/projects/{project}/baseline-proposals/{proposal}/approve', [ProjectPlanningController::class, 'approveBaselineProposal'])->name('projects.baseline-proposals.approve');
     });
     Route::post('/projects/{project}/progress', [ProjectProgressController::class, 'store'])->middleware('izin:report_project_progress')->name('projects.progress.store');
     Route::post('/projects/{project}/material-installations', [ProjectMaterialInstallationController::class, 'store'])

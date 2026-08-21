@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MitraHargaJasa;
 use App\Models\Project;
 use App\Models\ProjectBaseline;
+use App\Models\ProjectBaselineProposal;
 use App\Models\ProjectRabJasa;
 use App\Models\ProjectVariationOrder;
 use App\Services\ProjectPlanningService;
@@ -20,6 +21,7 @@ class ProjectPlanningController extends Controller
         $canManage = ($viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan'))
             || ($viewer->mitra_id !== null && $viewer->hasIzin('manage_mitra_project'));
         $canApproveVariationOrder = $viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan');
+        $canApproveBaselineProposal = $canApproveVariationOrder;
 
         return view('projects.planning', [
             'project' => $project->loadMissing('mitra'),
@@ -42,6 +44,11 @@ class ProjectPlanningController extends Controller
                 ->with('days')
                 ->orderByDesc('version')
                 ->get(),
+            'baselineProposals' => ProjectBaselineProposal::query()
+                ->where('project_id', $project->id)
+                ->with('days')
+                ->orderByDesc('id')
+                ->get(),
             'variationOrders' => ProjectVariationOrder::query()
                 ->where('project_id', $project->id)
                 ->with(['items.rabJasa.pekerjaanJasa', 'items.hargaJasaMitra.pekerjaanJasa'])
@@ -49,6 +56,7 @@ class ProjectPlanningController extends Controller
                 ->get(),
             'canManage' => $canManage,
             'canApproveVariationOrder' => $canApproveVariationOrder,
+            'canApproveBaselineProposal' => $canApproveBaselineProposal,
         ]);
     }
 
@@ -73,7 +81,11 @@ class ProjectPlanningController extends Controller
         ]);
         $service->savePlan($project, $request->user(), $data['toc'], $data['plan']);
 
-        return redirect()->route('projects.show', $project)->with('status', 'Baseline Project disimpan.');
+        $message = $request->user()->mitra_id === null
+            ? 'Baseline Project disimpan.'
+            : 'Usulan Baseline Project diajukan untuk persetujuan THC.';
+
+        return redirect()->route('projects.show', $project)->with('status', $message);
     }
 
     public function storeVariationOrder(Request $request, Project $project, ProjectPlanningService $service): RedirectResponse
@@ -95,5 +107,12 @@ class ProjectPlanningController extends Controller
         $service->approveVariationOrder($project, $variationOrder, $request->user());
 
         return redirect()->route('projects.show', $project)->with('status', 'Variation Order disetujui.');
+    }
+
+    public function approveBaselineProposal(Request $request, Project $project, ProjectBaselineProposal $proposal, ProjectPlanningService $service): RedirectResponse
+    {
+        $service->approveBaselineProposal($project, $proposal, $request->user());
+
+        return redirect()->route('projects.show', $project)->with('status', 'Usulan Baseline Project disetujui.');
     }
 }
