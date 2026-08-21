@@ -64,20 +64,23 @@
         });
     };
     const bindIdentity = (select) => { select.addEventListener('change', () => toggleIdentity(select)); toggleIdentity(select); };
-    document.querySelectorAll('[data-material-select], [data-transfer-row] select').forEach(bindIdentity);
+    // Satu selector untuk halaman maupun baris klon, supaya baris tidak pernah terikat separuh.
+    const bindSelects = (root) => root.querySelectorAll('[data-material-select], [data-transfer-row] select').forEach(bindIdentity);
+    bindSelects(document);
     const items = document.querySelector('[data-transfer-items]'); let nextTransferIndex = 1;
     document.querySelector('[data-add-item]')?.addEventListener('click', () => {
         const source = items.querySelector('[data-transfer-row]'); const index = nextTransferIndex++; const row = source.cloneNode(true);
         row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[0\]/g, `items[${index}]`); input.value = ''; });
-        row.querySelector('[data-remove-item]').hidden = false; items.append(row); bindIdentity(row.querySelector('select'));
+        row.querySelector('[data-remove-item]').hidden = false; items.append(row); bindSelects(row);
     });
     items?.addEventListener('click', (event) => { if (event.target.matches('[data-remove-item]')) event.target.closest('[data-transfer-row]').remove(); });
     const RESTORE_SUBMIT_AFTER_MS = 1000;
+    const NAVIGATES_THIS_PAGE = ['', '_self', '_parent', '_top'];
     document.querySelectorAll('[data-submit-loading]').forEach((form) => form.addEventListener('submit', () => {
         const buttons = [...form.querySelectorAll('button[type="submit"]')];
         buttons.forEach((button) => { button.disabled = true; button.dataset.originalLabel = button.textContent; button.textContent = 'Ops…'; });
-        // Form bertarget tab baru tidak pernah memindahkan halaman ini, jadi tombolnya harus dipulihkan sendiri.
-        if (!form.target) return;
+        // Halaman ini akan berpindah, jadi tombol sengaja dibiarkan terkunci sampai halaman lenyap.
+        if (NAVIGATES_THIS_PAGE.includes(form.target)) return;
         setTimeout(() => buttons.forEach((button) => { button.disabled = false; button.textContent = button.dataset.originalLabel ?? button.textContent; }), RESTORE_SUBMIT_AFTER_MS);
     }));
 })();
