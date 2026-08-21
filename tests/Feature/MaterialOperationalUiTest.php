@@ -7,6 +7,7 @@ use App\Models\Izin;
 use App\Models\Material;
 use App\Models\Mitra;
 use App\Models\Project;
+use App\Models\SuratJalan;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -100,6 +101,94 @@ class MaterialOperationalUiTest extends TestCase
             ->assertSee($destination->kode)
             ->assertSee('MAT-HUB')
             ->assertSee('data-submit-loading', false);
+    }
+
+    public function test_operasional_material_memformat_qty_dan_menampilkan_surat_jalan_masuk(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'operate_warehouse');
+        [$origin, $destination] = $this->asThc(fn (): array => [
+            Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-ASAL']),
+            Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-TUJUAN']),
+        ]);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+        $material = Material::factory()->create(['kode' => 'MAT-QTY', 'nama' => 'Material Qty']);
+
+        $this->actingAs($user)->post(route('warehouse.stock.receive'), [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'qty' => '2312279',
+            'reason' => 'Stok awal',
+        ])->assertRedirect();
+
+        $this->actingAs($user)->post(route('warehouse.transfers.issue'), [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-20',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [['material_id' => $material->id, 'qty' => '4']],
+        ])->assertRedirect();
+
+        $suratJalan = SuratJalan::query()->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('warehouse.index'))
+            ->assertOk()
+            ->assertSee('2.312.275')
+            ->assertSee('2.312.279')
+            ->assertDontSee('2312275.000')
+            ->assertDontSee('2312279.000')
+            ->assertSee('Pengiriman masuk')
+            ->assertSee($suratJalan->nomor)
+            ->assertSee($origin->nama)
+            ->assertSee($destination->nama)
+            ->assertSee('Terima Pengiriman')
+            ->assertSee(route('warehouse.transfers.show', $suratJalan), false);
+    }
+
+    public function test_action_cetak_dan_penerbitan_surat_jalan_membuka_tab_baru_dengan_aman(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions($mitra->id, 'operate_warehouse');
+        [$origin, $destination] = $this->asThc(fn (): array => [
+            Warehouse::factory()->create(['mitra_id' => $mitra->id]),
+            Warehouse::factory()->create(['mitra_id' => $mitra->id]),
+        ]);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+        $material = Material::factory()->create();
+
+        $this->actingAs($user)->post(route('warehouse.stock.receive'), [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'qty' => '5',
+            'reason' => 'Stok awal',
+        ])->assertRedirect();
+        $this->actingAs($user)->post(route('warehouse.transfers.issue'), [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-20',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [['material_id' => $material->id, 'qty' => '2']],
+        ])->assertRedirect();
+        $suratJalan = SuratJalan::query()->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('warehouse.index'))
+            ->assertSee('target="_blank"', false);
+
+        $this->actingAs($user)
+            ->get(route('warehouse.transit'))
+            ->assertSee('target="_blank" rel="noopener noreferrer"', false);
+
+        $this->actingAs($user)
+            ->get(route('warehouse.transfers.index'))
+            ->assertSee('target="_blank" rel="noopener noreferrer"', false);
+
+        $this->actingAs($user)
+            ->get(route('warehouse.transfers.show', $suratJalan))
+            ->assertSee('target="_blank" rel="noopener noreferrer"', false);
     }
 
     public function test_transfer_detail_exposes_receive_cancel_return_and_correction_actions(): void

@@ -6,6 +6,7 @@ use App\Models\Drum;
 use App\Models\Material;
 use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
+use App\Models\SuratJalan;
 use App\Models\Warehouse;
 use App\Rules\ActiveMaterial;
 use App\Services\MaterialInventoryService;
@@ -47,6 +48,13 @@ class MaterialInventoryController extends Controller
                 ->whereIn('warehouse_id', $warehouseIds)
                 ->latest()
                 ->limit(20)
+                ->get(),
+            'suratJalanMasuk' => SuratJalan::query()
+                ->with(['origin', 'destination', 'items.material.unit'])
+                ->where('status', 'terbit')
+                ->whereIn('warehouse_tujuan_id', $warehouseIds)
+                ->latest('tanggal')
+                ->latest('id')
                 ->get(),
         ]);
     }

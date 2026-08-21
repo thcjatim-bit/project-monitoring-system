@@ -23,4 +23,9 @@ class MaterialStok extends Model
     {
         return $this->belongsTo(Mitra::class);
     }
+
+    public function suratJalan(): BelongsTo
+    {
+        return $this->belongsTo(SuratJalan::class, 'lokasi_id');
+    }
 }

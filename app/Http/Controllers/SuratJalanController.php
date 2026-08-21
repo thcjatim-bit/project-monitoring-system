@@ -184,7 +184,7 @@ class SuratJalanController extends Controller
         return response()->view('warehouse.transit', [
             'readOnlyTransit' => $readOnlyTransit,
             'stocks' => MaterialStok::query()
-                ->with(['material.unit', 'warehouse'])
+                ->with(['material.unit', 'warehouse', 'suratJalan.origin', 'suratJalan.destination', 'suratJalan.items'])
                 ->where('lokasi_tipe', 'transit')
                 ->where('qty', '>', 0)
                 ->when(

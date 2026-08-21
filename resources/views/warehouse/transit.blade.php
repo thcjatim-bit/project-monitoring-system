@@ -5,18 +5,23 @@
     @if(session('status'))<div class="ui-state ui-state--success" role="status">{{ session('status') }}</div>@endif
     <div class="ui-state ui-state--loading" role="status" aria-live="polite" data-transit-loading hidden>Memuat data Transit…</div>
     <section class="ui-panel ui-panel--wide"><div class="ui-table-wrap"><table class="ui-table">
-        <thead><tr><th>Surat Jalan</th><th>Material</th><th>Warehouse asal</th><th>Qty Transit</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Surat Jalan</th><th>Rute</th><th>Material</th><th>Sisa Transit</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody>
         @forelse($stocks as $stock)
+            @php
+                $transfer = $stock->suratJalan;
+                $transferHasPartialReceipt = $transfer?->items->contains(fn ($item) => (float) $item->qty_diterima > 0);
+            @endphp
             <tr>
-                <td><a href="{{ route('warehouse.transfers.show', $stock->lokasi_id) }}">SJ #{{ $stock->lokasi_id }}</a></td>
-                <td>{{ $stock->material->kode }} — {{ $stock->material->nama }}</td>
-                <td>{{ $stock->warehouse->kode }} — {{ $stock->warehouse->nama }}</td>
-                <td>{{ $stock->qty }} {{ $stock->material->unit?->nama }}</td>
-                <td><a href="{{ route('warehouse.transfers.print', $stock->lokasi_id) }}">Cetak</a></td>
+                <td><a href="{{ route('warehouse.transfers.show', $transfer) }}">{{ $transfer?->nomor }}</a></td>
+                <td>{{ $transfer?->origin?->kode }} — {{ $transfer?->origin?->nama }} → {{ $transfer?->destination?->kode }} — {{ $transfer?->destination?->nama }}</td>
+                <td>{{ $stock->material->kode }} — {{ $stock->material->nama }}<div class="ui-muted">{{ $stock->material->unit?->nama }}</div></td>
+                <td>{{ \App\Support\QuantityDisplayFormatter::format($stock->qty) }}</td>
+                <td><x-ui.badge :tone="$transferHasPartialReceipt ? 'warning' : 'info'" :label="$transferHasPartialReceipt ? 'Sebagian diterima' : 'Dalam Transit'" /></td>
+                <td class="ui-inline"><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.show', $transfer) }}">Detail</a><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.print', $transfer) }}" target="_blank" rel="noopener noreferrer">Cetak</a></td>
             </tr>
         @empty
-            <tr><td colspan="5"><div class="ui-state" role="status">Tidak ada Material dalam Transit.</div></td></tr>
+            <tr><td colspan="6"><div class="ui-state" role="status">Tidak ada Material dalam Transit.</div></td></tr>
         @endforelse
         </tbody>
     </table></div></section>

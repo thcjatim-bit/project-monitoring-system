@@ -59,7 +59,7 @@
                 <td>{{ $loop->iteration }}</td>
                 <td>{{ $item->material->kode }} — {{ $item->material->nama }}</td>
                 <td>{{ $item->serialNumber?->serial_number ?? $item->drum?->drum_id ?? '-' }}</td>
-                <td>{{ $item->qty }}</td>
+                <td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty) }}</td>
                 <td>{{ $item->material->unit?->nama ?? '-' }}</td>
             </tr>
         @endforeach

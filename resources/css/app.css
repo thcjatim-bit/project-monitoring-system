@@ -62,6 +62,7 @@
 .ui-badge--neutral { background: #e8edf1; color: #526071; }
 .ui-badge--done { background: #dff3ed; color: #11664f; }
 .ui-badge--warning { background: #fff0d5; color: #a86314; }
+.ui-badge--info { background: #e0f2fe; color: #155e75; }
 .ui-inline { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
 .ui-muted { color: #687684; font-size: .78rem; }
 .ui-stock-summary { display: grid; gap: 4px; color: #526071; font-size: .78rem; }

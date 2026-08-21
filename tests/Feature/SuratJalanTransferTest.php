@@ -124,8 +124,15 @@ class SuratJalanTransferTest extends TestCase
         $this->actingAs($user)
             ->get('/warehouse/transit')
             ->assertOk()
-            ->assertSee($suratJalanId)
-            ->assertSee('4.000');
+            ->assertSee($suratJalanNumber)
+            ->assertSee('4')
+            ->assertSee($origin->kode.' — '.$origin->nama)
+            ->assertSee($destination->kode.' — '.$destination->nama)
+            ->assertSee('Dalam Transit')
+            ->assertSee('ui-badge--info', false)
+            ->assertSee('Detail')
+            ->assertSee('Cetak')
+            ->assertDontSee('SJ #'.$suratJalanId);
 
         $this->actingAs($user)
             ->get("/warehouse/transfers/{$suratJalanId}/print")
@@ -135,7 +142,8 @@ class SuratJalanTransferTest extends TestCase
             ->assertSee($origin->kode)
             ->assertSee($destination->kode)
             ->assertSee('Tanda tangan penerima')
-            ->assertSee('QR');
+            ->assertSee('QR')
+            ->assertSee('<td>4</td>', false);
     }
 
     public function test_read_transit_grants_own_transfer_detail_and_print_without_dashboard_permission(): void

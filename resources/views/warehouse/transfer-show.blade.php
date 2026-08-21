@@ -14,7 +14,7 @@
         </div>
         <div class="ui-page__actions">
             <a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.index') }}">Kembali</a>
-            <a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.print', $suratJalan) }}">Cetak Surat Jalan</a>
+            <a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.print', $suratJalan) }}" target="_blank" rel="noopener noreferrer">Cetak Surat Jalan</a>
         </div>
     </header>
     <x-form-errors />
@@ -46,7 +46,7 @@
         <h2>Item Material</h2>
         <div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Material</th><th>Identitas</th><th>Diterbitkan</th><th>Diterima</th><th>Diretur</th><th>Sisa Transit</th></tr></thead><tbody>
         @foreach($suratJalan->items as $item)
-            <tr><td>{{ $item->material->kode }} — {{ $item->material->nama }}<div class="ui-muted">{{ $item->material->unit->nama }}</div></td><td>{{ $item->serialNumber?->serial_number ?? $item->drum?->drum_id ?? '—' }}</td><td>{{ $item->qty }}</td><td>{{ $item->qty_diterima }}</td><td>{{ $item->qty_diretur }}</td><td>{{ number_format($remaining($item), 3, '.', '') }}</td></tr>
+            <tr><td>{{ $item->material->kode }} — {{ $item->material->nama }}<div class="ui-muted">{{ $item->material->unit->nama }}</div></td><td>{{ $item->serialNumber?->serial_number ?? $item->drum?->drum_id ?? '—' }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty_diterima) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty_diretur) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($remaining($item)) }}</td></tr>
         @endforeach
         </tbody></table></div>
     </section>
@@ -57,7 +57,7 @@
             <form class="ui-form" method="POST" action="{{ route('warehouse.transfers.receive', $suratJalan) }}" data-submit-loading>@csrf
                 @foreach($suratJalan->items as $index => $item)
                     @if($remaining($item) > 0)
-                        <label>{{ $item->material->nama }} — qty tersisa {{ number_format($remaining($item), 3, '.', '') }}<input type="hidden" name="items[{{ $index }}][surat_jalan_item_id]" value="{{ $item->id }}"><input type="number" name="items[{{ $index }}][qty]" min="0.001" max="{{ $remaining($item) }}" step="0.001" value="{{ number_format($remaining($item), 3, '.', '') }}" required></label>
+                        <label>{{ $item->material->nama }} — qty tersisa {{ \App\Support\QuantityDisplayFormatter::format($remaining($item)) }}<input type="hidden" name="items[{{ $index }}][surat_jalan_item_id]" value="{{ $item->id }}"><input type="number" name="items[{{ $index }}][qty]" min="0.001" max="{{ $remaining($item) }}" step="0.001" value="{{ number_format($remaining($item), 3, '.', '') }}" required></label>
                     @endif
                 @endforeach
                 <button class="ui-button" type="submit">Terima Material</button>
@@ -89,7 +89,7 @@
                 <div class="ui-form__grid"><label>Sopir<input name="sopir"></label><label>Plat nomor<input name="plat_nomor"></label></div>
                 @foreach($suratJalan->items as $index => $item)
                     @if($returnable($item) > 0)
-                        <label>{{ $item->material->nama }} — tersedia {{ number_format($returnable($item), 3, '.', '') }}<input type="hidden" name="items[{{ $index }}][surat_jalan_item_id]" value="{{ $item->id }}"><input type="number" name="items[{{ $index }}][qty]" min="0.001" max="{{ $returnable($item) }}" step="0.001" value="{{ number_format($returnable($item), 3, '.', '') }}" required></label>
+                        <label>{{ $item->material->nama }} — tersedia {{ \App\Support\QuantityDisplayFormatter::format($returnable($item)) }}<input type="hidden" name="items[{{ $index }}][surat_jalan_item_id]" value="{{ $item->id }}"><input type="number" name="items[{{ $index }}][qty]" min="0.001" max="{{ $returnable($item) }}" step="0.001" value="{{ number_format($returnable($item), 3, '.', '') }}" required></label>
                     @endif
                 @endforeach
                 <button class="ui-button" type="submit">Terbitkan Retur</button>
@@ -102,7 +102,7 @@
         <section class="ui-panel ui-panel--wide" style="margin-top:18px">
             <h2>Koreksi Buku Transaksi</h2><p class="ui-help">Koreksi tidak mengubah baris asli. Sistem menambahkan pembalikan dan nilai koreksi dengan alasan.</p>
             @forelse($transactions->where('jenis_transaksi', 'receipt')->whereNull('koreksi_dari_id') as $transaction)
-                <div class="ui-list__item"><div class="ui-inline"><strong>{{ $transaction->material->nama }}</strong><span>{{ $transaction->qty_delta }} {{ $transaction->material->unit->nama }}</span><span class="ui-muted">{{ $transaction->warehouse->nama }}</span></div>
+                <div class="ui-list__item"><div class="ui-inline"><strong>{{ $transaction->material->nama }}</strong><span>{{ \App\Support\QuantityDisplayFormatter::format($transaction->qty_delta) }} {{ $transaction->material->unit->nama }}</span><span class="ui-muted">{{ $transaction->warehouse->nama }}</span></div>
                     <form class="ui-form" method="POST" action="{{ route('warehouse.material-transactions.correct', $transaction) }}" data-submit-loading>@csrf
                         <div class="ui-form__grid"><label>Qty koreksi<input type="number" name="qty_delta" min="0.001" step="0.001" value="{{ $transaction->qty_delta }}" required></label><label>Alasan<input name="reason" maxlength="1000" required></label></div>
                         <button class="ui-button ui-button--muted" type="submit">Simpan koreksi</button>
