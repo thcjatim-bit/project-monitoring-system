@@ -210,10 +210,12 @@ class SuratJalanController extends Controller
                 return collect([$stock->setAttribute('transit_status', 'Dalam Transit')]);
             }
 
-            return $items->map(function ($item) use ($stock): MaterialStok {
-                $row = clone $stock;
-                $row->setAttribute('qty', max(0, (float) $item->qty - (float) $item->qty_diterima));
-                $row->setAttribute('transit_status', (float) $item->qty_diterima > 0 ? 'Sebagian diterima' : 'Dalam Transit');
+            return $items->map(function ($item) use ($stock): object {
+                $row = new \stdClass;
+                $row->material = $stock->material;
+                $row->suratJalan = $stock->suratJalan;
+                $row->qty = max(0, (float) $item->qty - (float) $item->qty_diterima);
+                $row->transit_status = (float) $item->qty_diterima > 0.0 ? 'Sebagian diterima' : 'Dalam Transit';
 
                 return $row;
             });
