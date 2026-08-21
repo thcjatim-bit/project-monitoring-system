@@ -1,5 +1,18 @@
 # project-monitoring-system
 
+## Communication
+
+Be concise. Lead with the result, blocker, or decision.
+
+When I need to make a decision:
+- Give me the viable options.
+- Briefly state the trade-off of each.
+- Recommend one option and why.
+- Then stop and let me decide.
+
+Do not give long summaries of routine work.
+Do not invent options when there is no meaningful decision.
+
 ## Agent skills
 
 ### Issue tracker
