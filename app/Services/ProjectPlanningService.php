@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\MitraHargaJasa;
 use App\Models\Project;
 use App\Models\ProjectBaseline;
 use App\Models\ProjectBaselineDay;
@@ -28,6 +27,11 @@ class ProjectPlanningService
 
         return DB::transaction(function () use ($project, $actor, $hargaJasaId, $quantity): ProjectRabJasa {
             $project = Project::query()->lockForUpdate()->findOrFail($project->id);
+            if (ProjectBaseline::query()->where('project_id', $project->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'rab_jasa' => 'RAB Jasa sudah dibekukan. Lakukan perubahan melalui Variation Order.',
+                ]);
+            }
             $price = $this->priceBook->effectiveFor($project, $hargaJasaId, CarbonImmutable::today());
 
             $unitPrice = (string) $price->harga;
@@ -102,40 +106,15 @@ class ProjectPlanningService
 
         return DB::transaction(function () use ($project, $actor, $tocDate, $normalizedDays): ProjectBaseline {
             $project = Project::query()->lockForUpdate()->findOrFail($project->id);
-            $previous = ProjectBaseline::query()
-                ->where('project_id', $project->id)
-                ->orderByDesc('version')
-                ->lockForUpdate()
-                ->first();
-            $version = ($previous?->version ?? 0) + 1;
 
-            $baseline = ProjectBaseline::query()->create([
-                'mitra_id' => $project->mitra_id,
-                'project_id' => $project->id,
-                'kind' => $previous === null ? 'original' : 'revised',
-                'version' => $version,
-                'toc' => $tocDate,
-                'supersedes_id' => $previous?->id,
-                'dibuat_oleh' => $actor->id,
-            ]);
-
-            foreach ($normalizedDays as $day) {
-                ProjectBaselineDay::query()->create([
-                    'mitra_id' => $project->mitra_id,
-                    'project_baseline_id' => $baseline->id,
-                    'plan_date' => $day['date'],
-                    'cumulative_percent' => number_format($day['percent'], 3, '.', ''),
-                ]);
-            }
-
-            $project->update(['toc' => $tocDate]);
+            $baseline = $this->publishBaselineLocked($project, $actor, $tocDate, $normalizedDays->all());
             ProjectTimeline::recordSystem($project, $actor, 'toc_changed', [
-                'toc' => $tocDate,
                 'baseline_id' => $baseline->id,
                 'baseline_kind' => $baseline->kind,
+                'toc' => $tocDate,
             ]);
 
-            return $baseline->load('days');
+            return $baseline;
         });
     }
 
@@ -154,43 +133,24 @@ class ProjectPlanningService
                 throw ValidationException::withMessages(['status' => 'Usulan Baseline sudah diputuskan.']);
             }
 
-            $previous = ProjectBaseline::query()
-                ->where('project_id', $project->id)
-                ->orderByDesc('version')
-                ->lockForUpdate()
-                ->first();
-            $baseline = ProjectBaseline::query()->create([
-                'mitra_id' => $project->mitra_id,
-                'project_id' => $project->id,
-                'kind' => $previous === null ? 'original' : 'revised',
-                'version' => ($previous?->version ?? 0) + 1,
-                'toc' => $proposal->toc,
-                'supersedes_id' => $previous?->id,
-                'dibuat_oleh' => $actor->id,
-            ]);
+            $days = $proposal->days->map(fn ($day): array => [
+                'date' => $day->plan_date->toDateString(),
+                'percent' => $day->cumulative_percent,
+            ])->all();
 
-            foreach ($proposal->days as $day) {
-                ProjectBaselineDay::query()->create([
-                    'mitra_id' => $project->mitra_id,
-                    'project_baseline_id' => $baseline->id,
-                    'plan_date' => $day->plan_date,
-                    'cumulative_percent' => $day->cumulative_percent,
-                ]);
-            }
-
+            $baseline = $this->publishBaselineLocked($project, $actor, $proposal->toc->toDateString(), $days);
             $proposal->update([
                 'status' => 'disetujui',
                 'diputuskan_oleh' => $actor->id,
                 'diputuskan_at' => now(),
             ]);
-            $project->update(['toc' => $proposal->toc]);
             ProjectTimeline::recordSystem($project, $actor, 'baseline_proposal_approved', [
-                'baseline_proposal_id' => $proposal->id,
                 'baseline_id' => $baseline->id,
                 'baseline_kind' => $baseline->kind,
+                'baseline_proposal_id' => $proposal->id,
             ]);
 
-            return $baseline->load('days');
+            return $baseline;
         });
     }
 
@@ -340,6 +300,42 @@ class ProjectPlanningService
     private function money(float $value): string
     {
         return number_format($value, 2, '.', '');
+    }
+
+    /** @param array<int, array{date:string,percent:string|int|float}> $days */
+    private function publishBaselineLocked(
+        Project $project,
+        User $actor,
+        string $toc,
+        array $days,
+    ): ProjectBaseline {
+        $previous = ProjectBaseline::query()
+            ->where('project_id', $project->id)
+            ->orderByDesc('version')
+            ->lockForUpdate()
+            ->first();
+        $baseline = ProjectBaseline::query()->create([
+            'mitra_id' => $project->mitra_id,
+            'project_id' => $project->id,
+            'kind' => $previous === null ? 'original' : 'revised',
+            'version' => ($previous?->version ?? 0) + 1,
+            'toc' => $toc,
+            'supersedes_id' => $previous?->id,
+            'dibuat_oleh' => $actor->id,
+        ]);
+
+        foreach ($days as $day) {
+            ProjectBaselineDay::query()->create([
+                'mitra_id' => $project->mitra_id,
+                'project_baseline_id' => $baseline->id,
+                'plan_date' => $day['date'],
+                'cumulative_percent' => number_format((float) $day['percent'], 3, '.', ''),
+            ]);
+        }
+
+        $project->update(['toc' => $toc]);
+
+        return $baseline->load('days');
     }
 
     private function assertProjectAccess(Project $project, User $actor): void

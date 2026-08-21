@@ -14,6 +14,7 @@ use App\Models\Project;
 use App\Models\ProjectRekon;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -58,6 +59,7 @@ class ProjectWorkflowUiTest extends TestCase
             'status' => 'disetujui',
             'berlaku_mulai' => '2026-01-01',
         ]));
+        $this->asThc(fn () => app(ProjectPlanningService::class)->addRabJasa($project, $thc, $price->id, '1'));
 
         $this->actingAs($thc)
             ->get(route('projects.planning.index', $project))
@@ -69,8 +71,42 @@ class ProjectWorkflowUiTest extends TestCase
             ->assertSee('Variation Order')
             ->assertSee(route('projects.rab-jasa.store', $project), false)
             ->assertSee(route('projects.plan.update', $project), false)
-            ->assertSee(route('projects.variation-orders.store', $project), false)
-            ->assertSee('value="'.$price->id.'"', false);
+            ->assertSee(route('projects.variation-orders.store', $project), false);
+    }
+
+    public function test_published_baseline_hides_direct_rab_form_and_points_to_variation_order(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $project = $this->projectFor($mitra);
+        $job = $this->asThc(fn (): PekerjaanJasa => PekerjaanJasa::create([
+            'kode' => 'JASA-FROZEN-UI', 'nama' => 'Jasa Beku', 'aktif' => true,
+        ]));
+        $pks = $this->asThc(fn (): Pks => Pks::create([
+            'mitra_id' => $mitra->id,
+            'nomor' => 'PKS-FROZEN-UI',
+            'tanggal_mulai' => '2026-01-01',
+            'tanggal_berakhir' => '2026-12-31',
+        ]));
+        $price = $this->asThc(fn (): MitraHargaJasa => MitraHargaJasa::create([
+            'mitra_id' => $mitra->id,
+            'pks_id' => $pks->id,
+            'pekerjaan_jasa_id' => $job->id,
+            'harga' => '125000.00',
+            'status' => 'disetujui',
+            'berlaku_mulai' => '2026-01-01',
+        ]));
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-09-30', [
+            ['date' => '2026-09-30', 'percent' => '100'],
+        ]));
+
+        $this->actingAs($thc)
+            ->get(route('projects.planning.index', $project))
+            ->assertOk()
+            ->assertSee('RAB Jasa sudah dibekukan')
+            ->assertSee('Variation Order')
+            ->assertDontSee(route('projects.rab-jasa.store', $project), false)
+            ->assertSee($job->nama);
     }
 
     public function test_project_control_room_shows_installation_panel_with_material_read_permission_without_report_permission(): void

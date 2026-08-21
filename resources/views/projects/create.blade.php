@@ -10,14 +10,15 @@
                 @csrf
                 <label>ID Project <span class="ui-help">Kosongkan untuk kode otomatis PRJ-YYMM-NNNN.</span><input name="id_project" value="{{ old('id_project') }}" maxlength="255"></label>
                 <label>Nama<input name="nama" value="{{ old('nama') }}" required maxlength="255"></label>
-                <x-ui.search target="#mitra_id option[data-searchable]" label="Cari Mitra" placeholder="Ketik kode atau nama Mitra" data-mitra-search />
                 <label for="mitra_id">Mitra</label>
-                <select id="mitra_id" name="mitra_id" required size="5">
-                    <option value="">Pilih Mitra aktif</option>
-                    @foreach ($mitras as $mitra)
-                        <option value="{{ $mitra->id }}" data-searchable data-search-text="{{ $mitra->kode }} {{ $mitra->nama }}" @selected((string) old('mitra_id') === (string) $mitra->id)>{{ $mitra->kode }} - {{ $mitra->nama }}</option>
-                    @endforeach
-                </select>
+                <x-ui.searchable-select
+                    name="mitra_id"
+                    id="mitra_id"
+                    :options="$mitraOptions"
+                    :value="old('mitra_id')"
+                    placeholder="Pilih Mitra aktif"
+                    required
+                />
                 <button class="ui-button" type="submit">Simpan Project</button>
             </form>
         </x-ui.panel>

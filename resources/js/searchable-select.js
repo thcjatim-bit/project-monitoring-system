@@ -124,7 +124,20 @@ function bindSearchableSelect(root, document) {
     }
 
     root.dataset.uiSelectBound = 'true';
-    updateSelectedState(root, root.querySelector('[data-ui-select-value]')?.value || '');
+    const valueInput = root.querySelector('[data-ui-select-value]');
+    const nativeSelect = root.previousElementSibling?.matches?.('[data-ui-select-native]')
+        ? root.previousElementSibling
+        : null;
+    root.dataset.defaultValue = valueInput?.value || '';
+    root.hidden = false;
+    if (nativeSelect) {
+        nativeSelect.hidden = true;
+        nativeSelect.disabled = true;
+    }
+    if (valueInput) {
+        valueInput.disabled = root.dataset.disabled === 'true';
+    }
+    updateSelectedState(root, valueInput?.value || '');
 
     trigger.addEventListener('click', () => {
         root.dataset.open === 'true' ? closeSelect(root) : openSelect(root);
@@ -181,8 +194,8 @@ function bindSearchableSelect(root, document) {
     });
 
     root.closest('form')?.addEventListener('reset', () => {
-        window.setTimeout(() => {
-            updateSelectedState(root, root.querySelector('[data-ui-select-value]')?.defaultValue || '');
+        document.defaultView?.setTimeout(() => {
+            updateSelectedState(root, root.dataset.defaultValue || '');
             closeSelect(root);
         });
     });

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\MasterKind;
 use App\Exceptions\SafeDeletionException;
 use App\Models\Material;
 use App\Models\Mitra;
@@ -9,20 +10,16 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WhatsappSessionStatus;
-use App\Services\MasterCodeGenerator;
+use App\Services\CodedMasterLifecycle;
 use App\Services\MitraCodeGenerator;
 use App\Services\MitraDeletionService;
 use App\Services\MitraOnboardingService;
 use App\Services\MitraUserAdministration;
-use App\Services\MitraWarehouseAssignment;
 use App\Services\UserDeletionService;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AdminController extends Controller
@@ -165,7 +162,7 @@ class AdminController extends Controller
         ]);
     }
 
-    public function createMaterial(Request $request, MasterCodeGenerator $codes): RedirectResponse
+    public function createMaterial(Request $request, CodedMasterLifecycle $lifecycle): RedirectResponse
     {
         $data = $request->validate([
             'kode' => ['nullable', 'string', 'max:255'],
@@ -174,18 +171,12 @@ class AdminController extends Controller
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
             'ambang_minimum' => ['nullable', 'numeric', 'min:0'],
         ]);
-        $data['kode'] = $codes->normalize($data['kode'] ?? null);
-        $this->assertManualCodeIsAllowed($codes, 'material', $data['kode']);
-        $this->assertCodeIsUnique(Material::class, $data['kode']);
-        DB::transaction(function () use ($data, $codes): void {
-            $data['kode'] ??= $codes->generate('material', CarbonImmutable::now('Asia/Jakarta'));
-            Material::create($data);
-        });
+        $lifecycle->create($request->user(), MasterKind::Material, $data);
 
         return back()->with('status', 'Material dibuat.');
     }
 
-    public function updateMaterial(Request $request, Material $material, MasterCodeGenerator $codes): RedirectResponse
+    public function updateMaterial(Request $request, Material $material, CodedMasterLifecycle $lifecycle): RedirectResponse
     {
         $data = $request->validate([
             'kode' => ['required', 'string', 'max:255'],
@@ -196,65 +187,45 @@ class AdminController extends Controller
             'jenis' => ['required', Rule::in(['biasa', 'ber_sn', 'drum_kabel'])],
             'ambang_minimum' => ['nullable', 'numeric', 'min:0'],
         ]);
-        $data['kode'] = $codes->normalize($data['kode']);
-        $original = $codes->normalize($material->kode);
-        if ($data['kode'] !== $original && $original !== null && $codes->wasIssued('material', $original)) {
-            throw ValidationException::withMessages(['kode' => 'Kode otomatis tidak dapat diubah setelah diterbitkan.']);
-        }
-        $this->assertManualCodeIsAllowed($codes, 'material', $data['kode'], $original);
-        $this->assertCodeIsUnique(Material::class, $data['kode'], $material->id);
-        $material->update($data);
+        $lifecycle->update($request->user(), $material, $data);
 
         return back()->with('status', 'Material diperbarui.');
     }
 
-    public function deactivateMaterial(Material $material): RedirectResponse
+    public function deactivateMaterial(Request $request, Material $material, CodedMasterLifecycle $lifecycle): RedirectResponse
     {
-        $material->update(['aktif' => false]);
+        $lifecycle->deactivate($request->user(), $material);
 
         return back()->with('status', 'Material dinonaktifkan.');
     }
 
-    public function createWarehouse(Request $request, MasterCodeGenerator $codes): RedirectResponse
+    public function createWarehouse(Request $request, CodedMasterLifecycle $lifecycle): RedirectResponse
     {
         $data = $request->validate([
             'kode' => ['nullable', 'string', 'max:255'],
             'nama' => ['required', 'string', 'max:255'],
             'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where('aktif', true)],
         ]);
-        $data['kode'] = $codes->normalize($data['kode'] ?? null);
-        $this->assertManualCodeIsAllowed($codes, 'warehouse', $data['kode']);
-        $this->assertCodeIsUnique(Warehouse::class, $data['kode']);
-        DB::transaction(function () use ($data, $codes): void {
-            $data['kode'] ??= $codes->generate('warehouse', CarbonImmutable::now('Asia/Jakarta'));
-            Warehouse::create([...$data, 'aktif' => true]);
-        });
+        $lifecycle->create($request->user(), MasterKind::Warehouse, $data);
 
         return back()->with('status', 'Warehouse dibuat.');
     }
 
-    public function updateWarehouse(Request $request, Warehouse $warehouse, MasterCodeGenerator $codes): RedirectResponse
+    public function updateWarehouse(Request $request, Warehouse $warehouse, CodedMasterLifecycle $lifecycle): RedirectResponse
     {
         $data = $request->validate([
             'kode' => ['required', 'string', 'max:255'],
             'nama' => ['required', 'string', 'max:255'],
             'mitra_id' => ['nullable', Rule::exists('mitras', 'id')->where('aktif', true)],
         ]);
-        $data['kode'] = $codes->normalize($data['kode']);
-        $original = $codes->normalize($warehouse->kode);
-        if ($data['kode'] !== $original && $original !== null && $codes->wasIssued('warehouse', $original)) {
-            throw ValidationException::withMessages(['kode' => 'Kode otomatis tidak dapat diubah setelah diterbitkan.']);
-        }
-        $this->assertManualCodeIsAllowed($codes, 'warehouse', $data['kode'], $original);
-        $this->assertCodeIsUnique(Warehouse::class, $data['kode'], $warehouse->id);
-        $warehouse->update($data);
+        $lifecycle->update($request->user(), $warehouse, $data);
 
         return back()->with('status', 'Warehouse diperbarui.');
     }
 
-    public function deactivateWarehouse(Warehouse $warehouse): RedirectResponse
+    public function deactivateWarehouse(Request $request, Warehouse $warehouse, CodedMasterLifecycle $lifecycle): RedirectResponse
     {
-        $warehouse->update(['aktif' => false]);
+        $lifecycle->deactivate($request->user(), $warehouse);
 
         return back()->with('status', 'Warehouse dinonaktifkan.');
     }
@@ -286,27 +257,5 @@ class AdminController extends Controller
         }
 
         return response()->noContent();
-    }
-
-    private function assertManualCodeIsAllowed(MasterCodeGenerator $codes, string $entity, ?string $code, ?string $original = null): void
-    {
-        if ($code !== null && $code !== $original && $codes->isAutomaticCode($entity, $code)) {
-            throw ValidationException::withMessages(['kode' => 'Kode dengan pola otomatis hanya boleh diterbitkan generator.']);
-        }
-    }
-
-    private function assertCodeIsUnique(string $model, ?string $code, ?int $ignoreId = null): void
-    {
-        if ($code === null) {
-            return;
-        }
-
-        $query = $model::query()->where('kode', $code);
-        if ($ignoreId !== null) {
-            $query->where('id', '!=', $ignoreId);
-        }
-        if ($query->exists()) {
-            throw ValidationException::withMessages(['kode' => 'Kode sudah digunakan.']);
-        }
     }
 }

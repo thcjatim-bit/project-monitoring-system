@@ -100,6 +100,21 @@ class SharedUiFoundationTest extends TestCase
         }
     }
 
+    public function test_project_create_only_offers_active_mitras(): void
+    {
+        $admin = User::factory()->create([
+            'grup_id' => $this->groupWith('create_project')->id,
+        ]);
+        $active = Mitra::factory()->create(['kode' => 'MTR-AKTIF', 'nama' => 'Mitra Aktif', 'aktif' => true]);
+        $inactive = Mitra::factory()->create(['kode' => 'MTR-NONAKTIF', 'nama' => 'Mitra Nonaktif', 'aktif' => false]);
+
+        $this->actingAs($admin)
+            ->get(route('projects.create'))
+            ->assertOk()
+            ->assertSee($active->kode)
+            ->assertDontSee($inactive->kode);
+    }
+
     private function groupWith(string ...$permissions): Grup
     {
         $group = Grup::factory()->create();

@@ -10,11 +10,15 @@ use App\Models\PekerjaanJasa;
 use App\Models\Pks;
 use App\Models\Project;
 use App\Models\ProjectBaseline;
+use App\Models\ProjectBaselineProposal;
 use App\Models\ProjectRabJasa;
+use App\Models\ProjectTimeline;
 use App\Models\ProjectVariationOrder;
 use App\Models\User;
 use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
@@ -81,6 +85,138 @@ class ProjectPlanningTest extends TestCase
                 'harga_satuan' => '125000.00',
                 'total_nilai' => '1250000.00',
             ]);
+        });
+    }
+
+    public function test_direct_rab_add_is_rejected_after_baseline_is_published(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $job, $price] = $this->rabFixtureWithoutRab($mitra);
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $planning = app(ProjectPlanningService::class);
+
+        $this->asThc(fn () => $planning->savePlan($project, $thc, '2026-09-30', [
+            ['date' => '2026-09-30', 'percent' => '100'],
+        ]));
+        $this->asThc(fn () => $planning->savePlan($project, $thc, '2026-10-15', [
+            ['date' => '2026-10-15', 'percent' => '100'],
+        ]));
+        $timelineCount = $this->asThc(fn (): int => ProjectTimeline::query()->where('project_id', $project->id)->count());
+
+        try {
+            $this->asThc(fn () => $planning->addRabJasa($project, $thc, $price->id, '10'));
+            $this->fail('Direct RAB add should be rejected after a Baseline is published.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                ['RAB Jasa sudah dibekukan. Lakukan perubahan melalui Variation Order.'],
+                $exception->errors()['rab_jasa'],
+            );
+        }
+
+        $this->assertDatabaseCount('project_rab_jasas', 0);
+        $this->asThc(function () use ($project, $timelineCount): void {
+            $this->assertSame(2, ProjectBaseline::query()->where('project_id', $project->id)->count());
+            $this->assertSame($timelineCount, ProjectTimeline::query()->where('project_id', $project->id)->count());
+        });
+    }
+
+    public function test_rab_route_is_rejected_after_baseline_is_published(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $job, $price] = $this->rabFixtureWithoutRab($mitra);
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-09-30', [
+            ['date' => '2026-09-30', 'percent' => '100'],
+        ]));
+
+        $this->actingAs($thc)
+            ->post(route('projects.rab-jasa.store', $project), [
+                'harga_jasa_id' => $price->id,
+                'qty' => '10',
+            ])
+            ->assertSessionHasErrors('rab_jasa');
+
+        $this->assertDatabaseCount('project_rab_jasas', 0);
+    }
+
+    public function test_pending_baseline_proposal_does_not_freeze_initial_rab(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$project, $job, $price] = $this->rabFixtureWithoutRab($mitra);
+        $mitraUser = $this->userWithPermissions($mitra->id, 'read_project', 'manage_mitra_project');
+        $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+
+        $this->asTenant($mitra->id, fn () => app(ProjectPlanningService::class)->savePlan(
+            $project,
+            $mitraUser,
+            '2026-09-30',
+            [['date' => '2026-09-30', 'percent' => '100']],
+        ));
+
+        $rab = $this->asThc(
+            fn () => app(ProjectPlanningService::class)->addRabJasa($project, $thc, $price->id, '10'),
+        );
+
+        $this->assertSame($project->id, $rab->project_id);
+    }
+
+    public function test_baseline_proposal_cannot_be_approved_twice(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        $mitraUser = $this->userWithPermissions($mitra->id, 'manage_mitra_project');
+        $thc = $this->userWithPermissions(null, 'manage_project_plan');
+        $planning = app(ProjectPlanningService::class);
+        $proposal = $this->asTenant($mitra->id, fn (): ProjectBaselineProposal => $planning->savePlan(
+            $project,
+            $mitraUser,
+            '2026-09-30',
+            [['date' => '2026-09-30', 'percent' => '100']],
+        ));
+        $this->asThc(fn () => $planning->approveBaselineProposal($project, $proposal, $thc));
+
+        try {
+            $this->asThc(fn () => $planning->approveBaselineProposal($project, $proposal, $thc));
+            $this->fail('Proposal Baseline yang sudah disetujui tidak boleh disetujui ulang.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('status', $exception->errors());
+        }
+
+        $this->asThc(fn () => $this->assertSame(
+            1,
+            ProjectBaseline::query()->where('project_id', $project->id)->count(),
+        ));
+    }
+
+    public function test_baseline_proposal_cannot_be_approved_for_a_different_tenants_project(): void
+    {
+        $firstMitra = Mitra::factory()->create();
+        $secondMitra = Mitra::factory()->create();
+        $firstProject = $this->projectFor($firstMitra);
+        $secondProject = $this->projectFor($secondMitra);
+        $secondMitraUser = $this->userWithPermissions($secondMitra->id, 'manage_mitra_project');
+        $thc = $this->userWithPermissions(null, 'manage_project_plan');
+        $planning = app(ProjectPlanningService::class);
+        $proposal = $this->asTenant($secondMitra->id, fn (): ProjectBaselineProposal => $planning->savePlan(
+            $secondProject,
+            $secondMitraUser,
+            '2026-09-30',
+            [['date' => '2026-09-30', 'percent' => '100']],
+        ));
+
+        $rejected = false;
+        try {
+            $this->asThc(fn () => $planning->approveBaselineProposal($firstProject, $proposal, $thc));
+            $this->fail('Proposal lintas Project dan tenant tidak boleh disetujui.');
+        } catch (ModelNotFoundException) {
+            $rejected = true;
+        }
+
+        $this->assertTrue($rejected);
+        $this->asThc(function () use ($firstProject, $proposal): void {
+            $this->assertSame(0, ProjectBaseline::query()->where('project_id', $firstProject->id)->count());
+            $this->assertSame('diajukan', $proposal->fresh()->status);
         });
     }
 
@@ -161,6 +297,9 @@ class ProjectPlanningTest extends TestCase
         $mitra = Mitra::factory()->create();
         [$project, $job, $price, $rab] = $this->rabFixture($mitra);
         $thc = $this->userWithPermissions(null, 'read_project', 'manage_project_plan');
+        $this->asThc(fn () => app(ProjectPlanningService::class)->savePlan($project, $thc, '2026-09-30', [
+            ['date' => '2026-09-30', 'percent' => '100'],
+        ]));
 
         $response = $this->actingAs($thc)->post(route('projects.variation-orders.store', $project), [
             'reason' => 'Penyesuaian lapangan',
@@ -304,6 +443,17 @@ class ProjectPlanningTest extends TestCase
     private function asThc(\Closure $callback): mixed
     {
         app(TenantDatabaseContext::class)->set(null, true);
+
+        try {
+            return $callback();
+        } finally {
+            app(TenantDatabaseContext::class)->set(null, false);
+        }
+    }
+
+    private function asTenant(int $mitraId, \Closure $callback): mixed
+    {
+        app(TenantDatabaseContext::class)->set($mitraId, false);
 
         try {
             return $callback();

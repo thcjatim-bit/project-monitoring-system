@@ -27,9 +27,15 @@ class ProjectController extends Controller
 
     public function create(): View
     {
+        $mitras = Mitra::query()->where('aktif', true)->orderBy('nama')->get();
+
         return view('projects.create', [
             'user' => request()->user(),
-            'mitras' => Mitra::query()->where('aktif', true)->orderBy('nama')->get(),
+            'mitraOptions' => $mitras->map(fn (Mitra $mitra): array => [
+                'value' => (string) $mitra->id,
+                'label' => $mitra->kode.' - '.$mitra->nama,
+                'search' => $mitra->kode.' '.$mitra->nama,
+            ]),
         ]);
     }
 

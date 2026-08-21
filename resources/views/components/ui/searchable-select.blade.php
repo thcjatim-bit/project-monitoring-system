@@ -7,6 +7,7 @@
     'searchable' => true,
     'clearable' => false,
     'disabled' => false,
+    'required' => false,
     'loading' => false,
     'emptyMessage' => 'Data tidak ditemukan',
 ])
@@ -31,16 +32,30 @@
     $selectedOption = $normalizedOptions->first(fn (array $option): bool => $option['value'] === $selectedValue);
 @endphp
 
+<select
+    id="{{ $id }}"
+    name="{{ $name }}"
+    data-ui-select-native
+    @disabled($disabled)
+    @if ($required) required @endif
+>
+    <option value="" @selected($selectedValue === '')>{{ $placeholder }}</option>
+    @foreach ($normalizedOptions as $option)
+        <option value="{{ $option['value'] }}" @selected($option['value'] === $selectedValue)>{{ $option['label'] }}</option>
+    @endforeach
+</select>
+
 <div
     {{ $attributes->merge(['class' => 'ui-select']) }}
     data-ui-select
     data-placeholder="{{ $placeholder }}"
     data-clearable="{{ $clearable ? 'true' : 'false' }}"
     data-disabled="{{ $disabled ? 'true' : 'false' }}"
+    hidden
 >
     <div class="ui-select__control">
         <button
-            id="{{ $id }}"
+            id="{{ $id }}-trigger"
             class="ui-select__trigger"
             type="button"
             data-ui-select-trigger
@@ -57,7 +72,7 @@
         @endif
     </div>
 
-    <input type="hidden" name="{{ $name }}" value="{{ $selectedValue }}" data-ui-select-value @disabled($disabled)>
+    <input type="hidden" name="{{ $name }}" value="{{ $selectedValue }}" data-ui-select-value disabled>
 
     <div id="{{ $id }}-listbox" class="ui-select__popup" data-ui-select-popup role="listbox" aria-label="{{ $placeholder }}" hidden>
         @if ($searchable)

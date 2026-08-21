@@ -22,28 +22,41 @@ class ProjectPlanningController extends Controller
             || ($viewer->mitra_id !== null && $viewer->hasIzin('manage_mitra_project'));
         $canApproveVariationOrder = $viewer->mitra_id === null && $viewer->hasIzin('manage_project_plan');
         $canApproveBaselineProposal = $canApproveVariationOrder;
+        $rabJasas = ProjectRabJasa::query()
+            ->where('project_id', $project->id)
+            ->with('pekerjaanJasa')
+            ->orderBy('id')
+            ->get();
+        $prices = $canManage
+            ? MitraHargaJasa::query()
+                ->where('mitra_id', $project->mitra_id)
+                ->where('status', 'disetujui')
+                ->whereDate('berlaku_mulai', '<=', today())
+                ->with('pekerjaanJasa')
+                ->orderBy('pekerjaan_jasa_id')
+                ->get()
+            : collect();
+        $baselines = ProjectBaseline::query()
+            ->where('project_id', $project->id)
+            ->with('days')
+            ->orderByDesc('version')
+            ->get();
 
         return view('projects.planning', [
             'project' => $project->loadMissing('mitra'),
-            'rabJasas' => ProjectRabJasa::query()
-                ->where('project_id', $project->id)
-                ->with('pekerjaanJasa')
-                ->orderBy('id')
-                ->get(),
-            'prices' => $canManage
-                ? MitraHargaJasa::query()
-                    ->where('mitra_id', $project->mitra_id)
-                    ->where('status', 'disetujui')
-                    ->whereDate('berlaku_mulai', '<=', today())
-                    ->with('pekerjaanJasa')
-                    ->orderBy('pekerjaan_jasa_id')
-                    ->get()
-                : collect(),
-            'baselines' => ProjectBaseline::query()
-                ->where('project_id', $project->id)
-                ->with('days')
-                ->orderByDesc('version')
-                ->get(),
+            'rabJasas' => $rabJasas,
+            'prices' => $prices,
+            'priceOptions' => $prices->map(fn (MitraHargaJasa $price): array => [
+                'value' => (string) $price->id,
+                'label' => ($price->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa').' · Rp '.number_format((float) $price->harga, 2, ',', '.'),
+                'search' => ($price->pekerjaanJasa?->kode ?? '').' '.($price->pekerjaanJasa?->nama ?? ''),
+            ]),
+            'rabOptions' => $rabJasas->map(fn (ProjectRabJasa $rab): array => [
+                'value' => (string) $rab->id,
+                'label' => ($rab->pekerjaanJasa?->nama ?? 'Pekerjaan Jasa').' · qty '.number_format((float) $rab->qty, 3, '.', ''),
+                'search' => ($rab->pekerjaanJasa?->kode ?? '').' '.($rab->pekerjaanJasa?->nama ?? ''),
+            ]),
+            'baselines' => $baselines,
             'baselineProposals' => ProjectBaselineProposal::query()
                 ->where('project_id', $project->id)
                 ->with('days')
@@ -55,6 +68,8 @@ class ProjectPlanningController extends Controller
                 ->orderByDesc('id')
                 ->get(),
             'canManage' => $canManage,
+            'rabFrozen' => $baselines->isNotEmpty(),
+            'canAddInitialRab' => $canManage && $baselines->isEmpty(),
             'canApproveVariationOrder' => $canApproveVariationOrder,
             'canApproveBaselineProposal' => $canApproveBaselineProposal,
         ]);

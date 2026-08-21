@@ -27,8 +27,6 @@ class ProjectFormTest extends TestCase
             ->get(route('projects.create'))
             ->assertOk()
             ->assertSee('MTR-AKTIF - Mitra Aktif')
-            ->assertSee('data-mitra-search', false)
-            ->assertSee('data-search-text="MTR-AKTIF Mitra Aktif"', false)
             ->assertDontSee('MTR-LAMA - Mitra Lama');
 
         $this->assertNotSame($active->id, $inactive->id);
