@@ -2,7 +2,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "npm run build:assets && node scripts/verify-production-assets.mjs",
+        "build:assets": "vite build",
         "dev": "vite",
         "test:js": "node --test tests/JavaScript/*.test.js"
     },
