@@ -1,6 +1,6 @@
 # Diagnosis #92 — Presentation Warehouse, formatter Qty, Surat Jalan, dan Transit
 
-Status: diagnosis selesai, perbaikan belum diterapkan
+Status: selesai — diagnosis, implementasi, dan verifikasi
 Tanggal: 2026-08-21
 Issue: https://github.com/thcjatim-bit/project-monitoring-system/issues/92
 QC: QC-0012, QC-0013, QC-0014
@@ -100,9 +100,9 @@ Focused identity-transfer test lulus, sehingga temuan “field identifier tidak 
 - Testing database `pms-dev` sempat mengalami credential drift. `scripts/bootstrap-testing.sh` berhasil membangun ulang database disposable yang disetujui dan memverifikasi role/RLS.
 - Tidak ada perubahan source, database produksi, atau konfigurasi produksi selama diagnosis.
 
-## Batasan perbaikan yang disarankan
+## Batasan perbaikan yang diterapkan
 
-Perbaikan berikutnya sebaiknya tetap memisahkan canonical storage formatting dari display formatting:
+Implementasi memisahkan canonical storage formatting dari display formatting:
 
 1. Tambahkan shared quantity display formatter dan gunakan pada semua output quantity Warehouse, Surat Jalan, Transit, Drum, dan ledger.
 2. Beri Transit akses ke official Surat Jalan number serta origin/destination/status melalui query/read model yang jelas; jangan mengubah makna `material_stoks` atau ledger.
@@ -111,3 +111,32 @@ Perbaikan berikutnya sebaiknya tetap memisahkan canonical storage formatting dar
 5. Tambahkan regression assertions untuk format Qty, nomor resmi/rute/status Transit, perilaku tab aktif, dan discoverability penerimaan.
 
 Fitur yang harus tetap tidak berubah: SN/Drum identifier, multi-item Surat Jalan, partial receipt, Transit per item, append-only ledger, retur reverse Surat Jalan, correction append-only, permission, dan state machine.
+
+## Implementasi selesai
+
+Commit `e39866b595b5e53108d11720b61dfba2d63293ad` menerapkan seluruh perbaikan dalam scope issue:
+
+1. `App\\Support\\QuantityDisplayFormatter` menjadi module tampilan bersama dengan interface satu metode `format`. Module ini menyembunyikan aturan grouping ribuan, koma desimal, dan penghapusan trailing zero; precision canonical storage dan formatter service transaksi tetap tidak berubah.
+2. Query Transit eager-load relasi `SuratJalan` beserta origin, destination, dan items. View menampilkan nomor Surat Jalan resmi, rute, sisa Transit, semantic status badge, Detail, dan Cetak.
+3. Form penerbitan dari landing page Warehouse dan seluruh action Cetak memakai `target="_blank"` serta `rel="noopener noreferrer"`, sehingga operasi server-side tetap atomik dan halaman aplikasi tidak tergantikan oleh halaman print.
+4. Data contract landing page Warehouse menambahkan pengiriman masuk berstatus `terbit` yang menuju Warehouse yang ditugaskan. Jalur penerimaan menggunakan endpoint existing dan tidak membuat transaksi ganda.
+5. Regression test ditambahkan untuk formatter, pengiriman masuk, tab baru aman, nomor/rute/status Transit, dan preservasi identitas SN/Drum.
+
+### Keputusan desain module
+
+Seam dipasang pada helper tampilan, bukan pada model atau buku transaksi. Interface yang kecil memberi leverage ke seluruh view Warehouse/Surat Jalan, sementara implementation detail format terkonsentrasi pada satu tempat sehingga locality perubahan tetap tinggi. Query Transit menjadi bagian implementation controller; view hanya mengonsumsi data contract yang sudah memuat konteks Surat Jalan dan tidak mengetahui `lokasi_id` sebagai database ID.
+
+Interface test surface adalah output HTML dan hasil `QuantityDisplayFormatter::format`, sehingga regression test tidak bergantung pada struktur internal query atau ledger. Tidak ada adapter tambahan karena tidak ada variasi dependency lintas seam yang perlu ditukar.
+
+## Verifikasi penyelesaian
+
+Pada `pms-dev`, temporary worktree bersih dari commit di atas menjalankan focused PostgreSQL tests:
+
+```text
+php artisan test tests/Feature/QuantityDisplayFormatterTest.php tests/Feature/MaterialOperationalUiTest.php tests/Feature/SuratJalanTransferTest.php
+Tests: 19 passed (157 assertions)
+```
+
+Focused tests di atas lulus. Suite penuh pada SHA ini mencatat 265 test lulus dan 3 test gagal pada `PortfolioCockpitTest` karena kontrak shared searchable-select (`data-ui-select`, `data-value`, dan `data-disabled`) belum tersedia pada baseline UI yang tidak disentuh oleh issue #92. Kegagalan tersebut berada di luar diff #92 dan tidak menyentuh module Warehouse/Surat Jalan.
+
+Perubahan dokumentasi ini melengkapi commit implementasi di `main`; issue GitHub #92 ditutup setelah commit ini dipush dan diverifikasi.
