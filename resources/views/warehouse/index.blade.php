@@ -80,7 +80,7 @@
         const buttons = [...form.querySelectorAll('button[type="submit"]')];
         buttons.forEach((button) => { button.disabled = true; button.dataset.originalLabel = button.textContent; button.textContent = 'Ops…'; });
         // Halaman ini akan berpindah, jadi tombol sengaja dibiarkan terkunci sampai halaman lenyap.
-        if (NAVIGATES_THIS_PAGE.includes(form.target)) return;
+        if (NAVIGATES_THIS_PAGE.includes(form.target.toLowerCase())) return;
         setTimeout(() => buttons.forEach((button) => { button.disabled = false; button.textContent = button.dataset.originalLabel ?? button.textContent; }), RESTORE_SUBMIT_AFTER_MS);
     }));
 })();

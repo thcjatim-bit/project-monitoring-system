@@ -329,6 +329,29 @@ describe('daur hidup tombol submit', { concurrency: true }, () => {
         });
     });
 
+    it('target yang memindahkan halaman dikenali walau ditulis huruf besar', async (t) => {
+        const targets = ['_SELF', '_Parent', '_TOP'];
+        const window = pageWithTargetedForms(t, targets);
+        const submits = targets.map((target) => {
+            const form = targetedForm(window, target);
+            const submit = form.querySelector('button[type="submit"]');
+            form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+            assert.equal(submit.disabled, true, `prasyarat: tombol ${target} terkunci saat dikirim`);
+
+            return submit;
+        });
+
+        await waitOutRestore();
+
+        targets.forEach((target, index) => {
+            assert.equal(
+                submits[index].disabled,
+                true,
+                `kata kunci target di HTML tidak peka huruf besar-kecil, jadi ${target} tetap memindahkan halaman ini`,
+            );
+        });
+    });
+
     it('form bertarget bernama dipulihkan karena halaman ini tidak berpindah', async (t) => {
         const window = pageWithTargetedForms(t, ['cetak']);
         const form = targetedForm(window, 'cetak');
