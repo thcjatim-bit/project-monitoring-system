@@ -207,18 +207,20 @@ class SuratJalanController extends Controller
                 ->filter(fn ($item): bool => (float) $item->qty > (float) $item->qty_diterima);
 
             if ($items === null || $items->isEmpty()) {
-                return collect([$stock->setAttribute('transit_label', 'Dalam Transit')]);
+                return collect([[
+                    'material' => $stock->material,
+                    'suratJalan' => $stock->suratJalan,
+                    'qty' => $stock->qty,
+                    'transit_label' => 'Dalam Transit',
+                ]]);
             }
 
-            return $items->map(function ($item) use ($stock): object {
-                $row = new \stdClass;
-                $row->material = $stock->material;
-                $row->suratJalan = $stock->suratJalan;
-                $row->qty = max(0, (float) $item->qty - (float) $item->qty_diterima);
-                $row->transit_label = (float) $item->qty_diterima > 0.0 ? 'Sebagian diterima' : 'Dalam Transit';
-
-                return $row;
-            });
+            return $items->map(fn ($item): array => [
+                'material' => $stock->material,
+                'suratJalan' => $stock->suratJalan,
+                'qty' => max(0, (float) $item->qty - (float) $item->qty_diterima),
+                'transit_label' => (float) $item->qty_diterima > 0.0 ? 'Sebagian diterima' : 'Dalam Transit',
+            ]);
         });
     }
 
