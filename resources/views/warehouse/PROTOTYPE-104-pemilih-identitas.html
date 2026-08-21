@@ -266,8 +266,16 @@ function verdictFor(row) {
   const drum = drumsFor(m.id).find((d) => d.drum_id === row.drum_id);
   if (!drum) return { level: 'bad', text: 'Ditolak server: Drum tidak tersedia di Warehouse asal.' };
   if (takenDrums(row.key).has(row.drum_id)) return { level: 'bad', text: 'Ditolak server: Drum yang sama dipakai dua baris.' };
-  if (Number(drum.sisa) !== qty) return { level: 'bad', text: `Ditolak server: transfer harus membawa seluruh sisa Drum (${fmt(drum.sisa)} ${m.unit}). Potong Drum terlebih dahulu.` };
-  return { level: 'ok', text: `Drum ${drum.drum_id} dikirim utuh ${fmt(drum.sisa)} ${m.unit}.` };
+  if (qty > Number(drum.sisa)) return { level: 'bad', text: `Ditolak server: qty melebihi sisa Drum (${fmt(drum.sisa)} ${m.unit}). Pilih Drum lain atau tambah baris.` };
+  if (qty === Number(drum.sisa)) return { level: 'ok', text: `Drum ${drum.drum_id} berangkat utuh ${fmt(drum.sisa)} ${m.unit} — tanpa potong.` };
+  // Qty parsial memotong drum saat terbit: turunan berangkat, induk tinggal di gudang.
+  return { level: 'ok', text: `Potong saat terbit: ${fmt(qty)} ${m.unit} berangkat sebagai <strong>${childDrumId(drum)}</strong>, induk ${drum.drum_id} tinggal ${fmt(drum.sisa - qty)} ${m.unit} di gudang asal.` };
+}
+
+// Cerminan MaterialInventoryService::splitDrum(): akhiran urut per induk.
+function childDrumId(drum) {
+  const existing = fixture().drums.filter((d) => d.drum_id.startsWith(`${drum.drum_id}-`)).length;
+  return `${drum.drum_id}-${existing + 1}`;
 }
 
 function isDeviant(row) {
@@ -337,11 +345,11 @@ VARIANTS.A = {
         const opts = identityOptions(m);
         const taken = kind === 'ber_sn' ? takenSns(row.key) : takenDrums(row.key);
         const current = kind === 'ber_sn' ? row.serial_number : row.drum_id;
-        qtyLocked = true;
+        qtyLocked = kind === 'ber_sn';
         identity = `<label>${kind === 'ber_sn' ? 'Serial Number' : 'Drum ID'} <select data-field="identity" data-key="${row.key}"><option value="">${opts.length ? `Pilih — ${opts.length} tersedia` : 'Tidak ada stok teridentifikasi di gudang asal'}</option>${opts.map((o) => `<option value="${o.value}"${o.value === current ? ' selected' : ''}${taken.has(o.value) ? ' disabled' : ''}>${o.label}${taken.has(o.value) ? ' — sudah dipakai baris lain' : ''}</option>`).join('')}</select></label>`;
       }
       const splitHint = kind === 'drum_kabel'
-        ? '<div class="ui-help">Butuh sebagian saja? Pakai panel <strong>Split drum</strong> di halaman yang sama, lalu pilih Drum turunannya di sini.</div>'
+        ? '<div class="ui-help">Isi qty kurang dari sisa untuk memotong Drum saat Surat Jalan terbit — turunannya dibuat otomatis.</div>'
         : '';
       return `<div class="${rowClass(row)}">
         <div class="ui-form__grid"><label>Material ${materialSelect(row)}</label><label>Qty <input type="number" step="0.001" data-field="qty" data-key="${row.key}" value="${row.qty}"${qtyLocked ? ' readonly' : ''}>${qtyLocked ? '<small>Terkunci oleh identitas yang dipilih.</small>' : ''}</label></div>
@@ -402,11 +410,12 @@ VARIANTS.C = {
         identity = `<label>${kind === 'ber_sn' ? 'Serial Number' : 'Drum ID'}<div class="ui-select"><button class="ui-select__trigger" type="button" data-drawer="${row.key}"><span>${label}</span><span>▾</span></button>${popup}</div></label>`;
       }
       return `<div class="${rowClass(row)}">
-        <div class="ui-form__grid" style="grid-template-columns:2fr 1fr 2fr"><label>Material ${materialSelect(row)}</label><label>Qty <input type="number" step="0.001" data-field="qty" data-key="${row.key}" value="${row.qty}"${kind && kind !== 'biasa' ? ' readonly' : ''}></label>${identity}</div>
+        <div class="ui-form__grid" style="grid-template-columns:2fr 1fr 2fr"><label>Material ${materialSelect(row)}</label><label>Qty <input type="number" step="0.001" data-field="qty" data-key="${row.key}" value="${row.qty}"${kind === 'ber_sn' ? ' readonly' : ''}>${kind === 'ber_sn' ? '<small>Terkunci 1 oleh SN.</small>' : kind === 'drum_kabel' ? '<small>Kurang dari sisa = drum dipotong saat terbit.</small>' : ''}</label>${identity}</div>
         ${rowFooter(row)}<div><button class="ui-button ui-button--muted" type="button" data-remove="${row.key}">Hapus item</button></div></div>`;
     }).join('');
     return `<section class="ui-panel ui-panel--wide"><h2>C — Laci pencarian / scan</h2>
       <p class="ui-help">Baris tetap satu garis. Identitas dipilih lewat laci ber-kolom-cari yang <strong>hanya merender opsi saat dibuka</strong> — hasil scan barcode masuk ke kotak cari yang sama. Ini persis komponen <code>&lt;x-ui.searchable-select&gt;</code> yang sudah ada di repo, jadi varian ini bukan komponen baru.</p>
+      <p class="ui-help"><strong>Varian terpilih (22 Agu 2026), dengan satu revisi:</strong> qty drum <em>tidak</em> dikunci. Memilih Drum mengusulkan seluruh sisanya, tetapi operator boleh menurunkannya — dan qty di bawah sisa berarti Drum dipotong saat Surat Jalan terbit: turunan berangkat, induk tinggal di gudang asal. Qty ber-SN tetap terkunci di 1.</p>
       <div class="ui-form">${rows}<div><button class="ui-button ui-button--muted" type="button" data-add>Tambah item</button></div></div></section>`;
   },
 };
@@ -435,8 +444,15 @@ function render() {
 
 function applyIdentity(row, value) {
   const m = material(row.material_id);
-  if (m.jenis === 'ber_sn') { row.serial_number = value || null; row.drum_id = null; row.qty = value ? 1 : ''; }
-  else { row.drum_id = value || null; row.serial_number = null; const d = drumsFor(m.id).find((x) => x.drum_id === value); row.qty = d ? d.sisa : ''; }
+  if (m.jenis === 'ber_sn') { row.serial_number = value || null; row.drum_id = null; row.qty = value ? 1 : ''; return; }
+  row.drum_id = value || null;
+  row.serial_number = null;
+  const d = drumsFor(m.id).find((x) => x.drum_id === value);
+  if (!d) { row.qty = ''; return; }
+  // Qty yang sudah ada (mis. dari Request Material) dipertahankan selama muat di drum ini;
+  // kalau tidak, seluruh sisa drum jadi usulan awal — tetap bisa diubah operator.
+  const wanted = Number(row.qty);
+  row.qty = wanted > 0 && wanted <= Number(d.sisa) ? wanted : d.sisa;
 }
 
 document.addEventListener('change', (e) => {
