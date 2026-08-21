@@ -114,13 +114,13 @@ Fitur yang harus tetap tidak berubah: SN/Drum identifier, multi-item Surat Jalan
 
 ## Implementasi selesai
 
-Commit `e39866b595b5e53108d11720b61dfba2d63293ad` menerapkan seluruh perbaikan dalam scope issue:
+Rangkaian commit issue #92, berujung pada `9e1f8a65c5cb8b8cec863a27571b238a02556844`, menerapkan seluruh perbaikan dalam scope issue:
 
 1. `App\\Support\\QuantityDisplayFormatter` menjadi module tampilan bersama dengan interface satu metode `format`. Module ini menyembunyikan aturan grouping ribuan, koma desimal, dan penghapusan trailing zero; precision canonical storage dan formatter service transaksi tetap tidak berubah.
-2. Query Transit eager-load relasi `SuratJalan` beserta origin, destination, dan items. View menampilkan nomor Surat Jalan resmi, rute, sisa Transit, semantic status badge, Detail, dan Cetak.
+2. Query Transit eager-load relasi `SuratJalan` beserta origin, destination, dan items. Controller menyiapkan data contract per item, termasuk status partial receipt; view menampilkan nomor Surat Jalan resmi, rute, sisa Transit, semantic status badge, Detail, dan Cetak.
 3. Form penerbitan dari landing page Warehouse dan seluruh action Cetak memakai `target="_blank"` serta `rel="noopener noreferrer"`, sehingga operasi server-side tetap atomik dan halaman aplikasi tidak tergantikan oleh halaman print.
 4. Data contract landing page Warehouse menambahkan pengiriman masuk berstatus `terbit` yang menuju Warehouse yang ditugaskan. Jalur penerimaan menggunakan endpoint existing dan tidak membuat transaksi ganda.
-5. Regression test ditambahkan untuk formatter, pengiriman masuk, tab baru aman, nomor/rute/status Transit, dan preservasi identitas SN/Drum.
+5. Regression test ditambahkan untuk formatter display/input, pengiriman masuk, tab baru aman, status Transit per item pada multi-item Surat Jalan, nomor/rute/status Transit, dan preservasi identitas SN/Drum.
 
 ### Keputusan desain module
 
@@ -134,9 +134,14 @@ Pada `pms-dev`, temporary worktree bersih dari commit di atas menjalankan focuse
 
 ```text
 php artisan test tests/Feature/QuantityDisplayFormatterTest.php tests/Feature/MaterialOperationalUiTest.php tests/Feature/SuratJalanTransferTest.php
-Tests: 19 passed (157 assertions)
+Tests: 21 passed (169 assertions)
 ```
 
-Focused tests di atas lulus. Suite penuh pada SHA ini mencatat 265 test lulus dan 3 test gagal pada `PortfolioCockpitTest` karena kontrak shared searchable-select (`data-ui-select`, `data-value`, dan `data-disabled`) belum tersedia pada baseline UI yang tidak disentuh oleh issue #92. Kegagalan tersebut berada di luar diff #92 dan tidak menyentuh module Warehouse/Surat Jalan.
+Suite penuh pada SHA final juga lulus:
+
+```text
+php artisan test
+Tests: 270 passed (1794 assertions)
+```
 
 Perubahan dokumentasi ini melengkapi commit implementasi di `main`; issue GitHub #92 ditutup setelah commit ini dipush dan diverifikasi.
