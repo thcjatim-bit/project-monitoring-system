@@ -10,6 +10,7 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 - **Isolasi mitra** — jaminan bahwa user mitra mustahil membaca atau mengubah baris milik mitra lain. Ditegakkan di database lewat Row-Level Security, bukan di kode aplikasi. Lihat `docs/adr/0001-isolasi-mitra-row-level-security.md`.
 - **Tabel bertenant** — tabel yang punya kolom `mitra_id` dan tunduk pada RLS.
 - **Tabel bersama** — master data lintas mitra (Material, Unit, PoP, Pekerjaan Jasa). Tidak punya `mitra_id`; boleh dibaca semua, hanya bisa ditulis THC.
+- **Tabel hibrida** — tabel bertenant yang barisnya boleh ber-`mitra_id` NULL untuk menandai kepemilikan THC. Dapat dibaca lintas tenant, tetapi hanya dapat ditulis dalam tenantnya sendiri. Saat ini hanya Warehouse. Pengecualian yang harus disebut namanya, bukan pola yang boleh ditiru; lihat `docs/adr/0023-warehouse-tabel-hibrida.md`.
 - **Grup** — kumpulan hak akses (matriks centang menu) yang dipasang ke User. Preset peran bawaan disediakan, tapi matriksnya bebas untuk dikelola THC; pilihan Grup oleh Admin Mitra tetap dibatasi pada capability operasional Mitra.
 - **Grup Operasional Mitra** — Grup yang dapat dipasang Admin Mitra kepada User Mitra dalam tenantnya sendiri. Grup ini tidak boleh membuka capability THC-only, mengubah `mitra_id`, atau mengubah matriks izin global.
 - **Izin Aksi (Permissions)** — izin granular spesifik per aksi (seperti CRUD dan persetujuan/approve). Izin menentukan capability aplikasi, bukan kepemilikan data: authorization server-side tetap memeriksa tipe User dan cakupan Mitra, sementara elemen antarmuka menyembunyikan menu jika tidak ada akses. Lihat `docs/adr/0006-model-hak-akses-matriks-aksi.md`.
@@ -57,7 +58,7 @@ Glosarium istilah domain. Pakai istilah persis seperti di sini pada nama tabel, 
 
 - **Material** — barang milik **THC**, walau dititipkan di gudang mitra.
 - **Unit** — satuan material (meter, batang, pcs).
-- **Warehouse** — gudang. Bisa milik THC atau titipan di mitra.
+- **Warehouse** — gudang. Bisa milik THC (`mitra_id` NULL) atau titipan di mitra. Tabel hibrida: User Mitra dapat membaca gudangnya sendiri dan gudang THC — supaya asal Surat Jalan terbaca — tetapi tidak pernah gudang Mitra lain, dan hanya dapat menulis gudang Mitranya sendiri.
 - **Petugas Gudang** — user yang mencatat barang masuk/keluar di satu atau lebih Warehouse.
 - **SN** — Serial Number material tertentu; dilacak sampai keluar gudang dan untuk project mana.
 - **Request Material** — permintaan material oleh Mitra ke THC. Satu request bisa dipenuhi beberapa Surat Jalan (kirim bertahap); status `terpenuhi_sebagian` dan `selesai` **dihitung** dari qty yang diterima, tidak diketik. Lihat `docs/adr/0005-alur-perpindahan-material-transit.md`.

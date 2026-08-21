@@ -93,23 +93,139 @@ class PostgresIntegrationTest extends TestCase
         $policies = DB::table('pg_policies')
             ->where('schemaname', 'public')
             ->whereIn('tablename', $tables->keys())
-            ->pluck('policyname', 'tablename')
+            ->orderBy('policyname')
+            ->get()
+            ->groupBy('tablename')
+            ->map(static fn ($group): array => $group->pluck('policyname')->all())
             ->sortKeys()
             ->all();
 
+        // warehouses adalah tabel hibrida (ADR-0023): tenant_isolation tetap memegang
+        // seluruh jalur tulis, warehouse_shared_read hanya membuka SELECT gudang THC.
         $this->assertSame([
-            'drums' => 'drum_tenant_isolation',
-            'material_request_items' => 'material_request_item_tenant_isolation',
-            'material_requests' => 'material_request_tenant_isolation',
-            'material_sns' => 'material_sn_tenant_isolation',
-            'material_stoks' => 'warehouse_stock_tenant_isolation',
-            'material_transaksis' => 'material_transaction_tenant_isolation',
-            'pemakaian_materials' => 'pemakaian_material_tenant_isolation',
-            'project_rekon_items' => 'project_rekon_item_tenant_isolation',
-            'project_rekons' => 'project_rekon_tenant_isolation',
-            'projects' => 'tenant_isolation',
-            'warehouses' => 'tenant_isolation',
+            'drums' => ['drum_tenant_isolation'],
+            'material_request_items' => ['material_request_item_tenant_isolation'],
+            'material_requests' => ['material_request_tenant_isolation'],
+            'material_sns' => ['material_sn_tenant_isolation'],
+            'material_stoks' => ['warehouse_stock_tenant_isolation'],
+            'material_transaksis' => ['material_transaction_tenant_isolation'],
+            'pemakaian_materials' => ['pemakaian_material_tenant_isolation'],
+            'project_rekon_items' => ['project_rekon_item_tenant_isolation'],
+            'project_rekons' => ['project_rekon_tenant_isolation'],
+            'projects' => ['tenant_isolation'],
+            'warehouses' => ['tenant_isolation', 'warehouse_shared_read'],
         ], $policies);
+    }
+
+    public function test_warehouse_shared_read_policy_only_covers_select(): void
+    {
+        $policy = DB::table('pg_policies')
+            ->where('schemaname', 'public')
+            ->where('tablename', 'warehouses')
+            ->where('policyname', 'warehouse_shared_read')
+            ->first();
+
+        $this->assertNotNull($policy);
+        $this->assertSame('PERMISSIVE', $policy->permissive);
+        // DELETE hanya diperiksa terhadap USING, tidak pernah terhadap WITH CHECK, jadi
+        // policy ini wajib terbatas pada SELECT — lihat ADR-0023 poin 4.
+        $this->assertSame('SELECT', $policy->cmd);
+        $this->assertNull($policy->with_check);
+    }
+
+    public function test_mitra_raw_query_reads_thc_warehouses_but_never_another_mitras_warehouse(): void
+    {
+        $mitraA = Mitra::factory()->create();
+        $mitraB = Mitra::factory()->create();
+        $tenantContext = app(TenantDatabaseContext::class);
+
+        $tenantContext->set(null, true);
+
+        try {
+            $thcId = $this->createWarehouse('WH-RLS-THC', 'Gudang Pusat THC', null);
+            $mitraAId = $this->createWarehouse('WH-RLS-A', 'Gudang Mitra A', $mitraA->id);
+            $mitraBId = $this->createWarehouse('WH-RLS-B', 'Gudang Mitra B', $mitraB->id);
+
+            $tenantContext->set($mitraA->id, false);
+
+            $visible = DB::table('warehouses')
+                ->whereIn('id', [$thcId, $mitraAId, $mitraBId])
+                ->orderBy('id')
+                ->pluck('id')
+                ->map(static fn (int|string $id): int => (int) $id)
+                ->all();
+
+            $this->assertSame([$thcId, $mitraAId], $visible);
+            $this->assertFalse(DB::table('warehouses')->where('id', $mitraBId)->exists());
+        } finally {
+            $tenantContext->set(null, false);
+        }
+    }
+
+    public function test_mitra_raw_query_cannot_write_thc_or_foreign_warehouses(): void
+    {
+        $mitraA = Mitra::factory()->create();
+        $mitraB = Mitra::factory()->create();
+        $tenantContext = app(TenantDatabaseContext::class);
+
+        $tenantContext->set(null, true);
+
+        try {
+            $thcId = $this->createWarehouse('WH-RLS-WRITE-THC', 'Gudang Pusat THC', null);
+            $mitraAId = $this->createWarehouse('WH-RLS-WRITE-A', 'Gudang Mitra A', $mitraA->id);
+
+            $tenantContext->set($mitraA->id, false);
+
+            $this->assertWarehouseRlsViolation(fn () => DB::table('warehouses')->insert([
+                'kode' => 'WH-RLS-WRITE-CROSS',
+                'nama' => 'Gudang selundupan',
+                'mitra_id' => null,
+                'aktif' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+
+            $this->assertWarehouseRlsViolation(fn () => DB::table('warehouses')
+                ->where('id', $mitraAId)
+                ->update(['mitra_id' => $mitraB->id]));
+
+            // Gudang THC terbaca tapi tidak boleh tersentuh: UPDATE dan DELETE hanya
+            // lolos lewat tenant_isolation, yang tidak pernah mencakup mitra_id NULL.
+            $this->assertSame(0, DB::table('warehouses')->where('id', $thcId)->update(['nama' => 'Dibajak']));
+            $this->assertSame(0, DB::table('warehouses')->where('id', $thcId)->delete());
+
+            $tenantContext->set(null, true);
+
+            $this->assertDatabaseHas('warehouses', ['id' => $thcId, 'nama' => 'Gudang Pusat THC']);
+        } finally {
+            $tenantContext->set(null, false);
+        }
+    }
+
+    private function createWarehouse(string $kode, string $nama, ?int $mitraId): int
+    {
+        return (int) DB::table('warehouses')->insertGetId([
+            'kode' => $kode,
+            'nama' => $nama,
+            'mitra_id' => $mitraId,
+            'aktif' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function assertWarehouseRlsViolation(Closure $operation): void
+    {
+        try {
+            DB::transaction($operation);
+            $this->fail('Expected warehouses RLS to reject the cross-tenant write.');
+        } catch (QueryException $exception) {
+            $this->assertSame('42501', (string) $exception->getCode());
+            $this->assertStringContainsString(
+                'row-level security policy for table "warehouses"',
+                $exception->getMessage(),
+            );
+        }
     }
 
     public function test_surat_jalan_and_transit_tables_preserve_rls_and_stock_cache_privileges(): void
