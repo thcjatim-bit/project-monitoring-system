@@ -203,7 +203,7 @@ class SuratJalanController extends Controller
     {
         return $stocks->flatMap(function (MaterialStok $stock): Collection {
             $items = $stock->suratJalan?->items;
-            $items = $items?->where('material_id', $stock->material_id)
+            $items = $items?->filter(fn ($item): bool => (int) $item->material_id === (int) $stock->material_id)
                 ->filter(fn ($item): bool => (float) $item->qty > (float) $item->qty_diterima);
 
             if ($items === null || $items->isEmpty()) {

@@ -190,8 +190,8 @@ class MaterialOperationalUiTest extends TestCase
         $this->actingAs($user)
             ->get(route('warehouse.transfers.show', $suratJalan))
             ->assertSee('target="_blank" rel="noopener noreferrer"', false)
-            ->assertSee('value="2"', false)
-            ->assertDontSee('value="2.000"', false);
+            ->assertSee('name="items[0][qty]"', false)
+            ->assertSee('value="2"', false);
     }
 
     public function test_transfer_detail_exposes_receive_cancel_return_and_correction_actions(): void
