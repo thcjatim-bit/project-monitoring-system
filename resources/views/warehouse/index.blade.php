@@ -39,10 +39,21 @@
             @if($canIssueTransfer)
             <article class="ui-panel"><h2>Terbitkan Surat Jalan</h2><p class="ui-help">Material yang diterbitkan keluar dari saldo asal dan masuk Transit sampai diterima atau diselesaikan THC. Drum kabel boleh dikirim sebagian: qty di bawah sisa melahirkan Drum turunan yang berangkat sementara induknya tinggal di gudang asal. Satu Drum hanya boleh muncul sekali per Surat Jalan.</p>
                 @if($materials->isEmpty())<div class="ui-state">Belum ada Material dengan Unit/Satuan aktif.</div>@elseif($destinationWarehouses->isEmpty())<div class="ui-state" role="status">Belum ada Warehouse tujuan aktif yang sesuai dengan tenant Anda.</div>@else
+                @php
+                    // Render awal dikerjakan server dari payload yang sama dengan yang dipakai JS, supaya
+                    // isi dropdown pada muat pertama tidak bergantung pada skrip yang belum sempat jalan.
+                    $initialDestination = $destinationWarehouses->first();
+                    $initialMitraId = $warehouses->first()?->mitra_id ?? $initialDestination?->mitra_id;
+                    $initialRequests = $transferFormData['requests'][(string) $initialDestination?->id] ?? [];
+                    $initialProjects = collect($transferFormData['projects'])->where('mitra_id', $initialMitraId)->all();
+                    $projectKosongLabel = '— Tanpa Project —';
+                    $projectTerkunciLabel = 'Gudang THC ke gudang THC — tanpa Project';
+                @endphp
                 <form class="ui-form" method="POST" action="{{ route('warehouse.transfers.issue') }}" target="_blank" rel="noopener noreferrer" data-submit-loading data-transfer-form>@csrf
-                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
+                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-origin-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-destination-select required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
+                    <div class="ui-form__grid"><label>Request Material<select name="material_request_id" data-request-select data-empty-label="— Tanpa Request Material —"><option value="">— Tanpa Request Material —</option>@foreach($initialRequests as $initialRequest)<option value="{{ $initialRequest['id'] }}">{{ $initialRequest['label'] }}</option>@endforeach</select></label><label>Project<select name="project_id" data-project-select data-empty-label="{{ $projectKosongLabel }}" data-locked-label="{{ $projectTerkunciLabel }}" @disabled($initialMitraId === null)>@if($initialMitraId === null)<option value="">{{ $projectTerkunciLabel }}</option>@else<option value="">{{ $projectKosongLabel }}</option>@foreach($initialProjects as $initialProject)<option value="{{ $initialProject['id'] }}">{{ $initialProject['label'] }}</option>@endforeach @endif</select></label></div>
                     <div class="ui-form__grid"><label>Tanggal<input type="date" name="tanggal" value="{{ now()->toDateString() }}" required></label><label>Pengirim<input name="pengirim" maxlength="255" required></label></div><div class="ui-form__grid"><label>Sopir<input name="sopir" maxlength="255"></label><label>Plat nomor<input name="plat_nomor" maxlength="255"></label></div>
-                    <div class="ui-form"><strong>Item Surat Jalan</strong><div data-transfer-items><div class="ui-list__item" data-transfer-row><div class="ui-form__grid"><label>Material<select name="items[0][material_id]" required><option value="">Pilih Material</option>@foreach($materials as $material)<option value="{{ $material->id }}" data-kind="{{ $material->jenis }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>@endforeach</select></label><label>Qty<input type="number" name="items[0][qty]" min="0.001" step="0.001" required></label></div><div class="ui-form__grid"><label data-identity="serial_number" hidden>Serial Number<input name="items[0][serial_number]"></label><label data-identity="drum_id" hidden>Drum ID<input name="items[0][drum_id]"></label></div><button class="ui-button ui-button--muted" type="button" data-remove-item hidden>Hapus item</button></div></div><button class="ui-button ui-button--muted" type="button" data-add-item>Tambah item</button></div>
+                    <div class="ui-form"><strong>Item Surat Jalan</strong><div data-transfer-items><div class="ui-list__item" data-transfer-row><div class="ui-form__grid"><label>Material<select name="items[0][material_id]" required><option value="">Pilih Material</option>@foreach($materials as $material)<option value="{{ $material->id }}" data-kind="{{ $material->jenis }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>@endforeach</select></label><label>Qty<input type="number" name="items[0][qty]" min="0.001" step="0.001" required></label></div><div class="ui-form__grid"><label data-identity="serial_number" hidden>Serial Number<input name="items[0][serial_number]"></label><label data-identity="drum_id" hidden>Drum ID<input name="items[0][drum_id]"></label></div><input type="hidden" name="items[0][asal]" value="manual" data-row-origin><button class="ui-button ui-button--muted" type="button" data-remove-item hidden>Hapus item</button></div></div><button class="ui-button ui-button--muted" type="button" data-add-item>Tambah item</button></div>
                     <button class="ui-button" type="submit">Terbitkan Surat Jalan</button>
                 </form>@endif
                 {{-- Kontrak data form request-driven: prefill dan penyaringan berjalan murni di klien, tanpa endpoint JSON baru. --}}
@@ -72,12 +83,96 @@
     const bindSelects = (root) => root.querySelectorAll('[data-material-select], [data-transfer-row] select').forEach(bindIdentity);
     bindSelects(document);
     const items = document.querySelector('[data-transfer-items]'); let nextTransferIndex = 1;
-    document.querySelector('[data-add-item]')?.addEventListener('click', () => {
+    // Semua baris baru adalah klon baris pertama, jadi indeks dan binding-nya tidak pernah dirakit tangan.
+    const buildRow = (asal) => {
         const source = items.querySelector('[data-transfer-row]'); const index = nextTransferIndex++; const row = source.cloneNode(true);
         row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[0\]/g, `items[${index}]`); input.value = ''; });
+        // Asal-usul baris dibawa hidden input, bukan sekadar atribut DOM, supaya bertahan melewati repopulasi old().
+        const asalInput = row.querySelector('[data-row-origin]'); if (asalInput) asalInput.value = asal;
+        row.dataset.rowAsal = asal;
         row.querySelector('[data-remove-item]').hidden = false; items.append(row); bindSelects(row);
-    });
+        return { row, index };
+    };
+    document.querySelector('[data-add-item]')?.addEventListener('click', () => buildRow('manual'));
     items?.addEventListener('click', (event) => { if (event.target.matches('[data-remove-item]')) event.target.closest('[data-transfer-row]').remove(); });
+    // Form request-driven: penyaringan dan prefill berjalan murni di klien di atas payload yang diserialisasi Blade.
+    const transferForm = document.querySelector('[data-transfer-form]');
+    const formDataScript = document.querySelector('[data-transfer-form-data]');
+    const formData = formDataScript ? JSON.parse(formDataScript.textContent) : null;
+    if (formData && transferForm) {
+        const originSelect = transferForm.querySelector('[data-origin-select]');
+        const destinationSelect = transferForm.querySelector('[data-destination-select]');
+        const requestSelect = transferForm.querySelector('[data-request-select]');
+        const projectSelect = transferForm.querySelector('[data-project-select]');
+        const option = (value, label) => { const created = document.createElement('option'); created.value = String(value); created.textContent = label; return created; };
+        // Mitra Surat Jalan ditentukan gudang asal, dan jatuh ke gudang tujuan bila asal milik THC.
+        const effectiveMitra = () => formData.warehouse_mitra[originSelect.value] ?? formData.warehouse_mitra[destinationSelect.value] ?? null;
+        let currentMitra = effectiveMitra();
+        // Gudang tujuan adalah filter wajib; Project mempersempit daftar tapi request tanpa Project tetap muncul.
+        const availableRequests = () => (formData.requests[destinationSelect.value] ?? []).filter((request) =>
+            projectSelect.value === '' || request.project_id === null || String(request.project_id) === projectSelect.value);
+        const renderProjects = () => {
+            const mitraId = effectiveMitra();
+            projectSelect.replaceChildren();
+            projectSelect.disabled = mitraId === null;
+            if (mitraId === null) { projectSelect.append(option('', projectSelect.dataset.lockedLabel)); return; }
+            projectSelect.append(option('', projectSelect.dataset.emptyLabel));
+            formData.projects.filter((project) => project.mitra_id === mitraId).forEach((project) => projectSelect.append(option(project.id, project.label)));
+        };
+        const renderRequests = () => {
+            requestSelect.replaceChildren(option('', requestSelect.dataset.emptyLabel));
+            availableRequests().forEach((request) => requestSelect.append(option(request.id, request.label)));
+        };
+        const dropPrefillRows = () => items.querySelectorAll('[data-row-asal="request"]').forEach((row) => row.remove());
+        const unlockProject = () => { transferForm.querySelector('[data-project-lock]')?.remove(); projectSelect.disabled = effectiveMitra() === null; };
+        const lockProject = (projectId) => {
+            projectSelect.value = String(projectId); projectSelect.disabled = true;
+            // Select yang disabled tidak ikut terkirim, jadi nilai terkuncinya dibawa hidden input.
+            const lock = document.createElement('input');
+            lock.type = 'hidden'; lock.name = 'project_id'; lock.value = String(projectId); lock.setAttribute('data-project-lock', '');
+            projectSelect.after(lock);
+        };
+        const prefillRow = (item, qty) => {
+            const { row, index } = buildRow('request');
+            const materialSelect = row.querySelector('select');
+            materialSelect.value = String(item.material_id); materialSelect.disabled = true;
+            // Material baris prefill dikunci; select disabled tidak terkirim, hidden input yang membawanya.
+            const locked = document.createElement('input');
+            locked.type = 'hidden'; locked.name = 'items[' + index + '][material_id]'; locked.value = String(item.material_id);
+            materialSelect.after(locked);
+            row.querySelector('input[type="number"]').value = String(qty);
+            materialSelect.dispatchEvent(new Event('change'));
+        };
+        const applyRequest = () => {
+            dropPrefillRows(); unlockProject();
+            const request = availableRequests().find((candidate) => String(candidate.id) === requestSelect.value);
+            if (!request) return;
+            if (request.project_id !== null) lockProject(request.project_id);
+            // Qty prefill adalah sisa, material bersisa 0 tidak muncul, dan baris ber-SN dipecah satu baris per pcs.
+            request.items.filter((item) => item.sisa > 0).forEach((item) => {
+                const berSn = item.jenis === 'ber_sn';
+                const barisan = berSn ? Math.round(item.sisa) : 1;
+                for (let pcs = 0; pcs < barisan; pcs += 1) prefillRow(item, berSn ? 1 : item.sisa);
+            });
+        };
+        const resetRequest = () => { renderRequests(); requestSelect.value = ''; dropPrefillRows(); unlockProject(); };
+        destinationSelect.addEventListener('change', () => {
+            // Ganti gudang tujuan me-reset Project hanya bila Mitra efektif berubah.
+            if (effectiveMitra() !== currentMitra) { currentMitra = effectiveMitra(); renderProjects(); }
+            resetRequest();
+        });
+        originSelect.addEventListener('change', () => {
+            if (effectiveMitra() === currentMitra) return;
+            currentMitra = effectiveMitra(); renderProjects(); resetRequest();
+        });
+        projectSelect.addEventListener('change', () => {
+            const previous = requestSelect.value;
+            renderRequests();
+            if (previous !== '' && requestSelect.querySelector('option[value="' + previous + '"]') !== null) { requestSelect.value = previous; return; }
+            requestSelect.value = ''; dropPrefillRows();
+        });
+        requestSelect.addEventListener('change', applyRequest);
+    }
     const RESTORE_SUBMIT_AFTER_MS = 1000;
     const NAVIGATES_THIS_PAGE = ['', '_self', '_parent', '_top'];
     document.querySelectorAll('[data-submit-loading]').forEach((form) => form.addEventListener('submit', () => {

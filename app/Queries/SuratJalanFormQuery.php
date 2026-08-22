@@ -67,13 +67,8 @@ class SuratJalanFormQuery
                 ->get();
         $sent = $this->sentQuantities($requests->pluck('id')->map(fn ($id): int => (int) $id)->all());
 
-        $serialized = $requests->map(fn (MaterialRequest $request): array => [
-            'id' => (int) $request->id,
-            'mitra_id' => (int) $request->mitra_id,
-            'project_id' => $request->project_id === null ? null : (int) $request->project_id,
-            'tanggal' => $request->created_at?->toDateString(),
-            'status' => $request->status,
-            'items' => $request->items
+        $serialized = $requests->map(function (MaterialRequest $request) use ($sent): array {
+            $items = $request->items
                 ->groupBy('material_id')
                 ->map(function (Collection $lines, int|string $materialId) use ($sent, $request): array {
                     $diminta = (float) $lines->sum('qty');
@@ -88,8 +83,18 @@ class SuratJalanFormQuery
                     ];
                 })
                 ->values()
-                ->all(),
-        ])->groupBy('mitra_id');
+                ->all();
+
+            return [
+                'id' => (int) $request->id,
+                'mitra_id' => (int) $request->mitra_id,
+                'project_id' => $request->project_id === null ? null : (int) $request->project_id,
+                'tanggal' => $request->created_at?->toDateString(),
+                'status' => $request->status,
+                'label' => $this->requestLabel($request, $items),
+                'items' => $items,
+            ];
+        })->groupBy('mitra_id');
 
         return $destinationWarehouses
             ->mapWithKeys(fn (Warehouse $warehouse): array => [
@@ -162,8 +167,28 @@ class SuratJalanFormQuery
                 'id_project' => $project->id_project,
                 'nama' => $project->nama,
                 'mitra_id' => (int) $project->mitra_id,
+                'label' => $project->id_project.' — '.$project->nama,
             ])
             ->all();
+    }
+
+    /**
+     * Label opsi dirakit di sini, bukan di Blade dan di JS masing-masing: render awal oleh
+     * server dan render ulang oleh klien harus mustahil menyimpang satu sama lain.
+     *
+     * @param  list<array<string, mixed>>  $items
+     */
+    private function requestLabel(MaterialRequest $request, array $items): string
+    {
+        $belumLengkap = count(array_filter($items, fn (array $item): bool => $item['sisa'] > 0));
+
+        return sprintf(
+            '#%d — %s · %d item, %d belum lengkap',
+            (int) $request->id,
+            $request->created_at?->format('d M Y') ?? '-',
+            count($items),
+            $belumLengkap,
+        );
     }
 
     /**

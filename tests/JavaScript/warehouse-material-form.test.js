@@ -368,3 +368,193 @@ describe('daur hidup tombol submit', { concurrency: true }, () => {
         assert.equal(submit.textContent, 'Catat penerimaan', 'label semula harus dikembalikan');
     });
 });
+
+/**
+ * Payload form request-driven. Bentuknya mengikuti kontrak App\Queries\SuratJalanFormQuery;
+ * yang diuji di sini adalah apa yang klien lakukan terhadapnya, bukan cara server merakitnya.
+ */
+const transferFormData = {
+    warehouse_mitra: { 10: null, 20: 7, 30: null },
+    requests: {
+        10: [],
+        20: [
+            {
+                id: 91,
+                mitra_id: 7,
+                project_id: 55,
+                tanggal: '2026-08-20',
+                status: 'disetujui',
+                label: '#91 — 20 Aug 2026 · 3 item, 2 belum lengkap',
+                items: [
+                    { material_id: 1, jenis: 'biasa', diminta: 10, terkirim: 4, sisa: 6 },
+                    { material_id: 2, jenis: 'ber_sn', diminta: 3, terkirim: 0, sisa: 3 },
+                    { material_id: 3, jenis: 'drum_kabel', diminta: 250, terkirim: 250, sisa: 0 },
+                ],
+            },
+            {
+                id: 92,
+                mitra_id: 7,
+                project_id: null,
+                tanggal: '2026-08-19',
+                status: 'disetujui',
+                label: '#92 — 19 Aug 2026 · 1 item, 1 belum lengkap',
+                items: [{ material_id: 1, jenis: 'biasa', diminta: 2, terkirim: 0, sisa: 2 }],
+            },
+        ],
+        30: [],
+    },
+    projects: [
+        { id: 55, id_project: 'PRJ-2608-0001', nama: 'Alpha', mitra_id: 7, label: 'PRJ-2608-0001 — Alpha' },
+        { id: 56, id_project: 'PRJ-2608-0002', nama: 'Beta', mitra_id: 7, label: 'PRJ-2608-0002 — Beta' },
+    ],
+    identities: {},
+};
+
+const KOSONG_REQUEST = '— Tanpa Request Material —';
+const KOSONG_PROJECT = '— Tanpa Project —';
+const TERKUNCI_PROJECT = 'Gudang THC ke gudang THC — tanpa Project';
+
+/** Render awal fixture meniru Blade: gudang tujuan pertama milik Mitra 7. */
+const requestDrivenPage = (t) => openPage(t, `
+    <form data-submit-loading data-transfer-form target="_blank">
+        <select name="warehouse_asal_id" data-origin-select required>
+            <option value="10">WH-THC</option>
+            <option value="20">WH-MITRA</option>
+        </select>
+        <select name="warehouse_tujuan_id" data-destination-select required>
+            <option value="20">WH-MITRA</option>
+            <option value="30">WH-THC-2</option>
+        </select>
+        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
+            <option value="">${KOSONG_REQUEST}</option>
+            <option value="91">${transferFormData.requests[20][0].label}</option>
+            <option value="92">${transferFormData.requests[20][1].label}</option>
+        </select>
+        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
+            <option value="">${KOSONG_PROJECT}</option>
+            <option value="55">PRJ-2608-0001 — Alpha</option>
+            <option value="56">PRJ-2608-0002 — Beta</option>
+        </select>
+        <div data-transfer-items>
+            <div class="ui-list__item" data-transfer-row>
+                <label>Material<select name="items[0][material_id]" required>
+                    <option value="">Pilih Material</option>${materialOptions}
+                </select></label>
+                <label>Qty<input type="number" name="items[0][qty]" required></label>
+                ${identityFields('items[0]')}
+                <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
+                <button type="button" data-remove-item hidden>Hapus item</button>
+            </div>
+        </div>
+        <button type="button" data-add-item>Tambah item</button>
+        <button type="submit">Terbitkan Surat Jalan</button>
+    </form>
+    <script type="application/json" data-transfer-form-data>${JSON.stringify(transferFormData)}</script>
+`);
+
+const field = (window, selector) => window.document.querySelector(selector);
+
+const prefillRows = (window) => rows(window).filter((row) => row.dataset.rowAsal === 'request');
+
+const optionValues = (select) => [...select.querySelectorAll('option')].map((option) => option.value);
+
+const qtyOf = (row) => row.querySelector('input[type="number"]').value;
+
+test('memilih Request Material memprefill baris dengan qty sisa', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    const prefilled = prefillRows(window);
+    assert.equal(prefilled.length, 4, 'material bersisa 0 tidak boleh muncul, ber-SN dipecah per pcs');
+    assert.equal(qtyOf(prefilled[0]), '6', 'qty prefill adalah sisa, bukan qty yang diminta');
+    assert.deepEqual(prefilled.slice(1).map(qtyOf), ['1', '1', '1'], 'baris ber-SN dipecah satu baris per pcs');
+});
+
+test('baris prefill mengunci material lewat hidden input, bukan lewat select', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const [row] = prefillRows(window);
+    const select = row.querySelector('select');
+    assert.equal(select.disabled, true, 'material baris prefill tidak boleh diubah operator');
+    assert.equal(select.value, '1');
+    const hidden = row.querySelector('input[type="hidden"][name$="[material_id]"]');
+    assert.ok(hidden, 'select yang disabled tidak terkirim, jadi material wajib dibawa hidden input');
+    assert.equal(hidden.value, '1');
+    assert.equal(row.querySelector('[data-row-origin]').value, 'request');
+});
+
+test('baris prefill ber-SN tetap meminta Serial Number diisi operator', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    const berSn = prefillRows(window)[1];
+    assert.equal(identity(berSn, 'serial_number').hidden, false);
+    assert.equal(identity(berSn, 'serial_number').querySelector('input').value, '', 'prefill tidak pernah mengisi identitas');
+});
+
+test('request ber-Project mengunci Project dan tetap mengirimkannya', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.value, '55');
+    assert.equal(project.disabled, true);
+    assert.equal(field(window, '[data-project-lock]').value, '55');
+});
+
+test('request tanpa Project membiarkan Project diisi operator', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.disabled, false);
+    assert.equal(field(window, '[data-project-lock]'), null);
+});
+
+test('ganti gudang tujuan membuang baris prefill tapi menyisakan baris ketikan operator', (t) => {
+    const window = requestDrivenPage(t);
+    window.document.querySelector('[data-add-item]').click();
+    choose(window, field(window, '[data-request-select]'), '91');
+    prefillRows(window)[0].querySelector('input[type="number"]').value = '99';
+
+    choose(window, field(window, '[data-destination-select]'), '30');
+
+    assert.equal(prefillRows(window).length, 0, 'baris prefill yang sudah diedit pun ikut dibuang');
+    assert.equal(rows(window).length, 2, 'baris template dan baris ketikan operator harus bertahan');
+    assert.equal(field(window, '[data-request-select]').value, '');
+});
+
+test('gudang tujuan THC dengan asal THC mematikan Project dengan opsi penjelas', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-destination-select]'), '30');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.disabled, true);
+    assert.deepEqual([...project.querySelectorAll('option')].map((option) => option.textContent), [TERKUNCI_PROJECT]);
+    assert.deepEqual(optionValues(field(window, '[data-request-select]')), [''], 'gudang THC tidak punya Request Material');
+});
+
+test('memilih Project mempersempit daftar request tapi request tanpa Project tetap muncul', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-project-select]'), '56');
+
+    assert.deepEqual(optionValues(field(window, '[data-request-select]')), ['', '92']);
+});
+
+test('jalur tanpa Request Material tidak menambah baris apa pun', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    choose(window, field(window, '[data-request-select]'), '');
+
+    assert.equal(rows(window).length, 1);
+    assert.equal(field(window, '[data-project-select]').disabled, false);
+});

@@ -2,20 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\Grup;
-use App\Models\Izin;
 use App\Models\Material;
-use App\Models\MaterialRequest;
-use App\Models\MaterialRequestItem;
 use App\Models\MaterialSn;
 use App\Models\Mitra;
-use App\Models\Project;
-use App\Models\User;
 use App\Models\Warehouse;
-use App\Support\TenantDatabaseContext;
-use Closure;
 use Illuminate\Testing\TestResponse;
 use Tests\Concerns\RefreshDatabase;
+use Tests\Concerns\WarehouseFixtures;
 use Tests\TestCase;
 
 /**
@@ -25,6 +18,7 @@ use Tests\TestCase;
 class SuratJalanFormDataTest extends TestCase
 {
     use RefreshDatabase;
+    use WarehouseFixtures;
 
     public function test_gudang_tujuan_hanya_memuat_request_milik_mitra_pemiliknya(): void
     {
@@ -38,11 +32,11 @@ class SuratJalanFormDataTest extends TestCase
         $origin->users()->attach($operator);
 
         $material = Material::factory()->create(['jenis' => 'biasa']);
-        $disetujui = $this->request($mitraA, 'disetujui', $material, 10);
-        $sebagian = $this->request($mitraA, 'terpenuhi_sebagian', $material, 4);
-        $milikB = $this->request($mitraB, 'disetujui', $material, 3);
+        $disetujui = $this->materialRequest($mitraA, 'disetujui', [[$material, 10]]);
+        $sebagian = $this->materialRequest($mitraA, 'terpenuhi_sebagian', [[$material, 4]]);
+        $milikB = $this->materialRequest($mitraB, 'disetujui', [[$material, 3]]);
         foreach (['diajukan', 'ditolak', 'selesai', 'ditutup'] as $status) {
-            $this->request($mitraA, $status, $material, 7);
+            $this->materialRequest($mitraA, $status, [[$material, 7]]);
         }
 
         $payload = $this->transferFormData($this->actingAs($operator)->get('/warehouse'));
@@ -66,7 +60,7 @@ class SuratJalanFormDataTest extends TestCase
 
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $lain = Material::factory()->create(['jenis' => 'biasa']);
-        $request = $this->request($mitra, 'disetujui', $material, 10, $lain, 5);
+        $request = $this->materialRequest($mitra, 'disetujui', [[$material, 10], [$lain, 5]]);
 
         $this->actingAs($operator)->post('/warehouse/stock/receive', [
             'warehouse_id' => $origin->id,
@@ -178,7 +172,7 @@ class SuratJalanFormDataTest extends TestCase
         $operator = $this->userWith($mitra, 'operate_warehouse');
         $gudang = $this->warehouse($mitra, 'WH-MITRA');
         $gudang->users()->attach($operator);
-        $this->request($mitra, 'disetujui', Material::factory()->create(['jenis' => 'biasa']), 10);
+        $this->materialRequest($mitra, 'disetujui', [[Material::factory()->create(['jenis' => 'biasa']), 10]]);
 
         $this->actingAs($operator)
             ->get('/warehouse')
@@ -212,78 +206,5 @@ class SuratJalanFormDataTest extends TestCase
         $this->assertSame(1, $matched, 'Halaman Warehouse tidak menyerialisasi data form Surat Jalan.');
 
         return json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
-    }
-
-    private function request(
-        Mitra $mitra,
-        string $status,
-        Material $material,
-        float $qty,
-        ?Material $second = null,
-        ?float $secondQty = null,
-    ): MaterialRequest {
-        $requester = $this->userWith($mitra, 'create_material_request');
-
-        return $this->asThc(function () use ($mitra, $status, $material, $qty, $second, $secondQty, $requester): MaterialRequest {
-            $request = MaterialRequest::query()->create([
-                'mitra_id' => $mitra->id,
-                'requested_by' => $requester->id,
-                'status' => $status,
-            ]);
-            $lines = [[$material, $qty]];
-            if ($second !== null) {
-                $lines[] = [$second, $secondQty];
-            }
-            foreach ($lines as [$lineMaterial, $lineQty]) {
-                MaterialRequestItem::query()->create([
-                    'material_request_id' => $request->id,
-                    'mitra_id' => $mitra->id,
-                    'material_id' => $lineMaterial->id,
-                    'qty' => $lineQty,
-                ]);
-            }
-
-            return $request;
-        });
-    }
-
-    private function project(Mitra $mitra, string $idProject, string $status): Project
-    {
-        return $this->asThc(fn (): Project => Project::query()->create([
-            'id_project' => $idProject,
-            'nama' => 'Project '.$idProject,
-            'mitra_id' => $mitra->id,
-            'status_project' => $status,
-        ]));
-    }
-
-    private function warehouse(?Mitra $mitra, string $kode): Warehouse
-    {
-        return $this->asThc(fn (): Warehouse => Warehouse::factory()->create([
-            'mitra_id' => $mitra?->id,
-            'kode' => $kode,
-            'aktif' => true,
-        ]));
-    }
-
-    private function userWith(?Mitra $mitra, string ...$permissions): User
-    {
-        $group = Grup::factory()->create();
-        $group->izins()->attach(collect($permissions)->map(
-            fn (string $permission) => Izin::query()->firstOrCreate(['kode' => $permission], ['nama' => $permission])->id,
-        )->all());
-
-        return User::factory()->create(['mitra_id' => $mitra?->id, 'grup_id' => $group->id]);
-    }
-
-    private function asThc(Closure $callback): mixed
-    {
-        app(TenantDatabaseContext::class)->set(null, true);
-
-        try {
-            return $callback();
-        } finally {
-            app(TenantDatabaseContext::class)->set(null, false);
-        }
     }
 }

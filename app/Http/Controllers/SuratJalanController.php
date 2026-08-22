@@ -88,6 +88,9 @@ class SuratJalanController extends Controller
             'items.*.serial_number' => ['nullable', 'string', 'max:255'],
             'items.*.drum_id' => ['nullable', 'string', 'max:255'],
             'items.*.catatan' => ['nullable', 'string', 'max:1000'],
+            // Asal-usul baris adalah kenyamanan UI, bukan sumber kebenaran: server tetap
+            // menghitung ulang klasifikasi dan tidak pernah membaca nilai ini.
+            'items.*.asal' => ['nullable', Rule::in(['manual', 'request'])],
         ]);
 
         $origin = Warehouse::query()->findOrFail($data['warehouse_asal_id']);
