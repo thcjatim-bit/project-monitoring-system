@@ -4,7 +4,7 @@ Status: diterima · Tanggal: 2026-08-22 · Tiket: [#128](https://github.com/thcj
 
 ## Konteks
 
-ADR-0024 menetapkan bahwa form Terbitkan Surat Jalan **menandai baris menyimpang secara visual**. Penandaan itu mendarat di `b47b260`: `markDeviations()` di `resources/views/warehouse/index.blade.php` menghitung sendiri baris mana yang `material_asing` dan mana yang `qty_melebihi`, dengan cara yang sengaja meniru `SuratJalanService::classifyRequestDeviations()` persis — per material atas seluruh baris, terhadap `sisa = diminta − sudah terkirim`, dengan toleransi `0,0005` yang sama.
+ADR-0024 menetapkan bahwa form Terbitkan Surat Jalan **menandai baris menyimpang secara visual**. Penandaan itu mendarat di `b47b260`: `markDeviations()` menghitung sendiri baris mana yang `material_asing` dan mana yang `qty_melebihi`, dengan cara yang sengaja meniru `SuratJalanService::classifyRequestDeviations()` persis — per material atas seluruh baris, terhadap `sisa = diminta − sudah terkirim`, dengan toleransi `0,0005` yang sama.
 
 Jadi ada dua klasifikator penyimpangan di repo ini, satu di PHP dan satu di JavaScript, yang harus selalu sampai pada kesimpulan yang sama. Tidak ada mekanisme yang memaksanya.
 

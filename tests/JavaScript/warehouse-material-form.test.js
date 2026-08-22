@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import test, { describe, it } from 'node:test';
 import { Window } from 'happy-dom';
 
+import { RESTORE_SUBMIT_AFTER_MS } from '../../resources/js/submit-loading.js';
+import { initializeWarehouseMaterialForm } from '../../resources/js/warehouse-material-form.js';
+
 const bladePath = fileURLToPath(
     new URL('../../resources/views/warehouse/index.blade.php', import.meta.url),
 );
@@ -25,22 +28,6 @@ const qtyTolerance = () => {
     return Number(match[1]);
 };
 
-/** Skrip inline halaman Warehouse adalah artefak yang benar-benar dikirim ke browser. */
-const inlineScript = () => {
-    const blocks = [...blade().matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
-    assert.ok(blocks.length > 0, 'blok <script> halaman Warehouse tidak ditemukan');
-
-    return blocks.join('\n');
-};
-
-/** Tenggat test diturunkan dari konstanta aplikasi, bukan angka yang disalin tangan. */
-const restoreSubmitAfterMs = () => {
-    const match = inlineScript().match(/RESTORE_SUBMIT_AFTER_MS = (\d+)/);
-    assert.ok(match, 'konstanta RESTORE_SUBMIT_AFTER_MS tidak ditemukan');
-
-    return Number(match[1]);
-};
-
 const materialOptions = `
     <option value="1" data-kind="biasa">MAT-1 — Kabel Patch</option>
     <option value="2" data-kind="ber_sn">MAT-2 — ONT</option>
@@ -57,11 +44,43 @@ const catatanField = (prefix) => `
     <label>Catatan<input name="${prefix}[catatan]" maxlength="1000" data-catatan-input></label>
 `;
 
-/** Fixture happy-dom ditutup lewat `t.after`, seperti tests/JavaScript/searchable-select.test.js. */
+/**
+ * Satu perakit baris untuk seluruh fixture, dijaga tetap sejajar dengan Blade oleh test
+ * "fixture baris item membawa setiap field yang dirender Blade" di bawah. Markup baris yang
+ * disalin per fixture adalah cara sebelumnya, dan salinan yang tertinggallah yang dulu kehilangan
+ * hidden input asal-usul baris begitu Blade mulai merendernya.
+ */
+const barisSuratJalan = ({
+    index = 0,
+    asal = 'manual',
+    pilihan = materialOptions,
+    dikunci = null,
+    qty = '',
+    bisaDihapus = false,
+} = {}) => `
+    <div class="ui-list__item" data-transfer-row data-row-asal="${asal}">
+        <label>Material<select name="items[${index}][material_id]" required${dikunci === null ? '' : ' disabled'}>
+            <option value="">Pilih Material</option>${pilihan}
+        </select>${dikunci === null ? '' : `<input type="hidden" name="items[${index}][material_id]" value="${dikunci}">`}</label>
+        <label>Qty<input type="number" name="items[${index}][qty]" required value="${qty}"></label>
+        ${identityFields(`items[${index}]`)}
+        ${catatanField(`items[${index}]`)}
+        <input type="hidden" name="items[${index}][asal]" value="${asal}" data-row-origin>
+        <button type="button" data-remove-item${bisaDihapus ? '' : ' hidden'}>Hapus item</button>
+    </div>
+`;
+
+/**
+ * Fixture happy-dom ditutup lewat `t.after`, seperti tests/JavaScript/searchable-select.test.js.
+ *
+ * Halaman dibuka lewat seam yang sama dengan produksi: markup dipasang, lalu modulnya dipanggil.
+ * Penanda `data-warehouse-page` ikut dipasang karena Blade memasangnya juga — tanpa penanda itu
+ * modulnya memang tidak bekerja, persis seperti di halaman lain.
+ */
 const openPage = (t, body) => {
     const window = new Window({ url: 'https://example.test/warehouse' });
-    window.document.body.innerHTML = body;
-    window.eval(inlineScript());
+    window.document.body.innerHTML = `<main class="ui-page" data-warehouse-page>${body}</main>`;
+    initializeWarehouseMaterialForm(window.document);
     t.after(async () => {
         await window.close();
     });
@@ -85,17 +104,7 @@ const warehousePage = (t) => openPage(t, `
         <button type="submit">Catat pengeluaran</button>
     </form>
     <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
-        <div data-transfer-items>
-            <div class="ui-list__item" data-transfer-row>
-                <label>Material<select name="items[0][material_id]" required>
-                    <option value="">Pilih Material</option>${materialOptions}
-                </select></label>
-                <label>Qty<input type="number" name="items[0][qty]" required></label>
-                ${identityFields('items[0]')}
-                ${catatanField('items[0]')}
-                <button type="button" data-remove-item hidden>Hapus item</button>
-            </div>
-        </div>
+        <div data-transfer-items>${barisSuratJalan()}</div>
         <button type="button" data-add-item>Tambah item</button>
         <button type="submit">Terbitkan Surat Jalan</button>
     </form>
@@ -198,6 +207,130 @@ test('baris item Surat Jalan dimulai tanpa material terpilih dan tanpa kotak ide
     assert.equal(identity(row, 'drum_id').hidden, true);
 });
 
+/**
+ * Penjaga penyimpangan fixture. Fixture merakit markup barisnya sendiri, jadi ia bisa tertinggal
+ * saat Blade menambah field — persis yang terjadi pada hidden input asal-usul baris. Yang
+ * dibandingkan bukan markupnya kata per kata (Blade punya direktif dan indeks dari old()),
+ * melainkan daftar field dan atribut data yang jadi pegangan modulnya.
+ */
+const bladeBarisMarkup = () => {
+    const match = blade().match(/<div class="ui-list__item" data-transfer-row[\s\S]*?data-remove-item[\s\S]*?<\/button><\/div>/);
+    assert.ok(match, 'markup baris item Surat Jalan tidak ditemukan di Blade');
+
+    return match[0];
+};
+
+const namaField = (markup) => new Set(
+    [...markup.matchAll(/name="items\[[^\]]*\]\[(\w+)\]"/g)].map((match) => match[1]),
+);
+
+const atributData = (markup) => new Set(
+    [...markup.matchAll(/\sdata-([a-z-]+)/g)].map((match) => match[1]),
+);
+
+test('fixture baris item membawa setiap field dan atribut yang dirender Blade', () => {
+    const bladeRow = bladeBarisMarkup();
+    const fixtureRow = barisSuratJalan();
+
+    for (const nama of namaField(bladeRow)) {
+        assert.ok(
+            namaField(fixtureRow).has(nama),
+            `Blade merender items[N][${nama}] tapi fixture tidak — fixture menyimpang dari halaman aslinya`,
+        );
+    }
+
+    for (const atribut of atributData(bladeRow)) {
+        assert.ok(
+            atributData(fixtureRow).has(atribut),
+            `Blade merender data-${atribut} tapi fixture tidak — modulnya berpegang pada atribut yang hilang di fixture`,
+        );
+    }
+});
+
+/**
+ * Markup form untuk seluruh fixture request-driven. Sebelumnya form ini disalin lima kali, dan
+ * salinan yang tertinggal itulah cara fixture menyimpang dari halaman aslinya — persis yang
+ * terjadi pada baris item. Dijaga tetap sejajar dengan Blade oleh test di bawah.
+ */
+const opsi = (daftar) => daftar
+    .map(({ value, label, selected = false }) => `<option value="${value}"${selected ? ' selected' : ''}>${label}</option>`)
+    .join('');
+
+const formSuratJalan = ({
+    gudangAsal = [{ value: 10, label: 'WH-THC' }, { value: 20, label: 'WH-MITRA' }],
+    gudangTujuan = [{ value: 20, label: 'WH-MITRA' }, { value: 30, label: 'WH-THC-2' }, { value: 40, label: 'WH-MITRA-2' }],
+    requests = [],
+    projects = [],
+    projectMati = false,
+    kunciProject = null,
+    baris = barisSuratJalan(),
+    payload = transferFormData,
+} = {}) => `
+    <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
+        <select name="warehouse_asal_id" data-origin-select required>${opsi(gudangAsal)}</select>
+        <select name="warehouse_tujuan_id" data-destination-select required>${opsi(gudangTujuan)}</select>
+        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">${opsi([{ value: '', label: KOSONG_REQUEST }, ...requests])}</select>
+        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}"${projectMati ? ' disabled' : ''}>${opsi([{ value: '', label: projectMati ? TERKUNCI_PROJECT : KOSONG_PROJECT }, ...projects])}</select>
+        ${kunciProject === null ? '' : `<input type="hidden" name="project_id" value="${kunciProject}" data-project-lock>`}
+        <div data-transfer-items>${baris}</div>
+        <button type="button" data-add-item>Tambah item</button>
+        <button type="submit">Terbitkan Surat Jalan</button>
+    </form>
+    <script type="application/json" data-transfer-form-data>${JSON.stringify(payload)}</script>
+`;
+
+/** Markup form Terbitkan Surat Jalan yang dirender Blade, sampai sebelum daftar barisnya. */
+const bladeFormMarkup = () => {
+    const match = blade().match(/<form[^>]*data-transfer-form[\s\S]*?<div data-transfer-items>/);
+    assert.ok(match, 'markup form Terbitkan Surat Jalan tidak ditemukan di Blade');
+
+    return match[0];
+};
+
+test('fixture form Surat Jalan membawa setiap atribut yang dirender Blade', () => {
+    // Kunci Project hanya dirender Blade saat request membawanya, jadi fixture pembandingnya
+    // dibangun dengan kunci itu terpasang.
+    const fixtureForm = formSuratJalan({ kunciProject: 55 });
+
+    for (const atribut of atributData(bladeFormMarkup())) {
+        assert.ok(
+            atributData(fixtureForm).has(atribut),
+            `Blade merender data-${atribut} tapi fixture form tidak — fixture menyimpang dari halaman aslinya`,
+        );
+    }
+});
+
+/**
+ * Penanda halaman adalah satu-satunya hal yang membuat modulnya bekerja di produksi, dan fixture
+ * memasangnya sendiri. Tanpa test ini, menghapus atribut itu dari Blade akan mematikan seluruh
+ * form sementara suite JS tetap hijau — saluran penyimpangan baru, tepat di tempat yang sama.
+ */
+test('Blade menandai halaman Warehouse supaya modulnya ikut bekerja di produksi', () => {
+    assert.match(
+        blade(),
+        /<main[^>]*\sdata-warehouse-page[\s>]/,
+        'tanpa penanda ini modulnya diam dan form Surat Jalan mati di produksi',
+    );
+});
+
+test('tanpa penanda halaman Warehouse modulnya tidak menyentuh apa pun', async (t) => {
+    const window = new Window({ url: 'https://example.test/proyek' });
+    window.document.body.innerHTML = `<main class="ui-page">${formSuratJalan()}</main>`;
+    t.after(async () => {
+        await window.close();
+    });
+
+    initializeWarehouseMaterialForm(window.document);
+    window.document.querySelector('[data-add-item]').click();
+
+    assert.equal(
+        window.document.querySelectorAll('[data-transfer-row]').length,
+        1,
+        'view lain memakai atribut yang sama; modulnya tidak boleh ikut hidup di sana',
+    );
+});
+
+
 test('markup baris item Surat Jalan menyediakan opsi placeholder Pilih Material', () => {
     // Indeks baris dirender Blade dari old(), jadi markup dicocokkan tanpa memaku angkanya.
     const select = blade().match(/<select name="items\[[^"]*\]\[material_id\]"[^>]*>([\s\S]*?)<\/select>/);
@@ -275,7 +408,7 @@ test('memilih material pada baris item hasil klon membuka kotak identitasnya sen
 describe('daur hidup tombol submit', { concurrency: true }, () => {
     /** Menunggu penjaga UI dengan tenggat yang diturunkan dari konstanta aplikasi. */
     const waitFor = async (predicate, message) => {
-        const deadline = Date.now() + restoreSubmitAfterMs() * 3;
+        const deadline = Date.now() + RESTORE_SUBMIT_AFTER_MS * 3;
 
         while (Date.now() < deadline) {
             if (predicate()) {
@@ -290,7 +423,7 @@ describe('daur hidup tombol submit', { concurrency: true }, () => {
 
     /** Lewati tenggat pemulihan, supaya tombol yang tetap terkunci bisa dibuktikan. */
     const waitOutRestore = () => new Promise((resolve) => {
-        setTimeout(resolve, restoreSubmitAfterMs() + 200);
+        setTimeout(resolve, RESTORE_SUBMIT_AFTER_MS + 200);
     });
 
     it('tombol Terbitkan Surat Jalan bisa dipakai lagi setelah Surat Jalan terbit di tab baru', async (t) => {
@@ -489,47 +622,20 @@ const KOSONG_PROJECT = '— Tanpa Project —';
 const TERKUNCI_PROJECT = 'Gudang THC ke gudang THC — tanpa Project';
 
 /** Render awal fixture meniru Blade: gudang tujuan pertama milik Mitra 7. */
-const requestDrivenPage = (t) => openPage(t, `
-    <form data-submit-loading data-transfer-form target="_blank">
-        <select name="warehouse_asal_id" data-origin-select required>
-            <option value="10">WH-THC</option>
-            <option value="20">WH-MITRA</option>
-        </select>
-        <select name="warehouse_tujuan_id" data-destination-select required>
-            <option value="20">WH-MITRA</option>
-            <option value="30">WH-THC-2</option>
-            <option value="40">WH-MITRA-2</option>
-        </select>
-        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
-            <option value="">${KOSONG_REQUEST}</option>
-            <option value="91">${transferFormData.requests[20][0].label}</option>
-            <option value="92">${transferFormData.requests[20][1].label}</option>
-            <option value="93">${transferFormData.requests[20][2].label}</option>
-            <option value="94">${transferFormData.requests[20][3].label}</option>
-            <option value="95">${transferFormData.requests[20][4].label}</option>
-        </select>
-        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
-            <option value="">${KOSONG_PROJECT}</option>
-            <option value="55">PRJ-2608-0001 — Alpha</option>
-            <option value="56">PRJ-2608-0002 — Beta</option>
-        </select>
-        <div data-transfer-items>
-            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
-                <label>Material<select name="items[0][material_id]" required>
-                    <option value="">Pilih Material</option>${materialOptions}
-                </select></label>
-                <label>Qty<input type="number" name="items[0][qty]" required></label>
-                ${identityFields('items[0]')}
-                ${catatanField('items[0]')}
-                <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
-                <button type="button" data-remove-item hidden>Hapus item</button>
-            </div>
-        </div>
-        <button type="button" data-add-item>Tambah item</button>
-        <button type="submit">Terbitkan Surat Jalan</button>
-    </form>
-    <script type="application/json" data-transfer-form-data>${JSON.stringify(transferFormData)}</script>
-`);
+const requestDrivenPage = (t, payload = transferFormData) => openPage(t, formSuratJalan({
+    requests: [
+        { value: 91, label: transferFormData.requests[20][0].label },
+        { value: 92, label: transferFormData.requests[20][1].label },
+        { value: 93, label: transferFormData.requests[20][2].label },
+        { value: 94, label: transferFormData.requests[20][3].label },
+        { value: 95, label: transferFormData.requests[20][4].label },
+    ],
+    projects: [
+        { value: 55, label: 'PRJ-2608-0001 — Alpha' },
+        { value: 56, label: 'PRJ-2608-0002 — Beta' },
+    ],
+    payload,
+}));
 
 const field = (window, selector) => window.document.querySelector(selector);
 
@@ -848,41 +954,17 @@ test('ganti gudang tujuan menyusun daftar request tanpa disempitkan Project pinj
  * tidak ada yang bisa dipulihkan. Membatalkan request mengosongkan Project: menyisakan nilai
  * request yang sudah pergi justru mengulang bug yang diperbaiki di sini.
  */
-const halamanDenganKunciServer = (t) => openPage(t, `
-    <form data-submit-loading data-transfer-form target="_blank">
-        <select name="warehouse_asal_id" data-origin-select required>
-            <option value="10">WH-THC</option>
-        </select>
-        <select name="warehouse_tujuan_id" data-destination-select required>
-            <option value="20" selected>WH-MITRA</option>
-        </select>
-        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
-            <option value="">${KOSONG_REQUEST}</option>
-            <option value="91" selected>${transferFormData.requests[20][0].label}</option>
-        </select>
-        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}" disabled>
-            <option value="">${KOSONG_PROJECT}</option>
-            <option value="55" selected>PRJ-2608-0001 — Alpha</option>
-            <option value="56">PRJ-2608-0002 — Beta</option>
-        </select>
-        <input type="hidden" name="project_id" value="55" data-project-lock>
-        <div data-transfer-items>
-            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
-                <label>Material<select name="items[0][material_id]" required>
-                    <option value="">Pilih Material</option>${materialOptions}
-                </select></label>
-                <label>Qty<input type="number" name="items[0][qty]" required></label>
-                ${identityFields('items[0]')}
-                ${catatanField('items[0]')}
-                <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
-                <button type="button" data-remove-item hidden>Hapus item</button>
-            </div>
-        </div>
-        <button type="button" data-add-item>Tambah item</button>
-        <button type="submit">Terbitkan Surat Jalan</button>
-    </form>
-    <script type="application/json" data-transfer-form-data>${JSON.stringify(transferFormData)}</script>
-`);
+const halamanDenganKunciServer = (t) => openPage(t, formSuratJalan({
+    gudangAsal: [{ value: 10, label: 'WH-THC' }],
+    gudangTujuan: [{ value: 20, label: 'WH-MITRA', selected: true }],
+    requests: [{ value: 91, label: transferFormData.requests[20][0].label, selected: true }],
+    projects: [
+        { value: 55, label: 'PRJ-2608-0001 — Alpha', selected: true },
+        { value: 56, label: 'PRJ-2608-0002 — Beta' },
+    ],
+    projectMati: true,
+    kunciProject: 55,
+}));
 
 test('membatalkan request yang dikunci server melepas Project, bukan menyisakannya', (t) => {
     const window = halamanDenganKunciServer(t);
@@ -1211,52 +1293,22 @@ test('panduan tidak menghapus catatan yang sudah diketik operator', (t) => {
  * Setelah POST ditolak, Blade merender ulang setiap baris dari `old()`. Fixture ini meniru
  * hasil render itu: request tetap terpilih, dan baris kedua membawa material di luar request.
  */
-const halamanSetelahDitolak = (t) => openPage(t, `
-    <form data-submit-loading data-transfer-form target="_blank">
-        <select name="warehouse_asal_id" data-origin-select required>
-            <option value="10">WH-THC</option>
-            <option value="20">WH-MITRA</option>
-        </select>
-        <select name="warehouse_tujuan_id" data-destination-select required>
-            <option value="20" selected>WH-MITRA</option>
-            <option value="30">WH-THC-2</option>
-        </select>
-        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
-            <option value="">${KOSONG_REQUEST}</option>
-            <option value="92" selected>${transferFormData.requests[20][1].label}</option>
-        </select>
-        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
-            <option value="">${KOSONG_PROJECT}</option>
-        </select>
-        <div data-transfer-items>
-            <div class="ui-list__item" data-transfer-row data-row-asal="request">
-                <label>Material<select name="items[0][material_id]" required disabled>
-                    <option value="">Pilih Material</option>
-                    <option value="1" data-kind="biasa" selected>MAT-1 — Kabel Patch</option>
-                </select><input type="hidden" name="items[0][material_id]" value="1"></label>
-                <label>Qty<input type="number" name="items[0][qty]" required value="2"></label>
-                ${identityFields('items[0]')}
-                ${catatanField('items[0]')}
-                <input type="hidden" name="items[0][asal]" value="request" data-row-origin>
-                <button type="button" data-remove-item>Hapus item</button>
-            </div>
-            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
-                <label>Material<select name="items[1][material_id]" required>
-                    <option value="">Pilih Material</option>
-                    <option value="3" data-kind="drum_kabel" selected>MAT-3 — Drum Kabel</option>
-                </select></label>
-                <label>Qty<input type="number" name="items[1][qty]" required value="5"></label>
-                ${identityFields('items[1]')}
-                ${catatanField('items[1]')}
-                <input type="hidden" name="items[1][asal]" value="manual" data-row-origin>
-                <button type="button" data-remove-item>Hapus item</button>
-            </div>
-        </div>
-        <button type="button" data-add-item>Tambah item</button>
-        <button type="submit">Terbitkan Surat Jalan</button>
-    </form>
-    <script type="application/json" data-transfer-form-data>${JSON.stringify(transferFormData)}</script>
-`);
+const halamanSetelahDitolak = (t) => openPage(t, formSuratJalan({
+    gudangTujuan: [{ value: 20, label: 'WH-MITRA', selected: true }, { value: 30, label: 'WH-THC-2' }],
+    requests: [{ value: 92, label: transferFormData.requests[20][1].label, selected: true }],
+    baris: barisSuratJalan({
+        asal: 'request',
+        pilihan: '<option value="1" data-kind="biasa" selected>MAT-1 — Kabel Patch</option>',
+        dikunci: 1,
+        qty: 2,
+        bisaDihapus: true,
+    }) + barisSuratJalan({
+        index: 1,
+        pilihan: '<option value="3" data-kind="drum_kabel" selected>MAT-3 — Drum Kabel</option>',
+        qty: 5,
+        bisaDihapus: true,
+    }),
+}));
 
 test('baris tambahan melanjutkan indeks baris yang sudah dirender server', (t) => {
     const window = halamanSetelahDitolak(t);
@@ -1371,38 +1423,12 @@ const payloadKontrak = (kasus) => ({
 
 const KONTRAK_LABEL = '#91 — kontrak klasifikasi';
 
-const halamanKontrak = (t, kasus) => openPage(t, `
-    <form data-submit-loading data-transfer-form target="_blank">
-        <select name="warehouse_asal_id" data-origin-select required>
-            <option value="10">WH-THC</option>
-        </select>
-        <select name="warehouse_tujuan_id" data-destination-select required>
-            <option value="20">WH-MITRA</option>
-        </select>
-        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
-            <option value="">${KOSONG_REQUEST}</option>
-            <option value="91">${KONTRAK_LABEL}</option>
-        </select>
-        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
-            <option value="">${KOSONG_PROJECT}</option>
-        </select>
-        <div data-transfer-items>
-            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
-                <label>Material<select name="items[0][material_id]" required>
-                    <option value="">Pilih Material</option>${materialOptions}
-                </select></label>
-                <label>Qty<input type="number" name="items[0][qty]" required></label>
-                ${identityFields('items[0]')}
-                ${catatanField('items[0]')}
-                <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
-                <button type="button" data-remove-item hidden>Hapus item</button>
-            </div>
-        </div>
-        <button type="button" data-add-item>Tambah item</button>
-        <button type="submit">Terbitkan Surat Jalan</button>
-    </form>
-    <script type="application/json" data-transfer-form-data>${JSON.stringify(payloadKontrak(kasus))}</script>
-`);
+const halamanKontrak = (t, kasus) => openPage(t, formSuratJalan({
+    gudangAsal: [{ value: 10, label: 'WH-THC' }],
+    gudangTujuan: [{ value: 20, label: 'WH-MITRA' }],
+    requests: [{ value: 91, label: KONTRAK_LABEL }],
+    payload: payloadKontrak(kasus),
+}));
 
 /**
  * Baris kasus diketik operator satu per satu, bukan dipasang lewat atribut: yang dijamin kontrak
@@ -1449,29 +1475,20 @@ describe('kontrak klasifikasi penyimpangan', { concurrency: true }, () => {
      * diketik ulang di test hanya untuk membuktikan ia tidak diketik ulang di produksi.
      */
     it('mitra efektif awal diambil skrip dari payload, tidak dihitung ulang', (t) => {
-        const window = openPage(t, `
-            <form data-submit-loading data-transfer-form target="_blank">
-                <select name="warehouse_asal_id" data-origin-select required><option value="10">WH-THC</option></select>
-                <select name="warehouse_tujuan_id" data-destination-select required><option value="20">WH-MITRA</option></select>
-                <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}"><option value="">${KOSONG_REQUEST}</option></select>
-                <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}"><option value="">${KOSONG_PROJECT}</option></select>
-                <div data-transfer-items><div class="ui-list__item" data-transfer-row data-row-asal="manual">
-                    <label>Material<select name="items[0][material_id]" required><option value="">Pilih Material</option>${materialOptions}</select></label>
-                    <label>Qty<input type="number" name="items[0][qty]" required></label>
-                </div></div>
-                <button type="submit">Terbitkan Surat Jalan</button>
-            </form>
-            <script type="application/json" data-transfer-form-data>${JSON.stringify({
-        ...transferFormData,
-        // Gudang asal 10 milik THC dan tujuan 20 milik Mitra 7, tapi payload menyebut Mitra 9:
-        // skrip yang menghitung sendiri akan menjawab 7 dan menyusun daftar Project yang salah.
-        initial_mitra_id: 9,
-        projects: [
-            { id: 55, id_project: 'PRJ-2608-0001', nama: 'Alpha', mitra_id: 7, label: 'PRJ-2608-0001 — Alpha' },
-            { id: 57, id_project: 'PRJ-2608-0003', nama: 'Gamma', mitra_id: 9, label: 'PRJ-2608-0003 — Gamma' },
-        ],
-    })}</script>
-        `);
+        const window = openPage(t, formSuratJalan({
+            gudangAsal: [{ value: 10, label: 'WH-THC' }],
+            gudangTujuan: [{ value: 20, label: 'WH-MITRA' }],
+            payload: {
+                ...transferFormData,
+                // Gudang asal 10 milik THC dan tujuan 20 milik Mitra 7, tapi payload menyebut Mitra 9:
+                // klien yang menghitung sendiri akan menjawab 7 dan menyusun daftar Project yang salah.
+                initial_mitra_id: 9,
+                projects: [
+                    { id: 55, id_project: 'PRJ-2608-0001', nama: 'Alpha', mitra_id: 7, label: 'PRJ-2608-0001 — Alpha' },
+                    { id: 57, id_project: 'PRJ-2608-0003', nama: 'Gamma', mitra_id: 9, label: 'PRJ-2608-0003 — Gamma' },
+                ],
+            },
+        }));
 
         // Ganti gudang tujuan ke nilai yang sudah terpilih: Mitra efektifnya tidak berubah, jadi
         // daftar Project hanya tersusun ulang bila skrip berangkat dari Mitra yang berbeda.
@@ -1484,12 +1501,36 @@ describe('kontrak klasifikasi penyimpangan', { concurrency: true }, () => {
         );
     });
 
-    it('ambang klasifikasi dibawa payload, tidak diketik ulang di skrip halaman', () => {
-        assert.match(inlineScript(), /QTY_TOLERANCE = formData\.qty_tolerance/);
-        assert.doesNotMatch(
-            inlineScript(),
-            /QTY_TOLERANCE = [\d.]/,
-            'ambang yang diketik ulang di klien adalah ambang kedua yang bisa menyimpang dari server',
+    /**
+     * Ambang yang diketik ulang di klien adalah ambang kedua yang bisa menyimpang dari server.
+     * Dibuktikan lewat perilaku, bukan lewat pembacaan teks sumber: payload dengan ambang yang
+     * sengaja tidak masuk akal harus tetap dipatuhi, dan klien yang memakai angkanya sendiri
+     * menjawab lain untuk qty yang sama.
+     */
+    const denganToleransi = (toleransi) => ({ ...transferFormData, qty_tolerance: toleransi });
+
+    it('ambang klasifikasi diambil dari payload, bukan angka milik klien sendiri', (t) => {
+        // Material 1 bersisa 6 pada request #91; qty 10 melebihinya sebanyak 4.
+        const window = requestDrivenPage(t, denganToleransi(5));
+        choose(window, field(window, '[data-request-select]'), '91');
+        buangSemuaBarisPrefill(window);
+
+        ketik(window, rows(window)[0], '1', '10');
+
+        assert.equal(
+            penyimpangan(rows(window)[0]),
+            null,
+            'ambang 5 menampung kelebihan 4; klien yang memakai ambangnya sendiri akan menandai baris ini',
         );
+    });
+
+    it('ambang payload yang rapat tetap menandai kelebihan sekecil apa pun', (t) => {
+        const window = requestDrivenPage(t, denganToleransi(0));
+        choose(window, field(window, '[data-request-select]'), '91');
+        buangSemuaBarisPrefill(window);
+
+        ketik(window, rows(window)[0], '1', '6.5');
+
+        assert.equal(penyimpangan(rows(window)[0]), 'qty_melebihi');
     });
 });
