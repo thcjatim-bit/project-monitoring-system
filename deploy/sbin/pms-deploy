@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="/var/www/project-monitoring-system"
+DEPLOY_USER="jawan"
+BRANCH="main"
+
+STATE_DIR="/var/lib/pms-deploy"
+PREVIOUS_FILE="$STATE_DIR/previous_commit"
+
+HEALTHCHECK_URL="https://deploythc.web.id/up"
+
+mkdir -p "$STATE_DIR"
+
+as_deploy() {
+    /usr/sbin/runuser -u "$DEPLOY_USER" -- "$@"
+}
+
+restart_if_present() {
+    local unit="$1"
+
+    if systemctl cat "$unit" >/dev/null 2>&1; then
+        systemctl restart "$unit"
+    fi
+}
+
+validate_sha() {
+    local sha="$1"
+
+    if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+        echo "Deployment requires a full 40-character Git SHA."
+        exit 64
+    fi
+}
+
+production_checks() {
+    if [ ! -d "$APP_DIR/.git" ]; then
+        echo "Production repository not found: $APP_DIR"
+        exit 1
+    fi
+
+    if [ ! -f "$APP_DIR/artisan" ]; then
+        echo "Laravel artisan not found."
+        exit 1
+    fi
+
+    local dirty
+    dirty="$(as_deploy git -C "$APP_DIR" status --porcelain)"
+
+    if [ -n "$dirty" ]; then
+        echo "Production working tree contains local changes."
+        echo "$dirty"
+        exit 1
+    fi
+}
+
+production_boundary_guard() {
+    as_deploy env \
+        PMS_BOUNDARY_APP_DIR="$APP_DIR" \
+        "$APP_DIR/scripts/verify-runtime-boundary.sh" production
+}
+
+deploy_commit() {
+    local sha="$1"
+
+    validate_sha "$sha"
+    production_checks
+
+    echo "Running production boundary preflight..."
+    production_boundary_guard
+
+    echo "Fetching origin/$BRANCH..."
+    as_deploy git -C "$APP_DIR" fetch origin "$BRANCH"
+
+    if ! as_deploy git -C "$APP_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
+        echo "Commit does not exist: $sha"
+        exit 1
+    fi
+
+    if ! as_deploy git -C "$APP_DIR" merge-base --is-ancestor \
+        "$sha" "origin/$BRANCH"; then
+        echo "Commit is not contained in origin/$BRANCH."
+        exit 1
+    fi
+
+    local previous
+    previous="$(as_deploy git -C "$APP_DIR" rev-parse HEAD)"
+
+    echo "$previous" > "$PREVIOUS_FILE"
+
+    echo "Previous commit: $previous"
+    echo "Deploying commit: $sha"
+
+    as_deploy git -C "$APP_DIR" checkout --detach "$sha"
+
+    echo "Installing Composer dependencies..."
+    as_deploy composer \
+        --working-dir="$APP_DIR" \
+        install \
+        --no-dev \
+        --prefer-dist \
+        --no-interaction \
+        --optimize-autoloader
+
+    if [ -f "$APP_DIR/package-lock.json" ]; then
+        echo "Building frontend..."
+        as_deploy npm --prefix "$APP_DIR" ci
+        as_deploy npm --prefix "$APP_DIR" run build
+    fi
+
+    echo "Running production migrations..."
+    as_deploy php "$APP_DIR/artisan" migrate --force
+
+    echo "Optimizing Laravel..."
+    as_deploy php "$APP_DIR/artisan" optimize
+
+    echo "Restarting application workers..."
+
+    restart_if_present "pms-queue.service"
+    restart_if_present "pms-schedule.service"
+    restart_if_present "pms-schedule.timer"
+
+    echo "Running post-deploy production boundary gate..."
+    production_boundary_guard
+
+    echo "Running health check..."
+
+    if command -v curl >/dev/null 2>&1; then
+        curl --fail --silent --show-error \
+            --max-time 15 \
+            "$HEALTHCHECK_URL" >/dev/null
+    fi
+
+    echo
+    echo "Deployment successful."
+    echo "Current commit:"
+    as_deploy git -C "$APP_DIR" rev-parse HEAD
+}
+
+recover_config_cache() {
+    production_checks
+
+    local cache="$APP_DIR/bootstrap/cache/config.php"
+
+    # Recovery only ever builds a cache that is ABSENT. A cache that exists but
+    # is wrong is the incident the boundary guard was built to catch (#65):
+    # rebuilding over it would overwrite the evidence before anyone read it.
+    if [ -f "$cache" ]; then
+        echo "Refusing: a cached configuration already exists."
+        echo "$cache"
+        echo
+        echo "Recovery only rebuilds a cache that is missing. If this cache is"
+        echo "wrong, inspect it first - overwriting it destroys the evidence."
+        echo "Run the guard to see whose configuration it actually is:"
+        echo "  $APP_DIR/scripts/verify-runtime-boundary.sh production"
+        exit 1
+    fi
+
+    echo "No cached configuration present."
+    echo "Rebuilding from $APP_DIR/.env ..."
+
+    as_deploy php "$APP_DIR/artisan" config:cache
+
+    if [ ! -f "$cache" ]; then
+        echo "Refusing: config:cache did not produce $cache"
+        exit 1
+    fi
+
+    echo
+    echo "Verifying the rebuilt cache against the production boundary..."
+
+    # Fail closed: a cache that cannot be vouched for is worse than no cache,
+    # and leaving none returns the runtime to the state the guard refuses on,
+    # rather than serving an artifact nothing has audited.
+    if ! production_boundary_guard; then
+        rm -f "$cache"
+        echo
+        echo "Refusing: the rebuilt cache does not match the production boundary."
+        echo "The cache has been removed. Production is left without one."
+        echo "Check $APP_DIR/.env before trying again."
+        exit 1
+    fi
+
+    echo
+    echo "Configuration cache recovered."
+}
+
+status() {
+    production_checks
+
+    echo "=== Commit ==="
+    as_deploy git -C "$APP_DIR" log -1 --oneline
+
+    echo
+    echo "=== Laravel ==="
+    as_deploy php "$APP_DIR/artisan" about
+
+    echo
+    echo "=== Queue ==="
+    systemctl --no-pager status pms-queue.service || true
+
+    echo
+    echo "=== Scheduler ==="
+    systemctl --no-pager status pms-schedule.timer || true
+}
+
+rollback_code() {
+    if [ ! -f "$PREVIOUS_FILE" ]; then
+        echo "No previous deployment recorded."
+        exit 1
+    fi
+
+    local sha
+    sha="$(cat "$PREVIOUS_FILE")"
+
+    validate_sha "$sha"
+
+    echo "WARNING:"
+    echo "This rolls application CODE back only."
+    echo "Database migrations are NOT automatically rolled back."
+
+    deploy_commit "$sha"
+}
+
+case "${1:-}" in
+    deploy)
+        [ "$#" -eq 2 ] || {
+            echo "Usage: pms-deploy deploy <40-char-git-sha>"
+            exit 64
+        }
+
+        deploy_commit "$2"
+        ;;
+
+    recover-config-cache)
+        [ "$#" -eq 1 ] || {
+            echo "Usage: pms-deploy recover-config-cache"
+            exit 64
+        }
+
+        recover_config_cache
+        ;;
+
+    status)
+        status
+        ;;
+
+    rollback-code)
+        rollback_code
+        ;;
+
+    *)
+        echo "Usage:"
+        echo "  pms-deploy status"
+        echo "  pms-deploy deploy <40-char-git-sha>"
+        echo "  pms-deploy rollback-code"
+        echo "  pms-deploy recover-config-cache"
+        exit 64
+        ;;
+esac
