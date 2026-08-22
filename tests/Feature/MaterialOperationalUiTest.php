@@ -83,7 +83,8 @@ class MaterialOperationalUiTest extends TestCase
     public function test_assigned_operator_can_open_operational_warehouse_hub(): void
     {
         $mitra = Mitra::factory()->create();
-        $user = $this->userWithPermissions($mitra->id, 'operate_warehouse', 'read_master_data');
+        // Petugas THC: form Terbitkan Surat Jalan hanya ada untuk User THC.
+        $user = $this->userWithPermissions(null, 'operate_warehouse', 'read_master_data');
         $warehouse = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
         $destination = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-TUJUAN']));
         $warehouse->users()->attach($user);
@@ -150,7 +151,8 @@ class MaterialOperationalUiTest extends TestCase
     public function test_action_cetak_dan_penerbitan_surat_jalan_membuka_tab_baru_dengan_aman(): void
     {
         $mitra = Mitra::factory()->create();
-        $user = $this->userWithPermissions($mitra->id, 'operate_warehouse');
+        // Petugas THC: form Terbitkan Surat Jalan hanya ada untuk User THC.
+        $user = $this->userWithPermissions(null, 'operate_warehouse');
         [$origin, $destination] = $this->asThc(fn (): array => [
             Warehouse::factory()->create(['mitra_id' => $mitra->id]),
             Warehouse::factory()->create(['mitra_id' => $mitra->id]),

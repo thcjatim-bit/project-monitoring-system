@@ -8,6 +8,7 @@ use App\Models\MaterialStok;
 use App\Models\MaterialTransaksi;
 use App\Models\SuratJalan;
 use App\Models\Warehouse;
+use App\Queries\SuratJalanFormQuery;
 use App\Rules\ActiveMaterial;
 use App\Services\MaterialInventoryService;
 use Illuminate\Http\RedirectResponse;
@@ -19,14 +20,22 @@ use Illuminate\View\View;
 
 class MaterialInventoryController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, SuratJalanFormQuery $transferForm): View
     {
         $warehouses = $this->assignedWarehouses($request);
         $warehouseIds = $warehouses->modelKeys();
+        $destinationWarehouses = $this->destinationWarehouses($request);
+        // Menerbitkan Surat Jalan adalah tindakan THC: material milik THC walau dititipkan di
+        // gudang Mitra. User Mitra tidak mendapat form penerbitan maupun data yang menyuapinya.
+        $canIssueTransfer = $request->user()->mitra_id === null;
 
         return view('warehouse.index', [
             'warehouses' => $warehouses,
-            'destinationWarehouses' => $this->destinationWarehouses($request),
+            'destinationWarehouses' => $destinationWarehouses,
+            'canIssueTransfer' => $canIssueTransfer,
+            'transferFormData' => $canIssueTransfer
+                ? $transferForm->forOperator($warehouses, $destinationWarehouses)
+                : null,
             'materials' => $this->activeMaterials(),
             'stocks' => MaterialStok::query()
                 ->with(['warehouse', 'material.unit'])
