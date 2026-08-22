@@ -10,4 +10,7 @@
 CHANGELOG.md export-ignore
 .styleci.yml export-ignore
 
-deploy/sbin/* text eol=lf
+# Installed verbatim on the production host and executed by root or systemd.
+# Any normalisation would make the versioned copy differ from what actually runs.
+deploy/sbin/* -text
+deploy/systemd/* -text

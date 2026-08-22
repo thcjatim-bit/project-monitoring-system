@@ -44,8 +44,7 @@ expect_status() {
 
     tests_run=$((tests_run + 1))
 
-    output="$(PMS_INFRA_REPO_DIR="$fixture/repo" \
-        PMS_INFRA_SBIN_DIR="$fixture/sbin" \
+    output="$(PMS_INFRA_PAIRS="$fixture/repo|$fixture/sbin" \
         "$checker" 2>&1)"
     actual=$?
 
@@ -79,6 +78,25 @@ echo versioned' absent)"
 whitespace_fixture="$(make_fixture 'x' 'x')"
 printf '\n' >> "$whitespace_fixture/sbin/pms-deploy"
 expect_status 'trailing-whitespace drift is refused' 1 "$whitespace_fixture"
+
+multi_fixture="$(make_fixture 'x' 'x')"
+mkdir -p "$multi_fixture/repo2" "$multi_fixture/sbin2"
+printf 'unit
+' > "$multi_fixture/repo2/pms-queue.service"
+printf 'drifted
+' > "$multi_fixture/sbin2/pms-queue.service"
+tests_run=$((tests_run + 1))
+multi_output="$(PMS_INFRA_PAIRS="$multi_fixture/repo|$multi_fixture/sbin
+$multi_fixture/repo2|$multi_fixture/sbin2" "$checker" 2>&1)"
+multi_status=$?
+if [[ "$multi_status" -eq 1 ]] && grep -q 'OK' <<<"$multi_output" && grep -q 'DRIFT' <<<"$multi_output"; then
+    echo "ok - drift in the second directory pair fails the whole run"
+else
+    tests_failed=$((tests_failed + 1))
+    echo "FAIL - drift in the second directory pair fails the whole run (exit $multi_status)"
+    sed 's/^/        /' <<<"$multi_output"
+fi
+rm -rf "$multi_fixture"
 
 empty_fixture="$(mktemp -d)"
 mkdir -p "$empty_fixture/repo" "$empty_fixture/sbin"

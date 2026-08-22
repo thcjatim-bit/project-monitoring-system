@@ -1,5 +1,5 @@
-[Unit]
-Description=Run the Project Monitoring System scheduler every minute
+﻿[Unit]
+Description=Run Project Monitoring System Laravel scheduler every minute
 
 [Timer]
 OnCalendar=*-*-* *:*:00

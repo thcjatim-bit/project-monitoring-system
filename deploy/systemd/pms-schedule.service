@@ -1,10 +1,10 @@
-[Unit]
-Description=Project Monitoring System scheduler
-After=network.target postgresql.service
+﻿[Unit]
+Description=Project Monitoring System Laravel scheduler
+After=network.target postgresql.service redis-server.service
 
 [Service]
 Type=oneshot
-User=pms
-Group=pms
-WorkingDirectory=/opt/pms/current
-ExecStart=/usr/bin/php artisan schedule:run --no-interaction
+User=jawan
+Group=www-data
+WorkingDirectory=/var/www/project-monitoring-system
+ExecStart=/usr/bin/php /var/www/project-monitoring-system/artisan schedule:run

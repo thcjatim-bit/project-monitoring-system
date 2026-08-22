@@ -1,16 +1,17 @@
-[Unit]
-Description=Project Monitoring System queue worker
-After=network.target postgresql.service
+﻿[Unit]
+Description=Project Monitoring System Laravel queue worker
+After=network.target postgresql.service redis-server.service
 
 [Service]
 Type=simple
-User=pms
-Group=pms
-WorkingDirectory=/opt/pms/current
-ExecStart=/usr/bin/php artisan queue:work --sleep=3 --tries=3 --max-time=3600 --no-interaction
-ExecReload=/usr/bin/php artisan queue:restart
-Restart=on-failure
+User=jawan
+Group=www-data
+WorkingDirectory=/var/www/project-monitoring-system
+ExecStart=/usr/bin/php /var/www/project-monitoring-system/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+Restart=always
 RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
