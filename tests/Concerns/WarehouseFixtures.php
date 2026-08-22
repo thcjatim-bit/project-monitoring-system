@@ -23,12 +23,16 @@ trait WarehouseFixtures
 {
     protected function warehouse(?Mitra $mitra, string $kode, ?string $nama = null): Warehouse
     {
-        return $this->asThc(fn (): Warehouse => Warehouse::factory()->create(array_filter([
-            'mitra_id' => $mitra?->id,
-            'kode' => $kode,
-            'nama' => $nama,
-            'aktif' => true,
-        ], fn ($value): bool => $value !== null)));
+        // `mitra_id` selalu diteruskan apa adanya: NULL di sini berarti "gudang milik THC"
+        // (ADR-0023), keputusan pemanggil yang tidak boleh diserahkan ke WarehouseFactory.
+        // Hanya `nama` yang boleh disaring, karena itu memang minta default factory.
+        $attributes = ['mitra_id' => $mitra?->id, 'kode' => $kode, 'aktif' => true];
+
+        if ($nama !== null) {
+            $attributes['nama'] = $nama;
+        }
+
+        return $this->asThc(fn (): Warehouse => Warehouse::factory()->create($attributes));
     }
 
     protected function userWith(?Mitra $mitra, string ...$permissions): User
