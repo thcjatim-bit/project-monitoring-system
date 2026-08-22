@@ -27,10 +27,12 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $mitra = Mitra::factory()->create();
         $mitraLain = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        // Gudang tujuan terpilih saat muat pertama adalah yang pertama menurut nama.
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
-        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $this->warehouse($mitraLain, 'WH-LAIN', 'C Gudang Mitra Lain');
+        // Gudang tujuan terpilih saat muat pertama adalah yang pertama menurut nama di antara
+        // seluruh gudang aktif -- gudang asal sendiri ikut jadi kandidat tujuan, jadi namanya
+        // sengaja diurutkan paling belakang supaya tujuan terpilih adalah gudang mitra.
+        $origin = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'A Gudang Mitra');
+        $this->warehouse($mitraLain, 'WH-LAIN', 'B Gudang Mitra Lain');
         $origin->users()->attach($operator);
 
         $lengkap = Material::factory()->create(['jenis' => 'biasa']);
@@ -61,6 +63,8 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
         $origin->users()->attach($operator);
+        // Tanpa Material ber-Unit aktif, panel Terbitkan Surat Jalan tidak merender form sama sekali.
+        Material::factory()->create(['jenis' => 'biasa']);
 
         $response = $this->actingAs($operator)->get('/warehouse')->assertOk();
 
@@ -77,6 +81,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
         $origin->users()->attach($operator);
+        Material::factory()->create(['jenis' => 'biasa']);
 
         $this->actingAs($operator)
             ->get('/warehouse')

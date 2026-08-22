@@ -182,7 +182,9 @@ class SuratJalanFormDataTest extends TestCase
             ->assertSee('Split drum')
             ->assertSee($gudang->kode)
             ->assertDontSee('Terbitkan Surat Jalan')
-            ->assertDontSee('data-transfer-form-data', false);
+            // Yang tidak boleh bocor adalah payload-nya. Skrip form request-driven dirender di
+            // setiap halaman dan menyebut selector ini apa adanya, jadi tag payload yang diperiksa.
+            ->assertDontSee('<script type="application/json" data-transfer-form-data>', false);
     }
 
     /**
