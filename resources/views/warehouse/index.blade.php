@@ -165,7 +165,10 @@
         // Surat Jalan: mengirim 2 dari sisa 2,5 tetap kirim bertahap, dan server tidak menandainya apa
         // pun saat terbit. Karena itu peringatannya punya salurannya sendiri di tingkat form, terpisah
         // dari markRow — memakai ulang saluran penyimpangan akan membuat layar dan server beda kesimpulan.
+        // Pasangan klien dari QuantityDisplayFormatter::format(): koma desimal, tiga angka di belakang,
+        // nol di ekor dibuang — supaya angka yang sama tidak tampil dua gaya di halaman yang sama.
         const angka = (nilai) => String(Math.round(nilai * 1000) / 1000).replace('.', ',');
+        // Nama materialnya diambil dari daftar opsi yang sudah dirender Blade; payload request hanya membawa id.
         const materialLabel = (materialId) => rowTemplate?.querySelector('option[value="' + materialId + '"]')?.textContent ?? 'material #' + materialId;
         const reportFractions = (request, pecahan) => {
             transferForm.querySelector('[data-fraction-notice]')?.remove();
