@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 
 class SuratJalanService
 {
-    /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, project_id?:int|null, material_request_id?:int|null, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
+    /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, project_id?:int|null, material_request_id?:int|null, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null}>} $data */
     public function issueDirect(User $actor, array $data): SuratJalan
     {
         return DB::transaction(fn (): SuratJalan => $this->issueTransfer($actor, $data));
@@ -250,7 +250,7 @@ class SuratJalanService
         });
     }
 
-    /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,project_id?:int|null,material_request_id?:int|null,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null}>} $data */
+    /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,project_id?:int|null,material_request_id?:int|null,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null}>} $data */
     private function issueTransfer(User $actor, array $data, ?int $returnedFromId = null): SuratJalan
     {
         $origin = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_asal_id']);
@@ -262,9 +262,10 @@ class SuratJalanService
         $tanggal = CarbonImmutable::parse($data['tanggal']);
         $mitraId = $origin->mitra_id ?? $destination->mitra_id;
         $materialRequest = $this->lockMaterialRequest($data['material_request_id'] ?? null, $mitraId);
-        if ($materialRequest !== null) {
-            $this->ensureRequestQuantitiesAvailable($materialRequest, $data['items']);
-        }
+        $deviations = $materialRequest === null
+            ? []
+            : $this->classifyRequestDeviations($materialRequest, $data['items']);
+        $this->ensureDeviatingLinesAreExplained($data['items'], $deviations);
         $projectId = $data['project_id'] ?? $materialRequest?->project_id;
         if ($projectId !== null) {
             $project = Project::query()->findOrFail($projectId);
@@ -292,7 +293,8 @@ class SuratJalanService
         foreach ($data['items'] as $itemData) {
             $this->ensurePositiveQuantity((string) $itemData['qty']);
             $material = Material::query()->findOrFail($itemData['material_id']);
-            $item = $this->createItem($suratJalan, $material, $origin, $itemData, $mitraId);
+            $deviation = $deviations[(int) $itemData['material_id']] ?? null;
+            $item = $this->createItem($suratJalan, $material, $origin, $itemData, $mitraId, $deviation);
             $this->moveToTransit($actor, $suratJalan, $item, $origin, $mitraId);
         }
 
@@ -320,8 +322,15 @@ class SuratJalanService
         return $request;
     }
 
-    /** @param array<int,array{material_id:int,qty:string|int|float}> $items */
-    private function ensureRequestQuantitiesAvailable(MaterialRequest $request, array $items): void
+    /**
+     * Daftar Request Material adalah prefill, bukan plafon: material di luar daftar dan qty melebihi
+     * sisa tetap boleh terbit, hanya ditandai. Klasifikasi ini dihitung sekali saat terbit dan
+     * disimpan di baris, jadi Surat Jalan yang sudah terbit tidak berubah arti ketika sisa bergerak.
+     *
+     * @param  array<int,array{material_id:int,qty:string|int|float}>  $items
+     * @return array<int,string> jenis penyimpangan per material_id
+     */
+    private function classifyRequestDeviations(MaterialRequest $request, array $items): array
     {
         $requested = $request->items
             ->groupBy('material_id')
@@ -337,10 +346,35 @@ class SuratJalanService
             ->map(fn ($qty): float => (float) $qty);
         $fulfillment = collect($items)->groupBy('material_id')->map(fn ($materialItems): float => (float) collect($materialItems)->sum('qty'));
 
+        $deviations = [];
         foreach ($fulfillment as $materialId => $qty) {
-            $remaining = ($requested->get((int) $materialId, 0.0) - $sent->get((int) $materialId, 0.0));
-            if ($requested->get((int) $materialId) === null || $qty > $remaining + 0.0005) {
-                throw ValidationException::withMessages(['items' => 'Qty Surat Jalan melebihi sisa Request Material.']);
+            $materialId = (int) $materialId;
+            if ($requested->get($materialId) === null) {
+                $deviations[$materialId] = 'material_asing';
+
+                continue;
+            }
+            $remaining = $requested->get($materialId, 0.0) - $sent->get($materialId, 0.0);
+            if ($qty > $remaining + 0.0005) {
+                $deviations[$materialId] = 'qty_melebihi';
+            }
+        }
+
+        return $deviations;
+    }
+
+    /**
+     * @param  array<int,array{material_id:int,catatan?:string|null}>  $items
+     * @param  array<int,string>  $deviations
+     */
+    private function ensureDeviatingLinesAreExplained(array $items, array $deviations): void
+    {
+        foreach ($items as $itemData) {
+            if (! isset($deviations[(int) $itemData['material_id']])) {
+                continue;
+            }
+            if (trim((string) ($itemData['catatan'] ?? '')) === '') {
+                throw ValidationException::withMessages(['items' => 'Baris yang menyimpang dari Request Material wajib memiliki catatan.']);
             }
         }
     }
@@ -439,7 +473,8 @@ class SuratJalanService
         return max(0, (float) $item->qty - (float) $item->qty_diterima);
     }
 
-    private function createItem(SuratJalan $suratJalan, Material $material, Warehouse $origin, array $data, ?int $mitraId): SuratJalanItem
+    /** @param array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null} $data */
+    private function createItem(SuratJalan $suratJalan, Material $material, Warehouse $origin, array $data, ?int $mitraId, ?string $deviation = null): SuratJalanItem
     {
         $qty = (string) $data['qty'];
         $item = [
@@ -447,6 +482,8 @@ class SuratJalanService
             'mitra_id' => $mitraId,
             'material_id' => $material->id,
             'qty' => $qty,
+            'catatan' => $this->normalizeNote($data['catatan'] ?? null),
+            'jenis_penyimpangan' => $deviation,
         ];
 
         if ($material->jenis === 'biasa') {
@@ -480,6 +517,13 @@ class SuratJalanService
         }
 
         return SuratJalanItem::query()->create($item);
+    }
+
+    private function normalizeNote(?string $note): ?string
+    {
+        $note = trim((string) $note);
+
+        return $note === '' ? null : $note;
     }
 
     private function moveToTransit(User $actor, SuratJalan $suratJalan, SuratJalanItem $item, Warehouse $origin, ?int $mitraId): void

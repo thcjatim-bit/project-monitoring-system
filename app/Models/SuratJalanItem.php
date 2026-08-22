@@ -19,6 +19,8 @@ class SuratJalanItem extends Model
         'qty',
         'qty_diterima',
         'qty_diretur',
+        'catatan',
+        'jenis_penyimpangan',
     ];
 
     protected function casts(): array

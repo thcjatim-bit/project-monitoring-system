@@ -87,6 +87,7 @@ class SuratJalanController extends Controller
             'items.*.qty' => ['required', 'numeric', 'gt:0'],
             'items.*.serial_number' => ['nullable', 'string', 'max:255'],
             'items.*.drum_id' => ['nullable', 'string', 'max:255'],
+            'items.*.catatan' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $origin = Warehouse::query()->findOrFail($data['warehouse_asal_id']);

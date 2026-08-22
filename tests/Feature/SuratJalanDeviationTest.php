@@ -1,0 +1,283 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Grup;
+use App\Models\Izin;
+use App\Models\Material;
+use App\Models\MaterialRequest;
+use App\Models\Mitra;
+use App\Models\SuratJalan;
+use App\Models\SuratJalanItem;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Support\TenantDatabaseContext;
+use Closure;
+use Illuminate\Testing\TestResponse;
+use Tests\Concerns\RefreshDatabase;
+use Tests\TestCase;
+
+class SuratJalanDeviationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_material_outside_the_request_is_issued_and_marked_material_asing(): void
+    {
+        [$user, $origin, $destination, $requested, $request] = $this->approvedRequest(4);
+        $substitute = $this->stockedMaterial($user, $origin, 5);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $requested->id, 'qty' => 4],
+            ['material_id' => $substitute->id, 'qty' => 5, 'catatan' => 'Substitusi, stok material asli habis'],
+        ])->assertRedirect();
+
+        $this->assertNull($this->itemFor($requested)->jenis_penyimpangan);
+        $this->assertSame('material_asing', $this->itemFor($substitute)->jenis_penyimpangan);
+        $this->assertSame('Substitusi, stok material asli habis', $this->itemFor($substitute)->catatan);
+    }
+
+    public function test_quantity_above_the_remainder_is_issued_and_marked_qty_melebihi(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4, 10);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 6, 'catatan' => 'Titipan tambahan ikut kendaraan'],
+        ])->assertRedirect();
+
+        $this->assertSame('qty_melebihi', $this->itemFor($material)->jenis_penyimpangan);
+    }
+
+    public function test_quantity_below_the_remainder_is_not_a_deviation(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 3],
+        ])->assertRedirect();
+
+        $this->assertNull($this->itemFor($material)->jenis_penyimpangan);
+        $this->assertNull($this->itemFor($material)->catatan);
+    }
+
+    public function test_a_deviating_line_without_a_note_rejects_the_whole_issuance(): void
+    {
+        [$user, $origin, $destination, $requested, $request] = $this->approvedRequest(4);
+        $substitute = $this->stockedMaterial($user, $origin, 5);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $requested->id, 'qty' => 4, 'catatan' => 'Sesuai permintaan'],
+            ['material_id' => $substitute->id, 'qty' => 5],
+        ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+        $this->assertDatabaseCount('surat_jalan_items', 0);
+    }
+
+    public function test_a_compliant_line_needs_no_note(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 4],
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('surat_jalans', 1);
+        $this->assertNull($this->itemFor($material)->jenis_penyimpangan);
+        $this->assertNull($this->itemFor($material)->catatan);
+    }
+
+    public function test_deviation_is_grouped_per_material_across_several_lines(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4, 10);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 3, 'catatan' => 'Bagian pertama'],
+            ['material_id' => $material->id, 'qty' => 3, 'catatan' => 'Titipan tambahan'],
+        ])->assertRedirect();
+
+        $items = SuratJalanItem::query()->where('material_id', $material->id)->orderBy('id')->get();
+        $this->assertSame(['qty_melebihi', 'qty_melebihi'], $items->pluck('jenis_penyimpangan')->all());
+    }
+
+    public function test_origin_warehouse_balance_still_blocks_a_quantity_the_request_would_allow(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(10, 4);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 10],
+        ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+    }
+
+    public function test_classification_is_frozen_when_a_later_surat_jalan_consumes_the_remainder(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4, 10);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 4],
+        ])->assertRedirect();
+        $first = SuratJalan::query()->latest('id')->firstOrFail();
+
+        $this->issue($user, $origin, $destination, $request->fresh(), [
+            ['material_id' => $material->id, 'qty' => 2, 'catatan' => 'Titipan tambahan'],
+        ])->assertRedirect();
+
+        $firstItem = SuratJalanItem::query()->where('surat_jalan_id', $first->id)->firstOrFail();
+        $this->assertNull($firstItem->jenis_penyimpangan);
+        $this->assertSame('qty_melebihi', $this->itemFor($material)->jenis_penyimpangan);
+    }
+
+    public function test_a_surat_jalan_without_a_request_never_has_a_deviating_line(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $user = $this->userWith($mitra, 'operate_warehouse');
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+        $material = $this->stockedMaterial($user, $origin, 7);
+
+        $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-22',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [['material_id' => $material->id, 'qty' => 7]],
+        ])->assertRedirect();
+
+        $this->assertNull($this->itemFor($material)->jenis_penyimpangan);
+    }
+
+    public function test_request_status_still_counts_a_mix_of_compliant_and_foreign_lines(): void
+    {
+        [$user, $origin, $destination, $requested, $request] = $this->approvedRequest(4);
+        $substitute = $this->stockedMaterial($user, $origin, 5);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $requested->id, 'qty' => 4],
+            ['material_id' => $substitute->id, 'qty' => 5, 'catatan' => 'Titipan'],
+        ])->assertRedirect();
+        $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalan->id}/receive")->assertRedirect();
+
+        $this->assertSame('selesai', $request->fresh()->status);
+    }
+
+    public function test_admin_mitra_still_cannot_reach_the_issuing_endpoint(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4);
+        $adminMitra = $this->userWith($origin->mitra, 'manage_mitra_users');
+
+        $this->actingAs($adminMitra)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'material_request_id' => $request->id,
+            'tanggal' => '2026-08-22',
+            'pengirim' => 'Admin Mitra',
+            'items' => [['material_id' => $material->id, 'qty' => 4, 'catatan' => 'Coba tembus']],
+        ])->assertForbidden();
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+    }
+
+    /** @param array<int,array<string,mixed>> $items */
+    private function issue(User $user, Warehouse $origin, Warehouse $destination, MaterialRequest $request, array $items): TestResponse
+    {
+        return $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'material_request_id' => $request->id,
+            'tanggal' => '2026-08-22',
+            'pengirim' => 'Petugas Gudang',
+            'items' => $items,
+        ]);
+    }
+
+    /** @return array{User, Warehouse, Warehouse, Material, MaterialRequest} */
+    private function approvedRequest(int $requestedQty, ?int $stockQty = null): array
+    {
+        $mitra = Mitra::factory()->create();
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
+        $thc = $this->userWith(null, 'approve_material_request');
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+
+        $this->actingAs($user)->post('/material-requests', [
+            'items' => [['material_id' => $material->id, 'qty' => $requestedQty]],
+        ])->assertRedirect('/material-requests');
+        $request = MaterialRequest::query()->firstOrFail();
+        $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve")->assertRedirect();
+
+        $this->receiveStock($user, $origin, $material, $stockQty ?? $requestedQty);
+
+        return [$user, $origin, $destination, $material, $request];
+    }
+
+    private function stockedMaterial(User $user, Warehouse $origin, int $qty): Material
+    {
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $this->receiveStock($user, $origin, $material, $qty);
+
+        return $material;
+    }
+
+    private function receiveStock(User $user, Warehouse $origin, Material $material, int $qty): void
+    {
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'qty' => $qty,
+            'reason' => 'Penerimaan awal',
+        ])->assertRedirect();
+    }
+
+    private function itemFor(Material $material): SuratJalanItem
+    {
+        return SuratJalanItem::query()->where('material_id', $material->id)->latest('id')->firstOrFail();
+    }
+
+    /** @return array{Warehouse, Warehouse} */
+    private function warehousesFor(Mitra $mitra): array
+    {
+        return $this->asThc(fn (): array => [
+            Warehouse::factory()->create(['mitra_id' => $mitra->id]),
+            Warehouse::factory()->create(['mitra_id' => $mitra->id]),
+        ]);
+    }
+
+    private function userWith(?Mitra $mitra, string ...$permissions): User
+    {
+        return User::factory()->create([
+            'mitra_id' => $mitra?->id,
+            'grup_id' => $this->groupWith(...$permissions)->id,
+        ]);
+    }
+
+    private function groupWith(string ...$permissions): Grup
+    {
+        $group = Grup::factory()->create();
+        $group->izins()->attach(collect($permissions)->map(
+            fn (string $permission) => Izin::query()->firstOrCreate(['kode' => $permission], ['nama' => $permission])->id,
+        )->all());
+
+        return $group;
+    }
+
+    private function asThc(Closure $callback): mixed
+    {
+        app(TenantDatabaseContext::class)->set(null, true);
+
+        try {
+            return $callback();
+        } finally {
+            app(TenantDatabaseContext::class)->set(null, false);
+        }
+    }
+}
