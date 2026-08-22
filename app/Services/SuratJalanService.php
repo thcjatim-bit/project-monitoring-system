@@ -20,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 class SuratJalanService
 {
+    public function __construct(private readonly MaterialInventoryService $inventory) {}
+
     /** @param array{warehouse_asal_id:int, warehouse_tujuan_id:int, tanggal:string, pengirim:string, project_id?:int|null, material_request_id?:int|null, sopir?:string|null, plat_nomor?:string|null, items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null}>} $data */
     public function issueDirect(User $actor, array $data): SuratJalan
     {
@@ -258,6 +260,7 @@ class SuratJalanService
         if ($origin->id === $destination->id) {
             throw ValidationException::withMessages(['warehouse_tujuan_id' => 'Warehouse tujuan harus berbeda dari asal.']);
         }
+        $this->ensureEachDrumAppearsOnce($data['items']);
 
         $tanggal = CarbonImmutable::parse($data['tanggal']);
         $mitraId = $origin->mitra_id ?? $destination->mitra_id;
@@ -294,7 +297,7 @@ class SuratJalanService
             $this->ensurePositiveQuantity((string) $itemData['qty']);
             $material = Material::query()->findOrFail($itemData['material_id']);
             $deviation = $deviations[(int) $itemData['material_id']] ?? null;
-            $item = $this->createItem($suratJalan, $material, $origin, $itemData, $mitraId, $deviation);
+            $item = $this->createItem($actor, $suratJalan, $material, $origin, $itemData, $mitraId, $deviation);
             $this->moveToTransit($actor, $suratJalan, $item, $origin, $mitraId);
         }
 
@@ -474,7 +477,7 @@ class SuratJalanService
     }
 
     /** @param array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null} $data */
-    private function createItem(SuratJalan $suratJalan, Material $material, Warehouse $origin, array $data, ?int $mitraId, ?string $deviation = null): SuratJalanItem
+    private function createItem(User $actor, SuratJalan $suratJalan, Material $material, Warehouse $origin, array $data, ?int $mitraId, ?string $deviation = null): SuratJalanItem
     {
         $qty = (string) $data['qty'];
         $item = [
@@ -508,15 +511,44 @@ class SuratJalanService
             if ($drum === null || $drum->lokasi_tipe !== 'warehouse' || (int) $drum->lokasi_id !== $origin->id) {
                 throw ValidationException::withMessages(['items' => 'Drum tidak tersedia di Warehouse asal.']);
             }
-            if ((float) $drum->sisa !== (float) $qty) {
-                throw ValidationException::withMessages(['items' => 'Transfer harus membawa seluruh sisa Drum. Potong Drum terlebih dahulu.']);
-            }
-            $item['drum_id'] = $drum->id;
+            $carrier = $this->drumForItem($actor, $suratJalan, $origin, $drum, $qty);
+            $item['drum_id'] = $carrier->id;
+            $item['qty'] = $this->formatQuantity((float) $carrier->sisa);
         } else {
             throw ValidationException::withMessages(['items' => 'Jenis material tidak didukung.']);
         }
 
         return SuratJalanItem::query()->create($item);
+    }
+
+    /**
+     * Drum yang menjadi identitas baris Surat Jalan. Qty di bawah sisa melahirkan turunan
+     * yang berangkat sementara induknya tinggal di gudang asal; qty tepat sama dengan sisa
+     * mengirim Drum itu sendiri. Baris selalu membawa seluruh sisa Drum yang berangkat.
+     */
+    private function drumForItem(User $actor, SuratJalan $suratJalan, Warehouse $origin, Drum $drum, string $qty): Drum
+    {
+        $sisa = (float) $drum->sisa;
+        if ($sisa + 0.0005 < (float) $qty) {
+            throw ValidationException::withMessages(['items' => 'Qty melebihi sisa Drum.']);
+        }
+        if ((float) $qty + 0.0005 >= $sisa) {
+            return $drum;
+        }
+
+        return $this->inventory->splitDrum($actor, $origin, $drum->drum_id, $qty, 'Surat Jalan '.$suratJalan->nomor);
+    }
+
+    /** @param array<int,array{drum_id?:string|null}> $items */
+    private function ensureEachDrumAppearsOnce(array $items): void
+    {
+        $drumIds = array_values(array_filter(
+            array_map(fn (array $item): ?string => $item['drum_id'] ?? null, $items),
+            fn (?string $drumId): bool => $drumId !== null && $drumId !== '',
+        ));
+        if (count($drumIds) !== count(array_unique($drumIds))) {
+            throw ValidationException::withMessages(['items' => 'Satu Drum hanya boleh muncul sekali per Surat Jalan.']);
+        }
     }
 
     private function normalizeNote(?string $note): ?string

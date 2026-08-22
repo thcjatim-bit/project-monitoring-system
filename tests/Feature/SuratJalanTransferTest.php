@@ -7,6 +7,7 @@ use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Material;
 use App\Models\MaterialSn;
+use App\Models\MaterialTransaksi;
 use App\Models\Mitra;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -280,6 +281,219 @@ class SuratJalanTransferTest extends TestCase
         ]);
     }
 
+    public function test_issuing_less_than_the_drum_remainder_splits_a_child_drum_that_carries_the_line(): void
+    {
+        [$origin, $destination, $material, $user] = $this->warehouseWithDrum('DRM-SPLIT-001', '200');
+
+        $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $material->id, 'qty' => '80', 'drum_id' => 'DRM-SPLIT-001'],
+            ],
+        ])->assertRedirect();
+
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $parent = Drum::query()->where('drum_id', 'DRM-SPLIT-001')->firstOrFail();
+        $child = Drum::query()->where('drum_id', 'DRM-SPLIT-001-1')->firstOrFail();
+
+        $this->assertSame($parent->id, $child->induk_drum_id);
+        $this->assertSame('80.000', $child->panjang_awal);
+        $this->assertSame('80.000', $child->sisa);
+        $this->assertSame('transit', $child->lokasi_tipe);
+        $this->assertSame($suratJalanId, (int) $child->lokasi_id);
+
+        $this->assertSame('120.000', $parent->sisa);
+        $this->assertSame('200.000', $parent->panjang_awal);
+        $this->assertSame('warehouse', $parent->lokasi_tipe);
+        $this->assertSame($origin->id, (int) $parent->lokasi_id);
+        $this->assertSame(200.0, (float) $parent->sisa + (float) $child->sisa);
+
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'surat_jalan_id' => $suratJalanId,
+            'material_id' => $material->id,
+            'drum_id' => $child->id,
+            'qty' => '80.000',
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $origin->id,
+            'qty' => '120.000',
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'transit',
+            'lokasi_id' => $suratJalanId,
+            'qty' => '80.000',
+        ]);
+        $this->assertSame(2, MaterialTransaksi::query()->where('jenis_transaksi', 'drum_split')->count());
+    }
+
+    public function test_issuing_exactly_the_drum_remainder_sends_the_drum_itself_without_a_child(): void
+    {
+        [$origin, $destination, $material, $user] = $this->warehouseWithDrum('DRM-SPLIT-002', '200');
+
+        $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $material->id, 'qty' => '200', 'drum_id' => 'DRM-SPLIT-002'],
+            ],
+        ])->assertRedirect();
+
+        $drum = Drum::query()->where('drum_id', 'DRM-SPLIT-002')->firstOrFail();
+        $this->assertSame(1, Drum::query()->count());
+        $this->assertSame('transit', $drum->lokasi_tipe);
+        $this->assertSame('200.000', $drum->sisa);
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'surat_jalan_id' => $suratJalanId,
+            'drum_id' => $drum->id,
+            'qty' => '200.000',
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $origin->id,
+            'qty' => '0.000',
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'transit',
+            'lokasi_id' => $suratJalanId,
+            'qty' => '200.000',
+        ]);
+        $this->assertSame(0, MaterialTransaksi::query()->where('jenis_transaksi', 'drum_split')->count());
+    }
+
+    public function test_issuing_more_than_the_drum_remainder_is_rejected(): void
+    {
+        [$origin, $destination, $material, $user] = $this->warehouseWithDrum('DRM-SPLIT-003', '200');
+
+        $this->actingAs($user)
+            ->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'tanggal' => '2026-08-15',
+                'pengirim' => 'Petugas Gudang',
+                'items' => [
+                    ['material_id' => $material->id, 'qty' => '250', 'drum_id' => 'DRM-SPLIT-003'],
+                ],
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+        $this->assertSame(1, Drum::query()->count());
+        $this->assertSame('200.000', Drum::query()->where('drum_id', 'DRM-SPLIT-003')->value('sisa'));
+    }
+
+    public function test_the_same_drum_cannot_appear_twice_in_one_surat_jalan(): void
+    {
+        [$origin, $destination, $material, $user] = $this->warehouseWithDrum('DRM-SPLIT-004', '200');
+
+        $this->actingAs($user)
+            ->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'tanggal' => '2026-08-15',
+                'pengirim' => 'Petugas Gudang',
+                'items' => [
+                    ['material_id' => $material->id, 'qty' => '50', 'drum_id' => 'DRM-SPLIT-004'],
+                    ['material_id' => $material->id, 'qty' => '150', 'drum_id' => 'DRM-SPLIT-004'],
+                ],
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+        $this->assertSame(1, Drum::query()->count());
+        $this->assertSame('200.000', Drum::query()->where('drum_id', 'DRM-SPLIT-004')->value('sisa'));
+    }
+
+    public function test_a_failure_after_a_split_leaves_no_orphan_child_drum(): void
+    {
+        [$origin, $destination, $material, $user] = $this->warehouseWithDrum('DRM-SPLIT-005', '200');
+        $serialMaterial = Material::factory()->create(['jenis' => 'ber_sn']);
+
+        $this->actingAs($user)
+            ->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'tanggal' => '2026-08-15',
+                'pengirim' => 'Petugas Gudang',
+                'items' => [
+                    ['material_id' => $material->id, 'qty' => '80', 'drum_id' => 'DRM-SPLIT-005'],
+                    ['material_id' => $serialMaterial->id, 'qty' => '1', 'serial_number' => 'SN-TIDAK-ADA'],
+                ],
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+        $this->assertDatabaseCount('surat_jalan_items', 0);
+        $this->assertSame(1, Drum::query()->count());
+        $this->assertSame('200.000', Drum::query()->where('drum_id', 'DRM-SPLIT-005')->value('sisa'));
+        $this->assertSame(0, MaterialTransaksi::query()->where('jenis_transaksi', 'drum_split')->count());
+    }
+
+    public function test_returning_part_of_a_received_drum_splits_a_child_at_the_returning_warehouse(): void
+    {
+        [$origin, $destination, $material, $user] = $this->warehouseWithDrum('DRM-SPLIT-006', '200');
+        $thc = $this->thcUserWithWarehousePermission();
+        $origin->users()->attach($thc);
+        $destination->users()->attach($thc);
+
+        $this->actingAs($user)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $material->id, 'qty' => '200', 'drum_id' => 'DRM-SPLIT-006'],
+            ],
+        ])->assertRedirect();
+
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        $itemId = DB::table('surat_jalan_items')->where('surat_jalan_id', $suratJalanId)->value('id');
+        $this->actingAs($user)->post("/warehouse/transfers/{$suratJalanId}/receive")->assertRedirect();
+
+        $this->actingAs($thc)->post("/warehouse/transfers/{$suratJalanId}/return", [
+            'tanggal' => '2026-08-16',
+            'pengirim' => 'Petugas THC',
+            'items' => [['surat_jalan_item_id' => $itemId, 'qty' => '80']],
+        ])->assertRedirect();
+
+        $returnId = DB::table('surat_jalans')->where('retur_dari_id', $suratJalanId)->value('id');
+        $parent = Drum::query()->where('drum_id', 'DRM-SPLIT-006')->firstOrFail();
+        $child = Drum::query()->where('drum_id', 'DRM-SPLIT-006-1')->firstOrFail();
+
+        $this->assertSame('120.000', $parent->sisa);
+        $this->assertSame('warehouse', $parent->lokasi_tipe);
+        $this->assertSame($destination->id, (int) $parent->lokasi_id);
+        $this->assertSame('80.000', $child->sisa);
+        $this->assertSame('transit', $child->lokasi_tipe);
+        $this->assertSame($returnId, (int) $child->lokasi_id);
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'surat_jalan_id' => $returnId,
+            'drum_id' => $child->id,
+            'qty' => '80.000',
+        ]);
+        $this->assertDatabaseHas('material_stoks', [
+            'warehouse_id' => $destination->id,
+            'material_id' => $material->id,
+            'lokasi_tipe' => 'warehouse',
+            'lokasi_id' => $destination->id,
+            'qty' => '120.000',
+        ]);
+    }
+
     public function test_receiving_part_of_a_transfer_leaves_the_residual_in_transit_until_it_is_resolved_as_lost(): void
     {
         [$origin, $destination, $material, $user] = $this->issueOrdinaryTransfer();
@@ -527,6 +741,27 @@ class SuratJalanTransferTest extends TestCase
             'sopir' => 'Budi',
             'plat_nomor' => 'L 1234 THC',
             'items' => [['material_id' => $material->id, 'qty' => '4']],
+        ])->assertRedirect();
+
+        return [$origin, $destination, $material, $user];
+    }
+
+    /** @return array{0:Warehouse,1:Warehouse,2:Material,3:User} */
+    private function warehouseWithDrum(string $drumId, string $panjang): array
+    {
+        $mitra = Mitra::factory()->create();
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $material = Material::factory()->create(['jenis' => 'drum_kabel']);
+        $user = $this->userWithWarehousePermission($mitra);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'drum_id' => $drumId,
+            'qty' => $panjang,
+            'reason' => 'Penerimaan drum',
         ])->assertRedirect();
 
         return [$origin, $destination, $material, $user];
