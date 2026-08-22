@@ -85,19 +85,61 @@ identitas secara independen, penolakan lintas profile, koneksi default bukan
 profile tak dikenal, checkout hilang, dan bahwa output tidak pernah memuat nilai
 password. Suite ini offline: tidak menyentuh server, database, maupun service.
 
-## Belum terpasang di pipeline
+## Terpasang di pipeline
 
-Guard **belum** dipanggil oleh `/usr/local/sbin/pms-deploy`. Saat ini
-`pms-deploy` hanya memverifikasi worktree bersih dan asal commit; tidak ada
-assertion bahwa cached config hasil `php artisan optimize` benar-benar milik
-production, dan `pms-deploy status` tidak gagal saat terjadi mismatch.
+`/usr/local/sbin/pms-deploy` memanggil guard dua kali dalam satu deploy:
 
-Pemasangannya adalah perubahan infrastruktur di luar profile `pms-install` yang
-disetujui, sehingga menjadi milik platform/deployment operator sesuai #63 —
-bukan diubah manual oleh worker. Hook yang disarankan: jalankan
-`verify-runtime-boundary.sh production` (a) sebagai preflight sebelum switch,
-dan (b) setelah `php artisan optimize` serta reload service, dengan kegagalan
-membatalkan deploy sebelum switch.
+- **preflight**, sebelum checkout commit baru — menolak deploy kalau runtime yang
+  sedang berjalan sudah melanggar boundary;
+- **gate sesudah deploy**, setelah `php artisan optimize` dan restart service —
+  menolak kalau cached config yang baru dibangun bukan milik production.
+
+Keduanya lewat `production_boundary_guard()`, yang menjalankan
+`scripts/verify-runtime-boundary.sh production` dari checkout terpasang sebagai
+user deploy. Kegagalan di preflight membatalkan deploy sebelum apa pun berubah.
+
+Konsekuensi yang perlu diketahui: karena preflight membaca script dari checkout
+yang **sedang terpasang**, perbaikan pada guard baru berlaku setelah satu deploy
+berhasil. Guard tidak bisa memperbaiki dirinya sendiri lewat deploy yang sedang
+diblokir olehnya.
+
+## Pemulihan: cached config production hilang
+
+**Konteks tiket**: [Preflight deploy buntu sendiri ketika cached config production hilang (#122)](https://github.com/thcjatim-bit/project-monitoring-system/issues/122)
+
+Preflight mensyaratkan config **CACHED**, sementara satu-satunya jalur yang
+membangun cache itu (`php artisan optimize`) berada di dalam deploy, sesudah
+preflight. Kalau `bootstrap/cache/config.php` hilang, deploy terkunci dan tidak
+bisa membuka kuncinya sendiri.
+
+Penyebab yang sudah terjadi: `composer install` dijalankan langsung di checkout
+production (22 Agustus 2026). `post-autoload-dump` menulis ulang `packages.php`
+dan `services.php` lalu menghapus `config.php`, tanpa membangunnya kembali.
+
+Pemulihannya:
+
+```bash
+ssh pms-prod "sudo -n /usr/local/sbin/pms-deploy recover-config-cache"
+```
+
+Perintah itu membangun ulang cache dari `.env` production, lalu menjalankan guard
+penuh untuk membuktikan hasilnya sah. Sesudah itu deploy normal bisa dijalankan.
+
+Dua sifatnya yang disengaja:
+
+- **Menolak kalau cache sudah ada.** Cache yang ada tapi salah adalah insiden #65,
+  dan membangun ulang di atasnya akan menimpa bukti sebelum ada yang membacanya.
+  Periksa dulu dengan guard; perintah ini hanya untuk cache yang benar-benar hilang.
+- **Fail-closed.** Kalau guard menolak cache yang baru dibangun, cache itu dihapus
+  lagi dan production ditinggalkan tanpa cache. Artifact yang tidak bisa
+  dipertanggungjawabkan lebih buruk daripada tidak ada artifact sama sekali.
+
+Aplikasi tetap melayani request selama tidak ada cache — Laravel membaca `.env`
+per request. Yang terhenti adalah kemampuan deploy, bukan layanannya.
+
+Guard sendiri tidak berubah sama sekali oleh #122: ia tetap assertion murni,
+tidak pernah membangun cache. Yang membangun adalah `pms-deploy`, dan hanya
+ketika operator memintanya secara eksplisit.
 
 ## Temuan operasional terbuka
 
