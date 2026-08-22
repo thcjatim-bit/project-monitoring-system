@@ -149,19 +149,40 @@
         // Baris pertama selalu ada sebagai baris ketikan operator, dan field-nya wajib diisi. Begitu
         // prefill mengisi form, baris itu tinggal hampa tapi tetap menahan submit; dinonaktifkan
         // supaya lepas dari validasi HTML dan tidak ikut terkirim sebagai item kosong.
-        const firstRow = items.querySelector('[data-transfer-row]');
-        const firstRowIsEmpty = () => [...firstRow.querySelectorAll('select, input:not([type="hidden"])')]
+        // Baris pertama dicari ulang setiap kali, bukan disimpan sekali: baris pertama hasil old()
+        // bisa saja baris prefill yang ikut terbuang, dan penggantinya yang harus dilayani.
+        const firstRow = () => items.querySelector('[data-transfer-row]');
+        const firstRowIsEmpty = () => [...firstRow().querySelectorAll('select, input:not([type="hidden"])')]
             .every((field) => field.value === '');
         const idleFirstRow = (idle) => {
-            firstRow.hidden = idle;
-            firstRow.querySelectorAll('select, input').forEach((field) => { field.disabled = idle; });
+            const row = firstRow();
+            row.hidden = idle;
+            row.querySelectorAll('select, input').forEach((field) => { field.disabled = idle; });
         };
+        // Form selalu menyisakan satu baris untuk diketik operator; tanpa itu tidak ada yang bisa
+        // diisi dan Surat Jalan tidak bisa terbit. Baris pertama hasil old() bisa berupa baris
+        // prefill, jadi baris itu pun bisa ikut terbuang.
+        const ensureTypingRow = () => { if (firstRow() === null) buildRow('manual'); };
         // Membuang baris prefill selalu berarti baris pertama dibutuhkan kembali, jadi keduanya satu langkah.
         const dropPrefillRows = () => {
             items.querySelectorAll('[data-row-asal="request"]').forEach((row) => row.remove());
             transferForm.querySelector('[data-fraction-notice]')?.remove();
+            ensureTypingRow();
             idleFirstRow(false);
         };
+        // Baris prefill juga pergi satu per satu lewat tombolnya sendiri, bukan hanya lewat ganti
+        // pilihan. Baris prefill terakhir yang dibuang berarti prefill habis, dan itu ditempuh lewat
+        // jalur yang sama supaya "prefill habis" tidak pernah berarti dua hal berbeda. Membuang baris
+        // ketikan operator bukan itu — peringatan pecahan bisa hidup tanpa satu pun baris prefill —
+        // jadi yang dijaga hanya barisnya. Terdaftar sebelum penandaan menyimpang, supaya baris
+        // pertama sudah pulih saat penandaan menghitung ulang.
+        items.addEventListener('click', (event) => {
+            if (! event.target.matches('[data-remove-item]')) return;
+            const prefillHabis = event.target.closest('[data-transfer-row]')?.dataset.rowAsal === 'request'
+                && items.querySelector('[data-row-asal="request"]') === null;
+            if (prefillHabis) { dropPrefillRows(); return; }
+            ensureTypingRow();
+        });
         const unlockProject = () => { transferForm.querySelector('[data-project-lock]')?.remove(); projectSelect.disabled = effectiveMitra() === null; };
         const lockProject = (projectId) => {
             projectSelect.value = String(projectId); projectSelect.disabled = true;

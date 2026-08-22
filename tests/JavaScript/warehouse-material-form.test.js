@@ -473,7 +473,7 @@ const requestDrivenPage = (t) => openPage(t, `
             <option value="56">PRJ-2608-0002 — Beta</option>
         </select>
         <div data-transfer-items>
-            <div class="ui-list__item" data-transfer-row>
+            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
                 <label>Material<select name="items[0][material_id]" required>
                     <option value="">Pilih Material</option>${materialOptions}
                 </select></label>
@@ -601,6 +601,79 @@ test('membatalkan pilihan request mengaktifkan kembali baris pertama', (t) => {
     assert.equal(first.hidden, false);
     assert.equal(first.querySelector('select').disabled, false);
     assert.equal(first.querySelector('select').required, true, 'baris ketikan operator kembali wajib diisi');
+});
+
+/** Baris yang aktif dan wajib diisi adalah yang benar-benar ikut terkirim ke server. */
+const wajibDiisiAktif = (window) => [...window.document.querySelectorAll('[data-transfer-row] [required]')]
+    .filter((field) => field.closest('[data-identity]') === null)
+    .filter((field) => ! field.disabled);
+
+const buangSemuaBarisPrefill = (window) => prefillRows(window)
+    .forEach((row) => row.querySelector('[data-remove-item]').click());
+
+test('membuang semua baris prefill memulihkan baris pertama supaya form bisa disubmit', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    buangSemuaBarisPrefill(window);
+
+    assert.equal(rows(window).length, 1, 'baris pertama tidak boleh ikut hilang bersama baris prefill');
+    const first = rows(window)[0];
+    assert.equal(first.hidden, false, 'operator harus punya baris yang terlihat untuk diketik');
+    assert.equal(first.querySelector('select').disabled, false);
+    assert.equal(first.querySelector('input[type="number"]').disabled, false);
+    assert.equal(first.querySelector('select').value, '', 'baris pertama kembali kosong, siap diketik');
+    assert.equal(first.querySelector('input[type="number"]').value, '');
+
+    choose(window, first.querySelector('select'), '1');
+    first.querySelector('input[type="number"]').value = '4';
+
+    assert.deepEqual(
+        wajibDiisiAktif(window).map((f) => f.value),
+        ['1', '4'],
+        'Material dan Qty baris pertama harus aktif dan terisi supaya form terkirim',
+    );
+});
+
+test('membuang baris prefill terakhir menutup peringatan pecahan yang menceritakannya', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '93');
+    assert.ok(field(window, '[data-fraction-notice]'), 'prasyarat: request ber-sisa pecahan memberi peringatan');
+
+    buangSemuaBarisPrefill(window);
+
+    assert.equal(field(window, '[data-fraction-notice]'), null, 'peringatan tidak boleh menceritakan baris yang sudah tidak ada');
+});
+
+test('membuang baris ketikan operator tidak menutup peringatan pecahan yang berdiri sendiri', (t) => {
+    const window = requestDrivenPage(t);
+    // Sisa 0,5 pcs ber-SN tidak melahirkan baris prefill sama sekali; peringatannya tetap berlaku.
+    choose(window, field(window, '[data-request-select]'), '94');
+    window.document.querySelector('[data-add-item]').click();
+
+    rows(window).at(-1).querySelector('[data-remove-item]').click();
+
+    assert.ok(field(window, '[data-fraction-notice]'), 'peringatan pecahan bisa hidup tanpa baris prefill');
+    assert.equal(rows(window).length, 1);
+});
+
+test('membuang semua baris prefill tidak menyentuh baris pertama yang sudah diketik operator', (t) => {
+    const window = requestDrivenPage(t);
+    const first = rows(window)[0];
+    choose(window, first.querySelector('select'), '3');
+    first.querySelector('input[type="number"]').value = '7';
+    first.querySelector('[data-catatan-input]').value = 'kirim susulan';
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    buangSemuaBarisPrefill(window);
+
+    assert.equal(rows(window).length, 1);
+    assert.equal(first.hidden, false);
+    assert.equal(first.querySelector('select').disabled, false);
+    assert.equal(first.querySelector('select').value, '3', 'material ketikan operator tidak boleh dikosongkan');
+    assert.equal(first.querySelector('input[type="number"]').value, '7');
+    assert.equal(first.querySelector('[data-catatan-input]').value, 'kirim susulan');
+    assert.equal(identity(first, 'drum_id').hidden, false, 'kotak identitas ketikan operator tetap terbuka');
 });
 
 test('baris tambahan setelah prefill tidak mewarisi keadaan baris pertama yang dinonaktifkan', (t) => {
@@ -1039,4 +1112,31 @@ test('baris tambahan tidak mewarisi kunci material baris prefill yang dipulihkan
         null,
         'kunci material milik baris prefill, bukan warisan untuk baris berikutnya',
     );
+});
+
+test('membuang baris prefill yang dipulihkan old() menyisakan baris ketikan operator apa adanya', (t) => {
+    const window = halamanSetelahDitolak(t);
+
+    rows(window)[0].querySelector('[data-remove-item]').click();
+
+    const tersisa = rows(window);
+    assert.equal(tersisa.length, 1, 'baris ketikan operator sudah cukup; tidak perlu baris tambahan');
+    assert.equal(tersisa[0].dataset.rowAsal, 'manual');
+    assert.equal(tersisa[0].querySelector('input[type="number"]').value, '5', 'ketikan operator tidak boleh tersentuh');
+});
+
+test('membuang setiap baris yang dipulihkan old() tetap menyisakan satu baris siap diketik', (t) => {
+    const window = halamanSetelahDitolak(t);
+
+    rows(window).forEach((row) => row.querySelector('[data-remove-item]').click());
+
+    const tersisa = rows(window);
+    assert.equal(tersisa.length, 1, 'baris pertama hasil old() bisa berupa baris prefill; penggantinya harus ada');
+    assert.equal(tersisa[0].hidden, false);
+    const material = tersisa[0].querySelector('select');
+    assert.equal(material.disabled, false, 'baris pengganti tidak boleh mewarisi kunci material baris prefill');
+    assert.equal(material.value, '');
+    assert.equal(tersisa[0].querySelector('input[type="number"]').value, '');
+    assert.equal(tersisa[0].querySelector('input[type="hidden"][name$="[material_id]"]'), null);
+    assert.equal(tersisa[0].dataset.rowAsal, 'manual');
 });
