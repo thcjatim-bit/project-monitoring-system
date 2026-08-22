@@ -6,6 +6,7 @@ use App\Models\Material;
 use App\Models\MaterialRequest;
 use App\Models\Project;
 use App\Rules\ActiveMaterial;
+use App\Rules\WholeMaterialQty;
 use App\Services\MaterialRequestService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,7 +40,7 @@ class MaterialRequestController extends Controller
             'catatan' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.material_id' => ['required', 'integer', new ActiveMaterial],
-            'items.*.qty' => ['required', 'numeric', 'gt:0'],
+            'items.*.qty' => ['required', 'numeric', 'gt:0', new WholeMaterialQty],
             'items.*.catatan' => ['nullable', 'string', 'max:1000'],
         ]);
         $service->submit($request->user(), $data);

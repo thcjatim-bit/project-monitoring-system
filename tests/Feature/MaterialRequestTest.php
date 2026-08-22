@@ -44,6 +44,48 @@ class MaterialRequestTest extends TestCase
         $this->assertSame($mitra->id, $request->items->first()->mitra_id);
     }
 
+    public function test_serial_number_material_rejects_a_fractional_qty(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create(['jenis' => 'ber_sn']);
+        $user = $this->userWith('create_material_request', $mitra);
+
+        $this->actingAs($user)
+            ->post('/material-requests', ['items' => [['material_id' => $material->id, 'qty' => '2.5']]])
+            ->assertSessionHasErrors('items.0.qty');
+
+        $this->assertSame(0, MaterialRequest::query()->count());
+    }
+
+    public function test_serial_number_material_accepts_a_whole_qty(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create(['jenis' => 'ber_sn']);
+        $user = $this->userWith('create_material_request', $mitra);
+
+        $this->actingAs($user)
+            ->post('/material-requests', ['items' => [['material_id' => $material->id, 'qty' => '3']]])
+            ->assertRedirect('/material-requests');
+
+        $this->assertSame('3.000', MaterialRequest::query()->with('items')->firstOrFail()->items->first()->qty);
+    }
+
+    public function test_fractional_qty_names_the_row_that_is_wrong_not_the_whole_request(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $biasa = Material::factory()->create(['jenis' => 'biasa']);
+        $berSn = Material::factory()->create(['jenis' => 'ber_sn']);
+        $user = $this->userWith('create_material_request', $mitra);
+
+        $this->actingAs($user)
+            ->post('/material-requests', ['items' => [
+                ['material_id' => $biasa->id, 'qty' => '12.5'],
+                ['material_id' => $berSn->id, 'qty' => '0.5'],
+            ]])
+            ->assertSessionHasErrors('items.1.qty')
+            ->assertSessionDoesntHaveErrors('items.0.qty');
+    }
+
     public function test_request_rows_are_isolated_between_mitras_even_for_raw_queries(): void
     {
         $mitraA = Mitra::factory()->create();

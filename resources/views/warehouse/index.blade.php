@@ -139,6 +139,7 @@
         // Membuang baris prefill selalu berarti baris pertama dibutuhkan kembali, jadi keduanya satu langkah.
         const dropPrefillRows = () => {
             items.querySelectorAll('[data-row-asal="request"]').forEach((row) => row.remove());
+            transferForm.querySelector('[data-fraction-notice]')?.remove();
             idleFirstRow(false);
         };
         const unlockProject = () => { transferForm.querySelector('[data-project-lock]')?.remove(); projectSelect.disabled = effectiveMitra() === null; };
@@ -159,6 +160,29 @@
             materialSelect.after(locked);
             row.querySelector('input[type="number"]').value = String(qty);
             materialSelect.dispatchEvent(new Event('change'));
+        };
+        // Sisa pecahan pada material ber-SN adalah data cacat dari hulu (ADR-0025), bukan penyimpangan
+        // Surat Jalan: mengirim 2 dari sisa 2,5 tetap kirim bertahap, dan server tidak menandainya apa
+        // pun saat terbit. Karena itu peringatannya punya salurannya sendiri di tingkat form, terpisah
+        // dari markRow — memakai ulang saluran penyimpangan akan membuat layar dan server beda kesimpulan.
+        const angka = (nilai) => String(Math.round(nilai * 1000) / 1000).replace('.', ',');
+        const materialLabel = (materialId) => rowTemplate?.querySelector('option[value="' + materialId + '"]')?.textContent ?? 'material #' + materialId;
+        const reportFractions = (request, pecahan) => {
+            transferForm.querySelector('[data-fraction-notice]')?.remove();
+            if (pecahan.length === 0) return;
+            const notice = document.createElement('div');
+            notice.className = 'ui-state ui-state--warning';
+            notice.setAttribute('data-fraction-notice', ''); notice.setAttribute('role', 'status');
+            // Angkanya, sebabnya, dan siapa yang membetulkan — operator Surat Jalan bukan pihak yang salah.
+            notice.replaceChildren(...pecahan.map(({ item, barisan }) => {
+                const kalimat = document.createElement('p');
+                kalimat.textContent = 'Request #' + request.id + ' mencatat ' + angka(item.sisa) + ' ' + materialLabel(item.material_id)
+                    + ' — material ber-Serial Number tidak bisa pecahan. '
+                    + (barisan === 0 ? 'Tidak ada pcs yang dapat ter-prefill' : barisan + ' pcs ter-prefill')
+                    + '; sisa ' + angka(item.sisa - barisan) + ' tidak dapat dikirim dan perlu dibetulkan pada Request Material.';
+                return kalimat;
+            }));
+            items.before(notice);
         };
         // Penyimpangan ditandai, tidak diblokir (ADR-0024). Klasifikasinya sengaja meniru
         // SuratJalanService::classifyRequestDeviations(): diukur per material atas seluruh baris
@@ -216,13 +240,17 @@
             if (!request) return;
             if (request.project_id !== null) lockProject(request.project_id);
             // Qty prefill adalah sisa, material bersisa 0 tidak muncul, dan baris ber-SN dipecah satu baris per pcs.
+            const pecahan = [];
             request.items.filter((item) => item.sisa > 0).forEach((item) => {
                 const berSn = item.jenis === 'ber_sn';
                 // Floor, bukan round: sisa 2,5 pcs ber-SN berarti dua pcs yang benar-benar ada.
                 // Membulatkan ke atas menaikkan total qty diam-diam dan justru melahirkan penyimpangan.
                 const barisan = berSn ? Math.floor(item.sisa) : 1;
+                // Yang dibuang floor tidak boleh lenyap tanpa jejak: ia dilaporkan di tingkat form.
+                if (berSn && ! Number.isInteger(item.sisa)) pecahan.push({ item, barisan });
                 for (let pcs = 0; pcs < barisan; pcs += 1) prefillRow(item, berSn ? 1 : item.sisa);
             });
+            reportFractions(request, pecahan);
             if (items.querySelector('[data-row-asal="request"]') !== null && firstRowIsEmpty()) idleFirstRow(true);
             markDeviations();
         };

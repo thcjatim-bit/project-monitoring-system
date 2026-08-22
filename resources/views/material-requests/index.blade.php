@@ -31,7 +31,7 @@
                                 <select name="items[0][material_id]" required>
                                     <option value="">Pilih Material</option>
                                     @foreach ($materials as $material)
-                                        <option value="{{ $material->id }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>
+                                        <option value="{{ $material->id }}" data-kind="{{ $material->jenis }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>
                                     @endforeach
                                 </select>
                             </label>
@@ -49,7 +49,7 @@
                         <select name="items[__INDEX__][material_id]" required>
                             <option value="">Pilih Material</option>
                             @foreach ($materials as $material)
-                                <option value="{{ $material->id }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>
+                                <option value="{{ $material->id }}" data-kind="{{ $material->jenis }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>
                             @endforeach
                         </select>
                     </label>
@@ -64,6 +64,18 @@
                     const template = document.getElementById('material-request-item-template');
                     button?.addEventListener('click', () => {
                         list.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__INDEX__', String(index++)));
+                    });
+                    // Qty material adalah bilangan bulat (ADR-0025). Untuk sementara hanya ber-SN yang
+                    // ditegakkan; jenis lain dan jalur qty lain menyusul di tiket terpisah (#133).
+                    // Ini kenyamanan input, bukan penjaganya: validasi server yang menolak pecahan.
+                    const JENIS_QTY_UTUH = ['ber_sn'];
+                    const PECAHAN_STEP = '0.001';
+                    list?.addEventListener('change', (event) => {
+                        if (! event.target.matches('select')) return;
+                        const utuh = JENIS_QTY_UTUH.includes(event.target.options[event.target.selectedIndex]?.dataset.kind ?? '');
+                        const qty = event.target.closest('.material-request-item').querySelector('input[type="number"]');
+                        qty.step = utuh ? '1' : PECAHAN_STEP;
+                        qty.min = utuh ? '1' : PECAHAN_STEP;
                     });
                 })();
             </script>

@@ -409,6 +409,15 @@ const transferFormData = {
                 label: '#93 — 18 Aug 2026 · 1 item, 1 belum lengkap',
                 items: [{ material_id: 2, jenis: 'ber_sn', diminta: 2.5, terkirim: 0, sisa: 2.5 }],
             },
+            {
+                id: 94,
+                mitra_id: 7,
+                project_id: 55,
+                tanggal: '2026-08-17',
+                status: 'disetujui',
+                label: '#94 — 17 Aug 2026 · 1 item, 1 belum lengkap',
+                items: [{ material_id: 2, jenis: 'ber_sn', diminta: 0.5, terkirim: 0, sisa: 0.5 }],
+            },
         ],
         30: [],
     },
@@ -439,6 +448,7 @@ const requestDrivenPage = (t) => openPage(t, `
             <option value="91">${transferFormData.requests[20][0].label}</option>
             <option value="92">${transferFormData.requests[20][1].label}</option>
             <option value="93">${transferFormData.requests[20][2].label}</option>
+            <option value="94">${transferFormData.requests[20][3].label}</option>
         </select>
         <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
             <option value="">${KOSONG_PROJECT}</option>
@@ -751,4 +761,71 @@ test('request ber-SN dengan sisa pecahan tidak melahirkan pcs yang tidak ada', (
     assert.equal(prefilled.length, 2, 'sisa 2,5 pcs ber-SN: membulatkan ke atas berarti mengarang satu pcs');
     assert.deepEqual(prefilled.map(qtyOf), ['1', '1']);
     assert.deepEqual(prefilled.map(penyimpangan), [null, null], 'prefill tidak pernah menyimpang dari requestnya sendiri');
+});
+
+/** Peringatan sisa pecahan punya salurannya sendiri, terpisah dari penandaan Menyimpang (ADR-0025). */
+const peringatanPecahan = (window) => window.document.querySelector('[data-fraction-notice]')?.textContent ?? null;
+
+test('sisa pecahan ber-SN yang tidak ter-prefill diberitahukan, bukan dibuang diam-diam', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '93');
+
+    const peringatan = peringatanPecahan(window);
+    assert.ok(peringatan, 'sisa 0,5 yang hilang dari prefill harus terbaca operator');
+    assert.match(peringatan, /#93/, 'operator harus tahu request mana yang perlu dibetulkan');
+    assert.match(peringatan, /2,5/, 'angka yang tercatat mitra disebut apa adanya');
+    assert.match(peringatan, /0,5/, 'sisa yang tidak dapat dikirim disebut angkanya');
+    assert.match(peringatan, /ONT/, 'materialnya disebut, bukan sekadar "ada yang pecahan"');
+    assert.match(peringatan, /Request Material/, 'operator harus tahu siapa yang membetulkan');
+});
+
+test('sisa ber-SN di bawah satu pcs tidak melahirkan baris, tapi tetap memberi tahu operator', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '94');
+
+    assert.equal(prefillRows(window).length, 0, 'sisa 0,5 pcs bukan satu pcs yang benar-benar ada');
+    const peringatan = peringatanPecahan(window);
+    assert.ok(peringatan, 'tanpa baris maupun peringatan, request itu lenyap dari layar');
+    assert.match(peringatan, /0,5/);
+});
+
+test('sisa pecahan yang tidak melahirkan baris menyisakan baris pertama untuk diketik operator', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '94');
+
+    const [first] = rows(window);
+    assert.equal(first.hidden, false, 'tidak ada baris prefill, jadi baris ketikan operator tetap dibutuhkan');
+    assert.equal(first.querySelector('select').disabled, false);
+});
+
+test('sisa ber-SN bulat tidak memunculkan peringatan pecahan sama sekali', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    assert.equal(peringatanPecahan(window), null, 'request yang sehat tidak boleh diberi peringatan palsu');
+});
+
+test('peringatan pecahan bukan penandaan menyimpang', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '93');
+
+    const prefilled = prefillRows(window);
+    assert.deepEqual(prefilled.map(penyimpangan), [null, null], 'mengirim 2 dari sisa 2,5 adalah kirim bertahap');
+    assert.deepEqual(prefilled.map((row) => row.classList.contains('ui-list__item--deviating')), [false, false]);
+    assert.deepEqual(prefilled.map(catatanPenyimpangan), [null, null], 'saluran penyimpangan harus tetap bersih');
+});
+
+test('membatalkan pilihan request menghapus peringatan pecahan', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '93');
+    assert.ok(peringatanPecahan(window), 'prasyarat: peringatan tampil');
+
+    choose(window, field(window, '[data-request-select]'), '');
+
+    assert.equal(peringatanPecahan(window), null, 'peringatan yang tertinggal akan berbohong');
 });
