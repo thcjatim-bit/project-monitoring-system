@@ -418,6 +418,15 @@ const transferFormData = {
                 label: '#94 — 17 Aug 2026 · 1 item, 1 belum lengkap',
                 items: [{ material_id: 2, jenis: 'ber_sn', diminta: 0.5, terkirim: 0, sisa: 0.5 }],
             },
+            {
+                id: 95,
+                mitra_id: 7,
+                project_id: 55,
+                tanggal: '2026-08-16',
+                status: 'disetujui',
+                label: '#95 — 16 Aug 2026 · 1 item, 1 belum lengkap',
+                items: [{ material_id: 2, jenis: 'ber_sn', diminta: 1250.5, terkirim: 0, sisa: 1250.5 }],
+            },
         ],
         30: [],
     },
@@ -449,6 +458,7 @@ const requestDrivenPage = (t) => openPage(t, `
             <option value="92">${transferFormData.requests[20][1].label}</option>
             <option value="93">${transferFormData.requests[20][2].label}</option>
             <option value="94">${transferFormData.requests[20][3].label}</option>
+            <option value="95">${transferFormData.requests[20][4].label}</option>
         </select>
         <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
             <option value="">${KOSONG_PROJECT}</option>
@@ -778,6 +788,16 @@ test('sisa pecahan ber-SN yang tidak ter-prefill diberitahukan, bukan dibuang di
     assert.match(peringatan, /0,5/, 'sisa yang tidak dapat dikirim disebut angkanya');
     assert.match(peringatan, /ONT/, 'materialnya disebut, bukan sekadar "ada yang pecahan"');
     assert.match(peringatan, /Request Material/, 'operator harus tahu siapa yang membetulkan');
+});
+
+test('angka peringatan memakai gaya yang sama dengan formatter server, termasuk pemisah ribuan', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '95');
+
+    const peringatan = peringatanPecahan(window);
+    assert.match(peringatan, /1\.250,5/, 'QuantityDisplayFormatter::format() memisah ribuan dengan titik; layar tidak boleh beda gaya');
+    assert.doesNotMatch(peringatan, /1250,5/, 'angka tanpa pemisah ribuan adalah gaya ketiga');
 });
 
 test('sisa ber-SN di bawah satu pcs tidak melahirkan baris, tapi tetap memberi tahu operator', (t) => {
