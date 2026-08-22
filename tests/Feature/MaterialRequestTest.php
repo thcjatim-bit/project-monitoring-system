@@ -206,6 +206,87 @@ class MaterialRequestTest extends TestCase
         $this->assertSame('disetujui', $request->fresh()->status);
     }
 
+    public function test_thc_can_close_an_approved_request_with_a_reason(): void
+    {
+        [$request, $thc] = $this->submittedRequest();
+        $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve");
+
+        $this->actingAs($thc)
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Sisa tidak jadi dikirim, sudah disubstitusi'])
+            ->assertRedirect('/material-requests');
+
+        $request->refresh();
+        $this->assertSame('ditutup', $request->status);
+        $this->assertSame($thc->id, $request->decided_by);
+        $this->assertSame('Sisa tidak jadi dikirim, sudah disubstitusi', $request->decision_note);
+        $this->assertNotNull($request->decided_at);
+
+        $this->actingAs($thc)
+            ->get("/material-requests/{$request->id}")
+            ->assertOk()
+            ->assertSee('Sisa tidak jadi dikirim, sudah disubstitusi');
+    }
+
+    public function test_thc_can_close_a_partially_fulfilled_request(): void
+    {
+        [$request, $thc] = $this->submittedRequest();
+        $this->asThc(fn () => MaterialRequest::query()->whereKey($request->id)->update(['status' => 'terpenuhi_sebagian']));
+
+        $this->actingAs($thc)
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Sisa dibatalkan Mitra'])
+            ->assertRedirect('/material-requests');
+
+        $this->assertSame('ditutup', $request->fresh()->status);
+    }
+
+    public function test_closing_a_request_requires_a_reason(): void
+    {
+        [$request, $thc] = $this->submittedRequest();
+        $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve");
+
+        $this->actingAs($thc)
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => '   '])
+            ->assertRedirect()
+            ->assertSessionHasErrors('catatan');
+
+        $this->actingAs($thc)
+            ->from('/material-requests')
+            ->followingRedirects()
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => '   '])
+            ->assertOk()
+            ->assertSee('Periksa kembali isian form.');
+
+        $this->assertSame('disetujui', $request->fresh()->status);
+    }
+
+    public function test_only_approved_or_partially_fulfilled_requests_can_be_closed(): void
+    {
+        foreach (['diajukan', 'selesai', 'ditolak', 'dibatalkan', 'ditutup'] as $status) {
+            [$request, $thc] = $this->submittedRequest();
+            $this->asThc(fn () => MaterialRequest::query()->whereKey($request->id)->update(['status' => $status]));
+
+            $this->actingAs($thc)
+                ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Tidak jadi dikirim'])
+                ->assertRedirect()
+                ->assertSessionHasErrors('status');
+
+            $this->assertSame($status, $request->fresh()->status);
+        }
+    }
+
+    public function test_mitra_users_cannot_close_a_request(): void
+    {
+        [$request, $thc] = $this->submittedRequest();
+        $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve");
+        $mitraAdmin = $this->userWith('approve_material_request', Mitra::query()->findOrFail($request->mitra_id));
+
+        $this->actingAs($mitraAdmin)
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Kami tutup sendiri'])
+            ->assertForbidden();
+
+        $this->assertSame('disetujui', $request->fresh()->status);
+    }
+
     /** @return array{MaterialRequest, User} */
     private function submittedRequest(): array
     {
@@ -214,7 +295,7 @@ class MaterialRequestTest extends TestCase
         $mitraUser = $this->userWith('create_material_request', $mitra);
         $thc = User::factory()->create([
             'mitra_id' => null,
-            'grup_id' => $this->groupWith('approve_material_request')->id,
+            'grup_id' => $this->groupWith('approve_material_request', 'read_material_request')->id,
         ]);
 
         $this->actingAs($mitraUser)

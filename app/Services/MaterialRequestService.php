@@ -40,6 +40,29 @@ class MaterialRequestService
         });
     }
 
+    public function close(MaterialRequest $request, User $actor, string $note): MaterialRequest
+    {
+        if ($actor->mitra_id !== null) {
+            throw ValidationException::withMessages(['status' => 'Hanya THC yang dapat menutup Request Material.']);
+        }
+
+        return DB::transaction(function () use ($request, $actor, $note): MaterialRequest {
+            $request = MaterialRequest::query()->lockForUpdate()->findOrFail($request->id);
+            if (! in_array($request->status, ['disetujui', 'terpenuhi_sebagian'], true)) {
+                throw ValidationException::withMessages(['status' => 'Hanya Request Material yang disetujui atau terpenuhi sebagian dapat ditutup.']);
+            }
+
+            $request->update([
+                'status' => 'ditutup',
+                'decided_by' => $actor->id,
+                'decided_at' => now(),
+                'decision_note' => $note,
+            ]);
+
+            return $request->fresh(['items', 'decider']);
+        });
+    }
+
     public function decide(MaterialRequest $request, User $actor, string $status, ?string $note): MaterialRequest
     {
         if (! in_array($status, ['disetujui', 'ditolak'], true)) {

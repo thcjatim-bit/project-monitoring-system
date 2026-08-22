@@ -352,6 +352,10 @@ class SuratJalanService
         }
 
         $request = MaterialRequest::query()->with('items')->lockForUpdate()->findOrFail($suratJalan->material_request_id);
+        if ($request->status === 'ditutup') {
+            return;
+        }
+
         $received = SuratJalanItem::query()
             ->whereHas('suratJalan', fn ($query) => $query->where('material_request_id', $request->id))
             ->select('material_id', DB::raw('SUM(qty_diterima) as qty_received'))

@@ -142,6 +142,85 @@ class MaterialRequestFulfillmentTest extends TestCase
         $this->assertSame('selesai', $request->fresh()->status);
     }
 
+    public function test_a_closed_request_cannot_be_referenced_by_a_surat_jalan(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
+        $thc = $this->userWith(null, 'approve_material_request');
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+
+        $this->actingAs($user)->post('/material-requests', [
+            'items' => [['material_id' => $material->id, 'qty' => 4]],
+        ])->assertRedirect('/material-requests');
+        $request = MaterialRequest::query()->firstOrFail();
+
+        $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve")->assertRedirect();
+        $this->actingAs($thc)
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Material disubstitusi'])
+            ->assertRedirect('/material-requests');
+
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'qty' => 4,
+            'reason' => 'Penerimaan awal',
+        ])->assertRedirect();
+
+        $this->actingAs($user)
+            ->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'material_request_id' => $request->id,
+                'tanggal' => '2026-08-15',
+                'pengirim' => 'Petugas Gudang',
+                'items' => [['material_id' => $material->id, 'qty' => 4]],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('status');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+        $this->assertSame('ditutup', $request->fresh()->status);
+    }
+
+    public function test_receiving_an_older_surat_jalan_does_not_reopen_a_closed_request(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
+        $thc = $this->userWith(null, 'approve_material_request');
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+
+        $this->actingAs($user)->post('/material-requests', [
+            'items' => [['material_id' => $material->id, 'qty' => 6]],
+        ])->assertRedirect('/material-requests');
+        $request = MaterialRequest::query()->firstOrFail();
+        $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve")->assertRedirect();
+
+        $this->actingAs($user)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $material->id,
+            'qty' => 6,
+            'reason' => 'Penerimaan awal',
+        ])->assertRedirect();
+
+        $suratJalan = $this->issueForRequest($user, $origin, $destination, $request, $material, 6);
+
+        $this->actingAs($thc)
+            ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Sisa tidak jadi dikirim'])
+            ->assertRedirect('/material-requests');
+
+        $this->actingAs($user)
+            ->post("/warehouse/transfers/{$suratJalan->id}/receive")
+            ->assertRedirect();
+
+        $this->assertSame('ditutup', $request->fresh()->status);
+    }
+
     private function issueForRequest(User $user, Warehouse $origin, Warehouse $destination, MaterialRequest $request, Material $material, int $qty): SuratJalan
     {
         $this->actingAs($user)

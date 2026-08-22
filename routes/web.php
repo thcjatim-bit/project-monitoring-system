@@ -262,6 +262,7 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware(['thc', 'izin:approve_material_request'])->group(function (): void {
         Route::patch('/material-requests/{materialRequest}/approve', [MaterialRequestController::class, 'approve'])->name('material-requests.approve');
         Route::patch('/material-requests/{materialRequest}/reject', [MaterialRequestController::class, 'reject'])->name('material-requests.reject');
+        Route::patch('/material-requests/{materialRequest}/close', [MaterialRequestController::class, 'close'])->name('material-requests.close');
     });
     Route::get('/material-usages', [MaterialUsageController::class, 'index'])
         ->middleware('izin:read_material_usage')

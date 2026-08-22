@@ -59,6 +59,8 @@ Ini bukan keputusan baru: ADR-0005 sudah menetapkan `ditutup` = "THC — sisa ti
 
 Aturannya: aksi THC di belakang izin `approve_material_request`, sah dari `disetujui` dan `terpenuhi_sebagian` saja (`diajukan` sudah punya `ditolak`), alasan wajib di `decision_note`, dan tidak bisa dibuka kembali — kalau sisanya ternyata masih perlu dikirim, Mitra membuat request baru.
 
+`ditutup` bersifat terminal, jadi `updateMaterialRequestStatus()` tetap perlu satu penjaga: Surat Jalan lama yang baru diterima setelah penutupan tidak boleh menghitung ulang status request menjadi `terpenuhi_sebagian` atau `selesai`. Selain penjaga itu, kesimpulan di atas — bahwa fungsinya tidak perlu diubah untuk baris menyimpang — tetap berlaku.
+
 Admin Mitra tidak boleh menutup requestnya sendiri. Penutupan adalah pengakuan bahwa THC tidak akan mengirim sisanya; itu keputusan pihak pengirim, bukan peminta.
 
 ## Konsekuensi

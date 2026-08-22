@@ -60,4 +60,11 @@ class MaterialRequestController extends Controller
 
         return redirect()->route('material-requests.index')->with('status', 'Request Material ditolak.');
     }
+
+    public function close(Request $request, MaterialRequest $materialRequest, MaterialRequestService $service): RedirectResponse
+    {
+        $service->close($materialRequest, $request->user(), $request->validate(['catatan' => ['required', 'string', 'max:2000']])['catatan']);
+
+        return redirect()->route('material-requests.index')->with('status', 'Request Material ditutup.');
+    }
 }

@@ -319,7 +319,7 @@ class CommandCenterQuery
     {
         $occurredAt = match ($request->status) {
             'diajukan' => $request->created_at,
-            'disetujui', 'ditolak' => $request->decided_at ?? $request->updated_at,
+            'disetujui', 'ditolak', 'ditutup' => $request->decided_at ?? $request->updated_at,
             default => $request->updated_at,
         } ?? $request->created_at ?? CarbonImmutable::now();
 

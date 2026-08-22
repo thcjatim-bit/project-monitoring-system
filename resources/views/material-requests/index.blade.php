@@ -10,6 +10,8 @@
             <div class="ui-state ui-state--success" role="status">{{ session('status') }}</div>
         @endif
 
+        <x-form-errors />
+
         @if (auth()->user()->mitra_id !== null && auth()->user()->hasIzin('create_material_request'))
             <x-ui.panel>
                 <h2>Ajukan Request Material</h2>
@@ -121,6 +123,14 @@
                                 </form>
                                 <form method="POST" action="{{ route('material-requests.reject', $materialRequest) }}" style="display:inline">
                                     @csrf @method('PATCH') <button class="ui-button ui-button--danger" type="submit">Tolak</button>
+                                </form>
+                            @endif
+                            @if (auth()->user()->mitra_id === null && auth()->user()->hasIzin('approve_material_request') && in_array($materialRequest->status, ['disetujui', 'terpenuhi_sebagian'], true))
+                                <form class="ui-form" method="POST" action="{{ route('material-requests.close', $materialRequest) }}" data-submit-loading>
+                                    @csrf @method('PATCH')
+                                    <label>Alasan menutup<input name="catatan" maxlength="2000" required></label>
+                                    <p class="ui-help">Sisa Request Material #{{ $materialRequest->id }} tidak jadi dikirim. Request yang ditutup tidak dapat dibuka kembali; Mitra harus membuat request baru.</p>
+                                    <button class="ui-button ui-button--danger" type="submit">Tutup Request</button>
                                 </form>
                             @endif
                         </div>

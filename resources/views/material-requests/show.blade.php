@@ -13,6 +13,12 @@
         @if ($materialRequest->catatan)
             <p>Catatan: {{ $materialRequest->catatan }}</p>
         @endif
+        @if ($materialRequest->decision_note)
+            <p>Alasan keputusan: {{ $materialRequest->decision_note }}</p>
+        @endif
+        @if ($materialRequest->decider)
+            <p>Diputuskan oleh: {{ $materialRequest->decider->name }}</p>
+        @endif
 
         <h2>Material yang diminta</h2>
         <ul>
