@@ -47,6 +47,14 @@ Dua lapis karena masing-masing punya lubang yang ditutup lapis lain. `recordProj
 
 Tidak ada daftar pilihan tetap untuk alasan. Kategori yang dipaksakan sekarang akan menebak-nebak alasan yang belum pernah kita baca; teks bebas dulu, kategori menyusul kalau polanya sudah terlihat.
 
+### Amandemen (#107) — hasil klasifikasi ikut tersimpan di baris
+
+Jejak di atas ditulis sebagai dua lapis. Tiket [#107](https://github.com/thcjatim-bit/project-monitoring-system/issues/107) menambah lapis ketiga yang sebenarnya sudah tersirat: **hasil klasifikasi disimpan**, di kolom `jenis_penyimpangan` (nullable, `material_asing` / `qty_melebihi`) pada `surat_jalan_items`.
+
+Alasannya bukan penyajian, melainkan kebenaran dokumen. Klasifikasi diukur terhadap **sisa saat terbit**; Surat Jalan lain yang terbit sesudahnya menggeser "sudah terkirim", jadi menghitung ulang saat render bisa membuat baris yang dulu patuh terbaca menyimpang, dan sebaliknya. Surat Jalan sudah ditandatangani — isinya tidak boleh berubah arti karena kejadian sesudahnya. **Klasifikasi penyimpangan dibekukan saat terbit, tidak pernah dihitung ulang.**
+
+Kolom ini juga yang menegakkan `catatan` wajib: server perlu tahu baris mana yang menyimpang pada saat validasi, dan klasifikator sudah menghitungnya. Enum, bukan boolean, karena kedua jenis itu sudah dibedakan untuk metadata event `surat_jalan_deviation` dan punya arti operasional berbeda saat rekon.
+
 ### Peringatan, bukan penghalang
 
 Form menandai baris menyimpang secara visual dan tidak memblokir submit. Penyimpangan di sini adalah alur kerja yang sah, bukan kesalahan — modal konfirmasi akan menjadi refleks-klik dalam seminggu. Tapi diam total juga salah: salah pilih material yang mirip namanya harus tertangkap, dan data request sudah ada di halaman untuk *prefill* sehingga penandaan itu gratis.
