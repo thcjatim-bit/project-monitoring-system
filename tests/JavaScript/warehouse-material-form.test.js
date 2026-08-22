@@ -400,6 +400,15 @@ const transferFormData = {
                 label: '#92 — 19 Aug 2026 · 1 item, 1 belum lengkap',
                 items: [{ material_id: 1, jenis: 'biasa', diminta: 2, terkirim: 0, sisa: 2 }],
             },
+            {
+                id: 93,
+                mitra_id: 7,
+                project_id: 55,
+                tanggal: '2026-08-18',
+                status: 'disetujui',
+                label: '#93 — 18 Aug 2026 · 1 item, 1 belum lengkap',
+                items: [{ material_id: 2, jenis: 'ber_sn', diminta: 2.5, terkirim: 0, sisa: 2.5 }],
+            },
         ],
         30: [],
     },
@@ -429,6 +438,7 @@ const requestDrivenPage = (t) => openPage(t, `
             <option value="">${KOSONG_REQUEST}</option>
             <option value="91">${transferFormData.requests[20][0].label}</option>
             <option value="92">${transferFormData.requests[20][1].label}</option>
+            <option value="93">${transferFormData.requests[20][2].label}</option>
         </select>
         <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
             <option value="">${KOSONG_PROJECT}</option>
@@ -617,4 +627,128 @@ test('jalur tanpa Request Material tidak menambah baris apa pun', (t) => {
 
     assert.equal(rows(window).length, 1);
     assert.equal(field(window, '[data-project-select]').disabled, false);
+});
+
+/**
+ * Penandaan baris menyimpang (ADR-0024 "Peringatan, bukan penghalang"). Klasifikasinya meniru
+ * `SuratJalanService::classifyRequestDeviations()`: diukur per material atas seluruh baris,
+ * bukan per baris, supaya yang dilihat operator sama dengan yang dinilai server saat terbit.
+ */
+const penyimpangan = (row) => row.dataset.deviation ?? null;
+
+const catatanPenyimpangan = (row) => row.querySelector('[data-deviation-note]')?.textContent ?? null;
+
+const barisManual = (window) => {
+    window.document.querySelector('[data-add-item]').click();
+
+    return rows(window).at(-1);
+};
+
+/** Operator mengetik: pilih material lalu isi qty, masing-masing memicu event aslinya. */
+const ketik = (window, row, materialId, qty) => {
+    choose(window, row.querySelector('select'), materialId);
+    isiQty(window, row, qty);
+};
+
+const isiQty = (window, row, qty) => {
+    const input = row.querySelector('input[type="number"]');
+    input.value = qty;
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+};
+
+test('baris bermaterial di luar Request Material ditandai menyimpang', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const manual = barisManual(window);
+    ketik(window, manual, '3', '5');
+
+    assert.equal(penyimpangan(manual), 'material_asing', 'request #92 hanya meminta material 1');
+    assert.equal(manual.classList.contains('ui-list__item--deviating'), true);
+    assert.match(catatanPenyimpangan(manual), /Request Material/);
+});
+
+test('qty melebihi sisa request ditandai menyimpang beserta sisanya', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const [prefilled] = prefillRows(window);
+    isiQty(window, prefilled, '5');
+
+    assert.equal(penyimpangan(prefilled), 'qty_melebihi');
+    assert.match(catatanPenyimpangan(prefilled), /2/, 'operator harus tahu sisanya berapa, bukan sekadar bahwa ia salah');
+});
+
+test('qty di bawah sisa bukan penyimpangan — itu kirim bertahap', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const [prefilled] = prefillRows(window);
+    isiQty(window, prefilled, '1');
+
+    assert.equal(penyimpangan(prefilled), null);
+    assert.equal(prefilled.classList.contains('ui-list__item--deviating'), false);
+    assert.equal(catatanPenyimpangan(prefilled), null);
+});
+
+test('penandaan qty diukur per material atas seluruh baris, bukan per baris', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+    const [prefilled] = prefillRows(window);
+
+    const tambahan = barisManual(window);
+    ketik(window, tambahan, '1', '1');
+
+    assert.equal(penyimpangan(tambahan), 'qty_melebihi', 'sisa 2 sudah habis dipakai baris prefill');
+    assert.equal(penyimpangan(prefilled), 'qty_melebihi', 'server menilai per material, jadi kedua baris sama-sama menyimpang');
+});
+
+test('tanpa Request Material tidak ada baris yang ditandai menyimpang', (t) => {
+    const window = requestDrivenPage(t);
+
+    ketik(window, rows(window)[0], '3', '999');
+
+    assert.equal(penyimpangan(rows(window)[0]), null, 'tanpa request tidak ada yang bisa disimpangi');
+});
+
+test('penandaan hilang begitu qty dikoreksi kembali ke dalam sisa', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+    const [prefilled] = prefillRows(window);
+    isiQty(window, prefilled, '5');
+    assert.equal(penyimpangan(prefilled), 'qty_melebihi', 'prasyarat: baris ditandai');
+
+    isiQty(window, prefilled, '2');
+
+    assert.equal(penyimpangan(prefilled), null);
+    assert.equal(catatanPenyimpangan(prefilled), null, 'catatan yang tertinggal akan berbohong');
+});
+
+test('baris menyimpang tetap boleh dikirim — penandaan adalah peringatan, bukan penghalang', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const manual = barisManual(window);
+    ketik(window, manual, '3', '5');
+
+    assert.equal(penyimpangan(manual), 'material_asing', 'prasyarat: baris ditandai');
+    assert.equal(manual.hidden, false);
+    assert.equal(manual.querySelector('select').disabled, false);
+    assert.equal(manual.querySelector('input[type="number"]').disabled, false);
+    assert.equal(
+        field(window, '[data-transfer-form] button[type="submit"]').disabled,
+        false,
+        'penyimpangan adalah alur kerja yang sah; form tidak boleh dikunci',
+    );
+});
+
+test('request ber-SN dengan sisa pecahan tidak melahirkan pcs yang tidak ada', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '93');
+
+    const prefilled = prefillRows(window);
+    assert.equal(prefilled.length, 2, 'sisa 2,5 pcs ber-SN: membulatkan ke atas berarti mengarang satu pcs');
+    assert.deepEqual(prefilled.map(qtyOf), ['1', '1']);
+    assert.deepEqual(prefilled.map(penyimpangan), [null, null], 'prefill tidak pernah menyimpang dari requestnya sendiri');
 });

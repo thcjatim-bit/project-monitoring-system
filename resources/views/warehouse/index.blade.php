@@ -160,6 +160,56 @@
             row.querySelector('input[type="number"]').value = String(qty);
             materialSelect.dispatchEvent(new Event('change'));
         };
+        // Penyimpangan ditandai, tidak diblokir (ADR-0024). Klasifikasinya sengaja meniru
+        // SuratJalanService::classifyRequestDeviations(): diukur per material atas seluruh baris
+        // dengan toleransi yang sama, supaya peringatan di layar dan penilaian server saat terbit
+        // tidak mungkin berbeda kesimpulan.
+        const QTY_TOLERANCE = 0.0005;
+        const DEVIATING_CLASS = 'ui-list__item--deviating';
+        // Material baris prefill dibawa hidden input karena selectnya dikunci disabled.
+        const rowMaterial = (row) => row.querySelector('input[type="hidden"][name$="[material_id]"]')?.value
+            ?? row.querySelector('select')?.value ?? '';
+        const rowQty = (row) => Number.parseFloat(row.querySelector('input[type="number"]')?.value ?? '') || 0;
+        const deviationNote = (row) => {
+            const existing = row.querySelector('[data-deviation-note]');
+            if (existing) return existing;
+            const note = document.createElement('p');
+            note.className = 'ui-help'; note.setAttribute('data-deviation-note', ''); note.setAttribute('role', 'status');
+            row.append(note);
+            return note;
+        };
+        const markRow = (row, jenis, sisa) => {
+            row.classList.toggle(DEVIATING_CLASS, jenis !== null);
+            if (jenis === null) { delete row.dataset.deviation; row.querySelector('[data-deviation-note]')?.remove(); return; }
+            row.dataset.deviation = jenis;
+            // Warna saja tidak cukup: alasannya harus terbaca, dan sisa harus disebut angkanya.
+            deviationNote(row).textContent = jenis === 'material_asing'
+                ? 'Menyimpang: material ini tidak ada di Request Material yang dipilih.'
+                : 'Menyimpang: total qty material ini melebihi sisa Request Material (sisa ' + sisa + ').';
+        };
+        const markDeviations = () => {
+            const request = availableRequests().find((candidate) => String(candidate.id) === requestSelect.value);
+            const sisa = new Map((request?.items ?? []).map((item) => [String(item.material_id), item.sisa]));
+            const total = new Map();
+            const baris = [...items.querySelectorAll('[data-transfer-row]')];
+            // Baris yang disembunyikan tidak ikut terkirim, jadi ia tidak menambah total dan tidak pernah ditandai.
+            baris.filter((row) => !row.hidden).forEach((row) => {
+                const material = rowMaterial(row);
+                if (material !== '') total.set(material, (total.get(material) ?? 0) + rowQty(row));
+            });
+            baris.forEach((row) => {
+                const material = rowMaterial(row);
+                if (request === undefined || row.hidden || material === '') { markRow(row, null); return; }
+                if (!sisa.has(material)) { markRow(row, 'material_asing'); return; }
+                markRow(row, total.get(material) > sisa.get(material) + QTY_TOLERANCE ? 'qty_melebihi' : null, sisa.get(material));
+            });
+        };
+        items.addEventListener('input', markDeviations);
+        items.addEventListener('change', markDeviations);
+        // Tambah dan hapus baris tidak memicu input maupun change, jadi keduanya menandai ulang sendiri.
+        // Keduanya terdaftar setelah penangan yang benar-benar mengubah baris, jadi selalu berjalan sesudahnya.
+        document.querySelector('[data-add-item]')?.addEventListener('click', markDeviations);
+        items.addEventListener('click', (event) => { if (event.target.matches('[data-remove-item]')) markDeviations(); });
         const applyRequest = () => {
             dropPrefillRows(); unlockProject();
             const request = availableRequests().find((candidate) => String(candidate.id) === requestSelect.value);
@@ -168,12 +218,15 @@
             // Qty prefill adalah sisa, material bersisa 0 tidak muncul, dan baris ber-SN dipecah satu baris per pcs.
             request.items.filter((item) => item.sisa > 0).forEach((item) => {
                 const berSn = item.jenis === 'ber_sn';
-                const barisan = berSn ? Math.round(item.sisa) : 1;
+                // Floor, bukan round: sisa 2,5 pcs ber-SN berarti dua pcs yang benar-benar ada.
+                // Membulatkan ke atas menaikkan total qty diam-diam dan justru melahirkan penyimpangan.
+                const barisan = berSn ? Math.floor(item.sisa) : 1;
                 for (let pcs = 0; pcs < barisan; pcs += 1) prefillRow(item, berSn ? 1 : item.sisa);
             });
             if (items.querySelector('[data-row-asal="request"]') !== null && firstRowIsEmpty()) idleFirstRow(true);
+            markDeviations();
         };
-        const resetRequest = () => { renderRequests(); requestSelect.value = ''; dropPrefillRows(); unlockProject(); };
+        const resetRequest = () => { renderRequests(); requestSelect.value = ''; dropPrefillRows(); unlockProject(); markDeviations(); };
         destinationSelect.addEventListener('change', () => {
             // Ganti gudang tujuan me-reset Project hanya bila Mitra efektif berubah.
             if (effectiveMitra() !== currentMitra) { currentMitra = effectiveMitra(); renderProjects(); }
@@ -187,7 +240,7 @@
             const previous = requestSelect.value;
             renderRequests();
             if (previous !== '' && requestSelect.querySelector('option[value="' + previous + '"]') !== null) { requestSelect.value = previous; return; }
-            requestSelect.value = ''; dropPrefillRows();
+            requestSelect.value = ''; dropPrefillRows(); markDeviations();
         });
         requestSelect.addEventListener('change', applyRequest);
     }

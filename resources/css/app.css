@@ -54,6 +54,7 @@
 .ui-list__item--pending { border-color: #d79c38; }
 .ui-list__item--done { border-color: #58a98c; }
 .ui-list__item--cancelled { border-color: #b34444; }
+.ui-list__item--deviating { border-color: #d79c38; background: #fff8ec; }
 .ui-badge { background: #e8edf1; border-radius: 999px; color: #526071; display: inline-block; font-size: .72rem; padding: 4px 8px; }
 .ui-badge--pending { background: #fff0d5; color: #a86314; }
 .ui-badge--done { background: #dff3ed; color: #11664f; }
