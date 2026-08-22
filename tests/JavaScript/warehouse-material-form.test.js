@@ -517,6 +517,66 @@ test('request tanpa Project membiarkan Project diisi operator', (t) => {
     assert.equal(field(window, '[data-project-lock]'), null);
 });
 
+test('baris pertama yang hampa tidak menahan submit setelah prefill', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    const first = rows(window)[0];
+    assert.equal(first.hidden, true, 'baris hampa tidak perlu dilihat operator');
+    assert.equal(
+        first.querySelector('select').disabled,
+        true,
+        'field required yang disabled tidak ikut divalidasi browser maupun terkirim sebagai item kosong',
+    );
+    assert.equal(first.querySelector('input[type="number"]').disabled, true);
+    // Identitas SN/Drum sengaja dibiarkan kosong-tapi-wajib: itu memang kerja operator. Yang tidak
+    // boleh tersisa kosong adalah Material dan Qty, karena prefill mengaku sudah mengisinya.
+    const wajibTerisi = [...window.document.querySelectorAll('[data-transfer-row] [required]')]
+        .filter((f) => f.closest('[data-identity]') === null);
+    assert.ok(
+        wajibTerisi.every((f) => f.disabled || f.value !== ''),
+        'Material dan Qty tidak boleh tersisa kosong dan aktif setelah prefill',
+    );
+});
+
+test('baris pertama yang sudah diketik operator bertahan meski prefill mengisi form', (t) => {
+    const window = requestDrivenPage(t);
+    const first = rows(window)[0];
+    choose(window, first.querySelector('select'), '1');
+    first.querySelector('input[type="number"]').value = '3';
+
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    assert.equal(first.hidden, false, 'baris ketikan operator tidak boleh disembunyikan');
+    assert.equal(first.querySelector('select').disabled, false);
+    assert.equal(first.querySelector('input[type="number"]').value, '3');
+});
+
+test('membatalkan pilihan request mengaktifkan kembali baris pertama', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    choose(window, field(window, '[data-request-select]'), '');
+
+    const first = rows(window)[0];
+    assert.equal(first.hidden, false);
+    assert.equal(first.querySelector('select').disabled, false);
+    assert.equal(first.querySelector('select').required, true, 'baris ketikan operator kembali wajib diisi');
+});
+
+test('baris tambahan setelah prefill tidak mewarisi keadaan baris pertama yang dinonaktifkan', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    window.document.querySelector('[data-add-item]').click();
+
+    const tambahan = rows(window).at(-1);
+    assert.equal(tambahan.hidden, false);
+    assert.equal(tambahan.querySelector('select').disabled, false);
+    assert.equal(tambahan.dataset.rowAsal, 'manual');
+});
+
 test('ganti gudang tujuan membuang baris prefill tapi menyisakan baris ketikan operator', (t) => {
     const window = requestDrivenPage(t);
     window.document.querySelector('[data-add-item]').click();

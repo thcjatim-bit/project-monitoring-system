@@ -83,9 +83,12 @@
     const bindSelects = (root) => root.querySelectorAll('[data-material-select], [data-transfer-row] select').forEach(bindIdentity);
     bindSelects(document);
     const items = document.querySelector('[data-transfer-items]'); let nextTransferIndex = 1;
+    // Klon diambil dari salinan bersih baris pertama, bukan dari baris pertama yang hidup: baris itu
+    // boleh dinonaktifkan saat prefill mengambil alih, dan klon tidak boleh ikut mewarisi keadaannya.
+    const rowTemplate = items?.querySelector('[data-transfer-row]')?.cloneNode(true) ?? null;
     // Semua baris baru adalah klon baris pertama, jadi indeks dan binding-nya tidak pernah dirakit tangan.
     const buildRow = (asal) => {
-        const source = items.querySelector('[data-transfer-row]'); const index = nextTransferIndex++; const row = source.cloneNode(true);
+        const source = rowTemplate; const index = nextTransferIndex++; const row = source.cloneNode(true);
         row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[0\]/g, `items[${index}]`); input.value = ''; });
         // Asal-usul baris dibawa hidden input, bukan sekadar atribut DOM, supaya bertahan melewati repopulasi old().
         const asalInput = row.querySelector('[data-row-origin]'); if (asalInput) asalInput.value = asal;
@@ -123,7 +126,21 @@
             requestSelect.replaceChildren(option('', requestSelect.dataset.emptyLabel));
             availableRequests().forEach((request) => requestSelect.append(option(request.id, request.label)));
         };
-        const dropPrefillRows = () => items.querySelectorAll('[data-row-asal="request"]').forEach((row) => row.remove());
+        // Baris pertama selalu ada sebagai baris ketikan operator, dan field-nya wajib diisi. Begitu
+        // prefill mengisi form, baris itu tinggal hampa tapi tetap menahan submit; dinonaktifkan
+        // supaya lepas dari validasi HTML dan tidak ikut terkirim sebagai item kosong.
+        const firstRow = items.querySelector('[data-transfer-row]');
+        const firstRowIsEmpty = () => [...firstRow.querySelectorAll('select, input:not([type="hidden"])')]
+            .every((field) => field.value === '');
+        const idleFirstRow = (idle) => {
+            firstRow.hidden = idle;
+            firstRow.querySelectorAll('select, input').forEach((field) => { field.disabled = idle; });
+        };
+        // Membuang baris prefill selalu berarti baris pertama dibutuhkan kembali, jadi keduanya satu langkah.
+        const dropPrefillRows = () => {
+            items.querySelectorAll('[data-row-asal="request"]').forEach((row) => row.remove());
+            idleFirstRow(false);
+        };
         const unlockProject = () => { transferForm.querySelector('[data-project-lock]')?.remove(); projectSelect.disabled = effectiveMitra() === null; };
         const lockProject = (projectId) => {
             projectSelect.value = String(projectId); projectSelect.disabled = true;
@@ -154,6 +171,7 @@
                 const barisan = berSn ? Math.round(item.sisa) : 1;
                 for (let pcs = 0; pcs < barisan; pcs += 1) prefillRow(item, berSn ? 1 : item.sisa);
             });
+            if (items.querySelector('[data-row-asal="request"]') !== null && firstRowIsEmpty()) idleFirstRow(true);
         };
         const resetRequest = () => { renderRequests(); requestSelect.value = ''; dropPrefillRows(); unlockProject(); };
         destinationSelect.addEventListener('change', () => {

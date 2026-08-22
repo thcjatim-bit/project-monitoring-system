@@ -133,6 +133,36 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $this->assertSame($mitra->id, $suratJalan->mitra_id);
     }
 
+    /**
+     * Baris pertama form dinonaktifkan begitu prefill mengambil alih, jadi browser tidak mengirim
+     * `items[0]` sama sekali dan penomoran item mulai dari 1. Bentuk payload itu harus diterima
+     * apa adanya, bukan hanya bentuk yang indeksnya rapat dari nol.
+     */
+    public function test_payload_prefill_tanpa_item_indeks_nol_diterima(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'A Gudang Mitra');
+        $origin->users()->attach($operator);
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $request = $this->materialRequest($mitra, 'disetujui', [[$material, 10]]);
+        $this->terimaStok($operator, $origin, $material, '10');
+
+        $this->actingAs($operator)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $tujuan->id,
+            'material_request_id' => $request->id,
+            'tanggal' => '2026-08-22',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [1 => ['material_id' => $material->id, 'qty' => '10', 'asal' => 'request']],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
+        $this->assertSame($request->id, $suratJalan->material_request_id);
+        $this->assertCount(1, $suratJalan->items()->get());
+    }
+
     public function test_asal_usul_baris_yang_tidak_dikenal_ditolak(): void
     {
         $mitra = Mitra::factory()->create();
