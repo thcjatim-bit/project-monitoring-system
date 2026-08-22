@@ -328,7 +328,7 @@ class SuratJalanService
         }
 
         $request = MaterialRequest::query()->with('items')->lockForUpdate()->findOrFail($requestId);
-        if (! in_array($request->status, ['disetujui', 'terpenuhi_sebagian'], true)) {
+        if (! in_array($request->status, MaterialRequest::FULFILLABLE_STATUSES, true)) {
             throw ValidationException::withMessages(['status' => 'Hanya Request Material yang sudah disetujui dapat dipenuhi.']);
         }
         if ($request->mitra_id !== $mitraId) {
@@ -356,7 +356,7 @@ class SuratJalanService
             ->join('surat_jalans', 'surat_jalans.id', '=', 'surat_jalan_items.surat_jalan_id')
             ->where('surat_jalans.mitra_id', $request->mitra_id)
             ->where('surat_jalans.status', '!=', 'dibatalkan')
-            ->select('surat_jalan_items.material_id', DB::raw("SUM(CASE WHEN surat_jalans.status = 'terbit' THEN surat_jalan_items.qty ELSE surat_jalan_items.qty_diterima END) as qty_sent"))
+            ->select('surat_jalan_items.material_id', DB::raw(SuratJalanItem::SENT_QUANTITY.' as qty_sent'))
             ->groupBy('material_id')
             ->pluck('qty_sent', 'material_id')
             ->map(fn ($qty): float => (float) $qty);

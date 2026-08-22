@@ -11,6 +11,9 @@ class MaterialRequest extends Model
 {
     use HasMitraScope;
 
+    /** Status Request Material yang masih boleh dipenuhi Surat Jalan. */
+    public const FULFILLABLE_STATUSES = ['disetujui', 'terpenuhi_sebagian'];
+
     protected $fillable = [
         'mitra_id',
         'project_id',

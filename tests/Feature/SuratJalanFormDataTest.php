@@ -184,6 +184,9 @@ class SuratJalanFormDataTest extends TestCase
             ->get('/warehouse')
             ->assertOk()
             ->assertSee('Penerimaan stok')
+            ->assertSee('Pengeluaran stok')
+            ->assertSee('Split drum')
+            ->assertSee($gudang->kode)
             ->assertDontSee('Terbitkan Surat Jalan')
             ->assertDontSee('data-transfer-form-data', false);
     }

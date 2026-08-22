@@ -25,8 +25,10 @@ class MaterialInventoryController extends Controller
         $warehouses = $this->assignedWarehouses($request);
         $warehouseIds = $warehouses->modelKeys();
         $destinationWarehouses = $this->destinationWarehouses($request);
-        // Menerbitkan Surat Jalan adalah tindakan THC: material milik THC walau dititipkan di
-        // gudang Mitra. User Mitra tidak mendapat form penerbitan maupun data yang menyuapinya.
+        // Form request-driven ini dibangun untuk petugas gudang THC, jadi User Mitra tidak
+        // mendapat formnya maupun data yang menyuapinya. Ini penyembunyian elemen antarmuka,
+        // bukan aturan otorisasi: `SuratJalanController::issue()` tetap penjaga sesungguhnya
+        // dan aturannya tidak diubah tiket ini.
         $canIssueTransfer = $request->user()->mitra_id === null;
 
         return view('warehouse.index', [

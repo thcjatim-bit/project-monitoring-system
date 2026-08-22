@@ -10,6 +10,14 @@ class SuratJalanItem extends Model
 {
     use HasMitraScope;
 
+    /**
+     * "Sudah terkirim" untuk satu Request Material: baris yang masih `terbit` dihitung dari qty
+     * yang berangkat, baris yang sudah `diterima` dari qty yang benar-benar sampai. Ini basis
+     * yang mendefinisikan sisa pada ADR-0024, jadi klasifikator penyimpangan dan angka yang
+     * dilihat operator harus memakai ekspresi yang sama persis.
+     */
+    public const SENT_QUANTITY = "SUM(CASE WHEN surat_jalans.status = 'terbit' THEN surat_jalan_items.qty ELSE surat_jalan_items.qty_diterima END)";
+
     protected $fillable = [
         'surat_jalan_id',
         'mitra_id',

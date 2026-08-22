@@ -21,9 +21,6 @@ use Illuminate\Support\Facades\DB;
  */
 class SuratJalanFormQuery
 {
-    /** Status Request Material yang boleh dipenuhi Surat Jalan, sama seperti `lockMaterialRequest()`. */
-    private const FULFILLABLE = ['disetujui', 'terpenuhi_sebagian'];
-
     /**
      * @param  Collection<int, Warehouse>  $originWarehouses  gudang yang ditugaskan kepada user
      * @param  Collection<int, Warehouse>  $destinationWarehouses  gudang tujuan yang boleh dipilih
@@ -65,7 +62,7 @@ class SuratJalanFormQuery
             : MaterialRequest::query()
                 ->with('items.material')
                 ->whereIn('mitra_id', $mitraIds)
-                ->whereIn('status', self::FULFILLABLE)
+                ->whereIn('status', MaterialRequest::FULFILLABLE_STATUSES)
                 ->orderByDesc('id')
                 ->get();
         $sent = $this->sentQuantities($requests->pluck('id')->map(fn ($id): int => (int) $id)->all());
@@ -125,7 +122,7 @@ class SuratJalanFormQuery
             ->select(
                 'surat_jalans.material_request_id',
                 'surat_jalan_items.material_id',
-                DB::raw("SUM(CASE WHEN surat_jalans.status = 'terbit' THEN surat_jalan_items.qty ELSE surat_jalan_items.qty_diterima END) as qty_sent"),
+                DB::raw(SuratJalanItem::SENT_QUANTITY.' as qty_sent'),
             )
             ->get()
             ->groupBy('material_request_id')
