@@ -6,6 +6,7 @@ use App\Models\Material;
 use App\Models\MaterialSn;
 use App\Models\Mitra;
 use App\Models\Warehouse;
+use App\Support\QtyTolerance;
 use Illuminate\Testing\TestResponse;
 use Tests\Concerns\RefreshDatabase;
 use Tests\Concerns\WarehouseFixtures;
@@ -166,6 +167,93 @@ class SuratJalanFormDataTest extends TestCase
         $this->assertSame($mitra->id, $payload['warehouse_mitra'][(string) $tujuan->id]);
     }
 
+    /**
+     * Mitra efektif awal punya satu sumber: `SuratJalanFormQuery`. Yang dijaga di sini adalah
+     * sisi servernya — nilai di payload dan dropdown yang dirender di atasnya. Bahwa skrip halaman
+     * membaca nilai itu alih-alih menghitungnya sendiri dijaga di sisi JS
+     * (tests/JavaScript/warehouse-material-form.test.js), supaya aturannya tidak diketik ulang
+     * di test hanya untuk membuktikan bahwa ia tidak diketik ulang di produksi.
+     */
+    public function test_mitra_efektif_awal_dilayani_payload_pada_arah_mitra_ke_thc(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        // Gudang asal terpilih adalah satu-satunya gudang yang ditugaskan; gudang tujuan terpilih
+        // adalah yang pertama menurut nama di antara seluruh gudang aktif.
+        $asal = $this->warehouse($mitra, 'WH-MITRA', 'Z Gudang Mitra');
+        $tujuan = $this->warehouse(null, 'WH-THC', 'A Gudang THC');
+        $asal->users()->attach($operator);
+        $this->project($mitra, 'PRJ-2608-0001');
+        // Form Terbitkan Surat Jalan hanya dirender bila ada Material aktif; tanpa itu yang diuji
+        // di bawah bukan render awalnya melainkan pesan kosongnya.
+        Material::factory()->create(['jenis' => 'biasa']);
+
+        $response = $this->actingAs($operator)->get('/warehouse');
+        $payload = $this->transferFormData($response);
+
+        $this->assertSame($asal->id, $payload['initial_origin_id']);
+        $this->assertSame($tujuan->id, $payload['initial_destination_id']);
+        $this->assertSame($mitra->id, $payload['initial_mitra_id'], 'asal milik Mitra menentukan Mitra Surat Jalan');
+        $this->assertRenderedSelection($response, $asal, $tujuan);
+        $response->assertSee('PRJ-2608-0001 — Project PRJ-2608-0001');
+    }
+
+    public function test_mitra_efektif_awal_dilayani_payload_pada_arah_thc_ke_mitra(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $asal = $this->warehouse(null, 'WH-THC', 'Z Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-MITRA', 'A Gudang Mitra');
+        $asal->users()->attach($operator);
+        $this->project($mitra, 'PRJ-2608-0002');
+        Material::factory()->create(['jenis' => 'biasa']);
+
+        $response = $this->actingAs($operator)->get('/warehouse');
+        $payload = $this->transferFormData($response);
+
+        $this->assertSame($asal->id, $payload['initial_origin_id']);
+        $this->assertSame($tujuan->id, $payload['initial_destination_id']);
+        $this->assertSame($mitra->id, $payload['initial_mitra_id'], 'asal milik THC jatuh ke Mitra gudang tujuan');
+        $this->assertRenderedSelection($response, $asal, $tujuan);
+        $response->assertSee('PRJ-2608-0002 — Project PRJ-2608-0002');
+    }
+
+    public function test_gudang_awal_mengikuti_old_input_setelah_penerbitan_ditolak(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $thc = $this->warehouse(null, 'WH-THC', 'A Gudang THC');
+        $milikMitra = $this->warehouse($mitra, 'WH-MITRA', 'Z Gudang Mitra');
+        $thc->users()->attach($operator);
+        $milikMitra->users()->attach($operator);
+
+        $payload = $this->transferFormData(
+            $this->actingAs($operator)
+                ->withSession(['_old_input' => [
+                    'warehouse_asal_id' => (string) $milikMitra->id,
+                    'warehouse_tujuan_id' => (string) $thc->id,
+                ]])
+                ->get('/warehouse'),
+        );
+
+        $this->assertSame($milikMitra->id, $payload['initial_origin_id']);
+        $this->assertSame($thc->id, $payload['initial_destination_id']);
+        $this->assertSame($mitra->id, $payload['initial_mitra_id']);
+    }
+
+    public function test_toleransi_klasifikasi_dibawa_payload_dari_konstanta_aplikasi(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL');
+        $this->warehouse($mitra, 'WH-TUJUAN');
+        $origin->users()->attach($operator);
+
+        $payload = $this->transferFormData($this->actingAs($operator)->get('/warehouse'));
+
+        $this->assertSame(QtyTolerance::VALUE, $payload['qty_tolerance']);
+    }
+
     public function test_user_mitra_tidak_melihat_form_penerbitan_maupun_datanya(): void
     {
         $mitra = Mitra::factory()->create();
@@ -185,6 +273,12 @@ class SuratJalanFormDataTest extends TestCase
             // Yang tidak boleh bocor adalah payload-nya. Skrip form request-driven dirender di
             // setiap halaman dan menyebut selector ini apa adanya, jadi tag payload yang diperiksa.
             ->assertDontSee('<script type="application/json" data-transfer-form-data>', false);
+    }
+
+    private function assertRenderedSelection(TestResponse $response, Warehouse $asal, Warehouse $tujuan): void
+    {
+        $response->assertSee(sprintf('<option value="%d" selected>%s', $asal->id, $asal->kode), false);
+        $response->assertSee(sprintf('<option value="%d" selected>%s', $tujuan->id, $tujuan->kode), false);
     }
 
     /**

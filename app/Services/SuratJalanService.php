@@ -14,6 +14,7 @@ use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Support\QtyTolerance;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -371,7 +372,7 @@ class SuratJalanService
                 continue;
             }
             $remaining = $requested->get($materialId, 0.0) - $sent->get($materialId, 0.0);
-            if ($qty > $remaining + 0.0005) {
+            if ($qty > $remaining + QtyTolerance::VALUE) {
                 $deviations[$materialId] = 'qty_melebihi';
             }
         }

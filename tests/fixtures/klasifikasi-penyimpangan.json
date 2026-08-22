@@ -1,0 +1,93 @@
+{
+    "tentang": [
+        "Kasus klasifikasi penyimpangan Surat Jalan terhadap Request Material.",
+        "Berkas ini dibaca dua kali: tests/Feature/SuratJalanDeviationContractTest.php atas",
+        "SuratJalanService::classifyRequestDeviations(), dan tests/JavaScript/warehouse-material-form.test.js",
+        "atas markDeviations() di resources/views/warehouse/index.blade.php. ADR-0026 menerima",
+        "kekembaran kedua klasifikator itu sebagai disengaja; berkas inilah penjaganya, jadi",
+        "menambah kasus berarti menambah satu entri di sini, bukan dua test."
+    ],
+    "bentuk": {
+        "request": "baris Request Material: diminta per material, dan berapa yang sudah terkirim Surat Jalan sebelumnya. sisa = diminta - terkirim.",
+        "baris": "baris yang diketik operator. `qty` adalah angka apa adanya; `qty_sisa_plus_toleransi` adalah sisa material itu ditambah faktor ini dikali toleransi aplikasi — supaya kasus batas tidak memaku angka toleransinya.",
+        "klasifikasi": "jenis penyimpangan yang diharapkan per material_id; null berarti baris itu patuh."
+    },
+    "kasus": [
+        {
+            "nama": "qty tepat sisa bukan penyimpangan",
+            "request": [{ "material_id": 1, "diminta": 10, "terkirim": 4 }],
+            "baris": [{ "material_id": 1, "qty": 6 }],
+            "klasifikasi": { "1": null }
+        },
+        {
+            "nama": "qty di bawah sisa adalah kirim bertahap",
+            "request": [{ "material_id": 1, "diminta": 10, "terkirim": 0 }],
+            "baris": [{ "material_id": 1, "qty": 4 }],
+            "klasifikasi": { "1": null }
+        },
+        {
+            "nama": "qty melebihi sisa ditandai qty_melebihi",
+            "request": [{ "material_id": 1, "diminta": 4, "terkirim": 0 }],
+            "baris": [{ "material_id": 1, "qty": 6 }],
+            "klasifikasi": { "1": "qty_melebihi" }
+        },
+        {
+            "nama": "material di luar Request Material ditandai material_asing",
+            "request": [{ "material_id": 1, "diminta": 4, "terkirim": 0 }],
+            "baris": [
+                { "material_id": 1, "qty": 4 },
+                { "material_id": 2, "qty": 5 }
+            ],
+            "klasifikasi": { "1": null, "2": "material_asing" }
+        },
+        {
+            "nama": "penyimpangan diukur per material atas seluruh baris",
+            "request": [{ "material_id": 1, "diminta": 4, "terkirim": 0 }],
+            "baris": [
+                { "material_id": 1, "qty": 3 },
+                { "material_id": 1, "qty": 3 }
+            ],
+            "klasifikasi": { "1": "qty_melebihi" }
+        },
+        {
+            "nama": "beberapa baris yang menjumlah tepat sisa bukan penyimpangan",
+            "request": [{ "material_id": 1, "diminta": 4, "terkirim": 0 }],
+            "baris": [
+                { "material_id": 1, "qty": 1 },
+                { "material_id": 1, "qty": 3 }
+            ],
+            "klasifikasi": { "1": null }
+        },
+        {
+            "nama": "sisa yang sudah habis membuat qty berapa pun melebihi",
+            "request": [{ "material_id": 1, "diminta": 4, "terkirim": 4 }],
+            "baris": [{ "material_id": 1, "qty": 1 }],
+            "klasifikasi": { "1": "qty_melebihi" }
+        },
+        {
+            "nama": "kelebihan di dalam toleransi bukan penyimpangan",
+            "request": [{ "material_id": 1, "diminta": 10, "terkirim": 0 }],
+            "baris": [{ "material_id": 1, "qty_sisa_plus_toleransi": 0.5 }],
+            "klasifikasi": { "1": null }
+        },
+        {
+            "nama": "kelebihan di luar toleransi adalah penyimpangan",
+            "request": [{ "material_id": 1, "diminta": 10, "terkirim": 0 }],
+            "baris": [{ "material_id": 1, "qty_sisa_plus_toleransi": 2 }],
+            "klasifikasi": { "1": "qty_melebihi" }
+        },
+        {
+            "nama": "material patuh, melebihi, dan asing dinilai terpisah dalam satu Surat Jalan",
+            "request": [
+                { "material_id": 1, "diminta": 10, "terkirim": 0 },
+                { "material_id": 2, "diminta": 5, "terkirim": 5 }
+            ],
+            "baris": [
+                { "material_id": 1, "qty": 10 },
+                { "material_id": 2, "qty": 1 },
+                { "material_id": 3, "qty": 2 }
+            ],
+            "klasifikasi": { "1": null, "2": "qty_melebihi", "3": "material_asing" }
+        }
+    ]
+}

@@ -53,4 +53,4 @@ Yang dimaksud kalimat kedua adalah **klien tidak memblokir**: tidak ada `require
 
 - Dua tempat harus disunting setiap kali aturan penyimpangan berubah. Itu diterima, dan test kontraknya yang membuat kelalaian itu berisik alih-alih senyap.
 - Setiap saluran peringatan baru di form Surat Jalan harus memutuskan lebih dulu apakah ia penyimpangan atau bukan. Peringatan sisa pecahan (ADR-0025) sudah menjadi preseden: bukan penyimpangan, jadi saluran sendiri.
-- Sampai test kontrak di #130 mendarat, invarian ini adalah janji tertulis tanpa penegak. ADR ini menetapkan aturannya; ia belum menjaganya.
+- Penegaknya sudah mendarat lewat [#130](https://github.com/thcjatim-bit/project-monitoring-system/issues/130): `tests/fixtures/klasifikasi-penyimpangan.json` dibaca `SuratJalanDeviationContractTest` di sisi PHP dan blok "kontrak klasifikasi penyimpangan" di `tests/JavaScript/warehouse-material-form.test.js` di sisi klien. Kasus batas menyebut toleransi sebagai faktor, bukan angka, jadi tiap sisi mengalikannya dengan ambang aplikasinya sendiri (`App\Support\QtyTolerance::VALUE`, yang sampai ke klien lewat payload).

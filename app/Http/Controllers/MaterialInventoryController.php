@@ -35,8 +35,15 @@ class MaterialInventoryController extends Controller
             'warehouses' => $warehouses,
             'destinationWarehouses' => $destinationWarehouses,
             'canIssueTransfer' => $canIssueTransfer,
+            // Pilihan awal kedua dropdown gudang berangkat dari old(): POST yang ditolak kembali
+            // ke halaman ini, dan konteks gudangnya harus cocok dengan baris yang dipulihkan.
             'transferFormData' => $canIssueTransfer
-                ? $transferForm->forOperator($warehouses, $destinationWarehouses)
+                ? $transferForm->forOperator(
+                    $warehouses,
+                    $destinationWarehouses,
+                    $this->oldWarehouseId('warehouse_asal_id'),
+                    $this->oldWarehouseId('warehouse_tujuan_id'),
+                )
                 : null,
             'materials' => $this->activeMaterials(),
             'stocks' => MaterialStok::query()
@@ -135,6 +142,13 @@ class MaterialInventoryController extends Controller
             ->activeWithUnit()
             ->orderBy('nama')
             ->get();
+    }
+
+    private function oldWarehouseId(string $field): ?int
+    {
+        $value = old($field);
+
+        return is_numeric($value) ? (int) $value : null;
     }
 
     private function assignedWarehouses(Request $request): Collection

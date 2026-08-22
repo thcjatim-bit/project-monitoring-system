@@ -8,6 +8,7 @@ use App\Models\MaterialSn;
 use App\Models\Project;
 use App\Models\SuratJalanItem;
 use App\Models\Warehouse;
+use App\Support\QtyTolerance;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -24,26 +25,70 @@ class SuratJalanFormQuery
     /**
      * @param  Collection<int, Warehouse>  $originWarehouses  gudang yang ditugaskan kepada user
      * @param  Collection<int, Warehouse>  $destinationWarehouses  gudang tujuan yang boleh dipilih
+     * @param  int|null  $selectedOriginId  gudang asal hasil `old()`; null berarti muat pertama
+     * @param  int|null  $selectedDestinationId  gudang tujuan hasil `old()`; null berarti muat pertama
      * @return array{
      *     warehouse_mitra: array<string, int|null>,
+     *     initial_origin_id: int|null,
+     *     initial_destination_id: int|null,
+     *     initial_mitra_id: int|null,
+     *     qty_tolerance: float,
      *     requests: array<string, list<array<string, mixed>>>,
      *     projects: list<array<string, mixed>>,
      *     identities: array<string, array<string, list<array<string, mixed>>>>,
      * }
      */
-    public function forOperator(Collection $originWarehouses, Collection $destinationWarehouses): array
-    {
+    public function forOperator(
+        Collection $originWarehouses,
+        Collection $destinationWarehouses,
+        ?int $selectedOriginId,
+        ?int $selectedDestinationId,
+    ): array {
+        $warehouseMitra = $originWarehouses->concat($destinationWarehouses)
+            ->keyBy('id')
+            ->mapWithKeys(fn (Warehouse $warehouse, int|string $id): array => [
+                (string) $id => $warehouse->mitra_id === null ? null : (int) $warehouse->mitra_id,
+            ])
+            ->all();
+        $initialOriginId = $this->initialWarehouseId($originWarehouses, $selectedOriginId);
+        $initialDestinationId = $this->initialWarehouseId($destinationWarehouses, $selectedDestinationId);
+
         return [
-            'warehouse_mitra' => $originWarehouses->concat($destinationWarehouses)
-                ->keyBy('id')
-                ->mapWithKeys(fn (Warehouse $warehouse, int|string $id): array => [
-                    (string) $id => $warehouse->mitra_id === null ? null : (int) $warehouse->mitra_id,
-                ])
-                ->all(),
+            'warehouse_mitra' => $warehouseMitra,
+            'initial_origin_id' => $initialOriginId,
+            'initial_destination_id' => $initialDestinationId,
+            'initial_mitra_id' => $this->effectiveMitra($warehouseMitra, $initialOriginId, $initialDestinationId),
+            'qty_tolerance' => QtyTolerance::VALUE,
             'requests' => $this->requestsPerDestination($destinationWarehouses),
             'projects' => $this->activeProjects($originWarehouses, $destinationWarehouses),
             'identities' => $this->identitiesPerOrigin($originWarehouses),
         ];
+    }
+
+    /**
+     * Pilihan awal sebuah dropdown gudang: yang dipulihkan `old()` bila masih ada di daftarnya,
+     * kalau tidak yang pertama menurut urutan render.
+     *
+     * @param  Collection<int, Warehouse>  $warehouses
+     */
+    private function initialWarehouseId(Collection $warehouses, ?int $selectedId): ?int
+    {
+        $selected = $selectedId === null ? null : $warehouses->firstWhere('id', $selectedId);
+        $initial = $selected ?? $warehouses->first();
+
+        return $initial === null ? null : (int) $initial->id;
+    }
+
+    /**
+     * Mitra Surat Jalan ditentukan gudang asal, dan jatuh ke gudang tujuan bila asal milik THC.
+     * Aturannya dirakit di sini saja dan hasilnya diserahkan lewat payload: render awal oleh
+     * Blade dan skrip halaman membacanya, bukan menghitungnya ulang masing-masing.
+     *
+     * @param  array<string, int|null>  $warehouseMitra
+     */
+    private function effectiveMitra(array $warehouseMitra, ?int $originId, ?int $destinationId): ?int
+    {
+        return $warehouseMitra[(string) $originId] ?? $warehouseMitra[(string) $destinationId] ?? null;
     }
 
     /**

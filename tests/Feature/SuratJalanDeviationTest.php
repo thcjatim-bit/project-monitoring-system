@@ -19,6 +19,12 @@ use Illuminate\Testing\TestResponse;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * Jalur HTTP penerbitan Surat Jalan bagi baris menyimpang: apa yang tersimpan, apa yang ditolak,
+ * siapa yang boleh melihatnya. Kasus klasifikasinya sendiri tidak ditulis di sini — tempatnya
+ * tests/fixtures/klasifikasi-penyimpangan.json, yang dibaca SuratJalanDeviationContractTest
+ * dan sisi JS-nya sekaligus (ADR-0026).
+ */
 class SuratJalanDeviationTest extends TestCase
 {
     use RefreshDatabase;

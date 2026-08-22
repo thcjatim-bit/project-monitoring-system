@@ -44,13 +44,16 @@
                     // isi dropdown pada muat pertama tidak bergantung pada skrip yang belum sempat jalan.
                     // POST yang ditolak kembali ke halaman ini, jadi render awal berangkat dari old():
                     // konteks gudang/request harus cocok dengan baris yang dipulihkan di bawah.
-                    $initialOrigin = $warehouses->firstWhere('id', (int) old('warehouse_asal_id')) ?? $warehouses->first();
-                    $initialDestination = $destinationWarehouses->firstWhere('id', (int) old('warehouse_tujuan_id')) ?? $destinationWarehouses->first();
-                    $initialMitraId = $initialOrigin?->mitra_id ?? $initialDestination?->mitra_id;
+                    // Gudang awal dan Mitra efektif pada muat pertama dirakit SuratJalanFormQuery lalu
+                    // dilayani lewat payload. Blade dan skrip halaman sama-sama membacanya dari sana,
+                    // jadi render awal server dan keadaan awal skrip tidak bisa berangkat dari nilai berbeda.
+                    $initialOriginId = $transferFormData['initial_origin_id'];
+                    $initialDestinationId = $transferFormData['initial_destination_id'];
+                    $initialMitraId = $transferFormData['initial_mitra_id'];
                     // Baris item hanya ada di klien setelah baris pertama, jadi tanpa render ulang ini
                     // catatan yang sudah diketik operator tidak punya tempat untuk kembali.
                     $oldItems = collect(old('items', [[]]))->map(fn ($item) => is_array($item) ? $item : [])->values();
-                    $initialRequests = $transferFormData['requests'][(string) $initialDestination?->id] ?? [];
+                    $initialRequests = $transferFormData['requests'][(string) $initialDestinationId] ?? [];
                     // Request ber-Project mengunci Projectnya di klien; render ulang harus memulihkan
                     // kunci itu juga, kalau tidak form kembali dalam bentuk yang prefill tidak pernah buat.
                     $initialRequest = collect($initialRequests)->first(fn (array $candidate): bool => (string) $candidate['id'] === (string) old('material_request_id'));
@@ -60,7 +63,7 @@
                     $projectTerkunciLabel = 'Gudang THC ke gudang THC — tanpa Project';
                 @endphp
                 <form class="ui-form" method="POST" action="{{ route('warehouse.transfers.issue') }}" target="_blank" rel="noopener noreferrer" data-submit-loading data-transfer-form>@csrf
-                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-origin-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialOrigin?->id === $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-destination-select required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialDestination?->id === $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
+                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-origin-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialOriginId === (int) $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-destination-select required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialDestinationId === (int) $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
                     <div class="ui-form__grid"><label>Request Material<select name="material_request_id" data-request-select data-empty-label="— Tanpa Request Material —"><option value="">— Tanpa Request Material —</option>@foreach($initialRequests as $initialRequest)<option value="{{ $initialRequest['id'] }}" @selected((string) old('material_request_id') === (string) $initialRequest['id'])>{{ $initialRequest['label'] }}</option>@endforeach</select></label><label>Project<select name="project_id" data-project-select data-empty-label="{{ $projectKosongLabel }}" data-locked-label="{{ $projectTerkunciLabel }}" @disabled($initialMitraId === null || $initialLockedProjectId !== null)>@if($initialMitraId === null)<option value="">{{ $projectTerkunciLabel }}</option>@else<option value="">{{ $projectKosongLabel }}</option>@foreach($initialProjects as $initialProject)<option value="{{ $initialProject['id'] }}" @selected((string) old('project_id') === (string) $initialProject['id'])>{{ $initialProject['label'] }}</option>@endforeach @endif</select>@if($initialLockedProjectId !== null)<input type="hidden" name="project_id" value="{{ $initialLockedProjectId }}" data-project-lock>@endif</label></div>
                     <div class="ui-form__grid"><label>Tanggal<input type="date" name="tanggal" required value="{{ old('tanggal', now()->toDateString()) }}"></label><label>Pengirim<input name="pengirim" maxlength="255" required value="{{ old('pengirim') }}"></label></div><div class="ui-form__grid"><label>Sopir<input name="sopir" maxlength="255" value="{{ old('sopir') }}"></label><label>Plat nomor<input name="plat_nomor" maxlength="255" value="{{ old('plat_nomor') }}"></label></div>
                     <div class="ui-form"><strong>Item Surat Jalan</strong><div data-transfer-items>@foreach($oldItems as $index => $oldItem)@php
@@ -130,7 +133,10 @@
         const option = (value, label) => { const created = document.createElement('option'); created.value = String(value); created.textContent = label; return created; };
         // Mitra Surat Jalan ditentukan gudang asal, dan jatuh ke gudang tujuan bila asal milik THC.
         const effectiveMitra = () => formData.warehouse_mitra[originSelect.value] ?? formData.warehouse_mitra[destinationSelect.value] ?? null;
-        let currentMitra = effectiveMitra();
+        // Aturannya tetap hidup di sini karena ganti gudang harus menilainya ulang; yang tidak
+        // dihitung ulang adalah nilai AWALNYA. Server sudah merakitnya dan merender dropdown Project
+        // di atasnya, jadi mengambilnya dari payload membuat keduanya mustahil berbeda saat muat.
+        let currentMitra = formData.initial_mitra_id;
         // Gudang tujuan adalah filter wajib; Project mempersempit daftar tapi request tanpa Project tetap muncul.
         const availableRequests = () => (formData.requests[destinationSelect.value] ?? []).filter((request) =>
             projectSelect.value === '' || request.project_id === null || String(request.project_id) === projectSelect.value);
@@ -249,8 +255,9 @@
         // Penyimpangan ditandai, tidak diblokir (ADR-0024). Klasifikasinya sengaja meniru
         // SuratJalanService::classifyRequestDeviations(): diukur per material atas seluruh baris
         // dengan toleransi yang sama, supaya peringatan di layar dan penilaian server saat terbit
-        // tidak mungkin berbeda kesimpulan.
-        const QTY_TOLERANCE = 0.0005;
+        // tidak mungkin berbeda kesimpulan. Ambangnya pun tidak diketik ulang di sini: ia dibawa
+        // payload dari App\Support\QtyTolerance, konstanta yang sama yang dibaca server.
+        const QTY_TOLERANCE = formData.qty_tolerance;
         const DEVIATING_CLASS = 'ui-list__item--deviating';
         // Material baris prefill dibawa hidden input karena selectnya dikunci disabled.
         const rowMaterial = (row) => row.querySelector('input[type="hidden"][name$="[material_id]"]')?.value

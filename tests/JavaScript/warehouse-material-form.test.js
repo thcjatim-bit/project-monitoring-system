@@ -8,7 +8,22 @@ const bladePath = fileURLToPath(
     new URL('../../resources/views/warehouse/index.blade.php', import.meta.url),
 );
 
+const tolerancePath = fileURLToPath(
+    new URL('../../app/Support/QtyTolerance.php', import.meta.url),
+);
+
 const blade = () => readFileSync(bladePath, 'utf8');
+
+/**
+ * Ambang klasifikasi dibaca dari konstanta aplikasinya, bukan diketik ulang di sini: fixture
+ * payload di bawah harus membawa angka yang sama persis dengan yang dipakai server.
+ */
+const qtyTolerance = () => {
+    const match = readFileSync(tolerancePath, 'utf8').match(/const VALUE = ([\d.]+);/);
+    assert.ok(match, 'konstanta QtyTolerance::VALUE tidak ditemukan');
+
+    return Number(match[1]);
+};
 
 /** Skrip inline halaman Warehouse adalah artefak yang benar-benar dikirim ke browser. */
 const inlineScript = () => {
@@ -382,6 +397,11 @@ describe('daur hidup tombol submit', { concurrency: true }, () => {
  */
 const transferFormData = {
     warehouse_mitra: { 10: null, 20: 7, 30: null, 40: 7 },
+    // Gudang awal dan Mitra efektifnya dilayani server; skrip membacanya, tidak menghitungnya ulang.
+    initial_origin_id: 10,
+    initial_destination_id: 20,
+    initial_mitra_id: 7,
+    qty_tolerance: qtyTolerance(),
     requests: {
         10: [],
         20: [
@@ -890,6 +910,10 @@ test('jalur tanpa Request Material tidak menambah baris apa pun', (t) => {
  * Penandaan baris menyimpang (ADR-0024 "Peringatan, bukan penghalang"). Klasifikasinya meniru
  * `SuratJalanService::classifyRequestDeviations()`: diukur per material atas seluruh baris,
  * bukan per baris, supaya yang dilihat operator sama dengan yang dinilai server saat terbit.
+ *
+ * Yang diuji di bawah ini adalah saluran penandaannya — kelas, catatan, panduan. Kasus
+ * klasifikasi baru tidak ditulis di sini: tempatnya tests/fixtures/klasifikasi-penyimpangan.json
+ * yang dibaca kedua sisi (ADR-0026), lihat "kontrak klasifikasi penyimpangan" di akhir berkas.
  */
 const penyimpangan = (row) => row.dataset.deviation ?? null;
 
@@ -1295,4 +1319,177 @@ test('membuang setiap baris yang dipulihkan old() tetap menyisakan satu baris si
     assert.equal(tersisa[0].querySelector('input[type="number"]').value, '');
     assert.equal(tersisa[0].querySelector('input[type="hidden"][name$="[material_id]"]'), null);
     assert.equal(tersisa[0].dataset.rowAsal, 'manual');
+});
+
+/**
+ * Sisi JS dari kontrak lintas bahasa yang dijanjikan ADR-0026. Kasusnya tidak ditulis di sini
+ * melainkan dibaca dari berkas yang sama yang dibaca tests/Feature/SuratJalanDeviationContractTest.php
+ * atas `SuratJalanService::classifyRequestDeviations()`. Klasifikator klien memang kembar dengan
+ * yang di server dan itu disengaja; berkas itu yang membuat keduanya tidak bisa menyimpang diam-diam.
+ */
+const kontrak = JSON.parse(readFileSync(
+    fileURLToPath(new URL('../fixtures/klasifikasi-penyimpangan.json', import.meta.url)),
+    'utf8',
+));
+
+const sisaKontrak = (kasus, materialId) => {
+    const line = kasus.request.find((candidate) => candidate.material_id === materialId);
+    assert.ok(line, 'kasus batas toleransi hanya berlaku pada material yang ada di request');
+
+    return Math.max(line.diminta - line.terkirim, 0);
+};
+
+/**
+ * Kasus batas menyebut toleransi sebagai faktor, bukan angka: tiap sisi mengalikannya dengan
+ * ambang aplikasinya sendiri — di sini ambang itu diambil dari payload, sama seperti skrip halaman.
+ */
+const qtyKontrak = (kasus, baris) => ('qty' in baris
+    ? baris.qty
+    : sisaKontrak(kasus, baris.material_id) + baris.qty_sisa_plus_toleransi * transferFormData.qty_tolerance);
+
+/** Request kontrak menempati gudang tujuan 20; sisanya diturunkan dari kasus, bukan diketik. */
+const payloadKontrak = (kasus) => ({
+    ...transferFormData,
+    requests: {
+        20: [{
+            id: 91,
+            mitra_id: 7,
+            project_id: null,
+            tanggal: '2026-08-20',
+            status: 'disetujui',
+            label: KONTRAK_LABEL,
+            items: kasus.request.map((line) => ({
+                material_id: line.material_id,
+                jenis: 'biasa',
+                diminta: line.diminta,
+                terkirim: line.terkirim,
+                sisa: Math.max(line.diminta - line.terkirim, 0),
+            })),
+        }],
+    },
+});
+
+const KONTRAK_LABEL = '#91 — kontrak klasifikasi';
+
+const halamanKontrak = (t, kasus) => openPage(t, `
+    <form data-submit-loading data-transfer-form target="_blank">
+        <select name="warehouse_asal_id" data-origin-select required>
+            <option value="10">WH-THC</option>
+        </select>
+        <select name="warehouse_tujuan_id" data-destination-select required>
+            <option value="20">WH-MITRA</option>
+        </select>
+        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
+            <option value="">${KOSONG_REQUEST}</option>
+            <option value="91">${KONTRAK_LABEL}</option>
+        </select>
+        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
+            <option value="">${KOSONG_PROJECT}</option>
+        </select>
+        <div data-transfer-items>
+            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
+                <label>Material<select name="items[0][material_id]" required>
+                    <option value="">Pilih Material</option>${materialOptions}
+                </select></label>
+                <label>Qty<input type="number" name="items[0][qty]" required></label>
+                ${identityFields('items[0]')}
+                ${catatanField('items[0]')}
+                <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
+                <button type="button" data-remove-item hidden>Hapus item</button>
+            </div>
+        </div>
+        <button type="button" data-add-item>Tambah item</button>
+        <button type="submit">Terbitkan Surat Jalan</button>
+    </form>
+    <script type="application/json" data-transfer-form-data>${JSON.stringify(payloadKontrak(kasus))}</script>
+`);
+
+/**
+ * Baris kasus diketik operator satu per satu, bukan dipasang lewat atribut: yang dijamin kontrak
+ * ini adalah kesimpulan klasifikasinya, dan jalur ketikan itulah yang benar-benar dilewati operator.
+ */
+const ketikBarisKontrak = (window, kasus) => kasus.baris.map((baris, index) => {
+    const row = index === 0 ? rows(window)[0] : barisManual(window);
+    ketik(window, row, String(baris.material_id), String(qtyKontrak(kasus, baris)));
+
+    return row;
+});
+
+describe('kontrak klasifikasi penyimpangan', { concurrency: true }, () => {
+    kontrak.kasus.forEach((kasus) => {
+        it(kasus.nama, (t) => {
+            const window = halamanKontrak(t, kasus);
+            // Request kontrak dipilih lebih dulu; prefillnya sengaja dibuang supaya yang dinilai
+            // hanyalah baris yang disebut fixture.
+            choose(window, field(window, '[data-request-select]'), '91');
+            rows(window)
+                .filter((row) => row.dataset.rowAsal === 'request')
+                .forEach((row) => row.querySelector('[data-remove-item]').click());
+
+            const baris = ketikBarisKontrak(window, kasus);
+
+            assert.deepEqual(
+                baris.map(penyimpangan),
+                kasus.baris.map((row) => kasus.klasifikasi[String(row.material_id)] ?? null),
+            );
+        });
+    });
+
+    it('fixture kontrak menyebut setiap jenis penyimpangan', () => {
+        const jenis = kontrak.kasus.flatMap((kasus) => Object.values(kasus.klasifikasi));
+
+        [null, 'material_asing', 'qty_melebihi'].forEach((harus) => {
+            assert.ok(jenis.includes(harus), `fixture kontrak harus memuat kasus ${harus ?? 'patuh'}`);
+        });
+    });
+
+    /**
+     * Sisi klien dari janji "Mitra efektif awal dilayani satu sumber": skrip tidak menghitung
+     * nilai awalnya sendiri. Dijaga di sini, bukan di test PHP, supaya aturannya tidak perlu
+     * diketik ulang di test hanya untuk membuktikan ia tidak diketik ulang di produksi.
+     */
+    it('mitra efektif awal diambil skrip dari payload, tidak dihitung ulang', (t) => {
+        const window = openPage(t, `
+            <form data-submit-loading data-transfer-form target="_blank">
+                <select name="warehouse_asal_id" data-origin-select required><option value="10">WH-THC</option></select>
+                <select name="warehouse_tujuan_id" data-destination-select required><option value="20">WH-MITRA</option></select>
+                <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}"><option value="">${KOSONG_REQUEST}</option></select>
+                <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}"><option value="">${KOSONG_PROJECT}</option></select>
+                <div data-transfer-items><div class="ui-list__item" data-transfer-row data-row-asal="manual">
+                    <label>Material<select name="items[0][material_id]" required><option value="">Pilih Material</option>${materialOptions}</select></label>
+                    <label>Qty<input type="number" name="items[0][qty]" required></label>
+                </div></div>
+                <button type="submit">Terbitkan Surat Jalan</button>
+            </form>
+            <script type="application/json" data-transfer-form-data>${JSON.stringify({
+        ...transferFormData,
+        // Gudang asal 10 milik THC dan tujuan 20 milik Mitra 7, tapi payload menyebut Mitra 9:
+        // skrip yang menghitung sendiri akan menjawab 7 dan menyusun daftar Project yang salah.
+        initial_mitra_id: 9,
+        projects: [
+            { id: 55, id_project: 'PRJ-2608-0001', nama: 'Alpha', mitra_id: 7, label: 'PRJ-2608-0001 — Alpha' },
+            { id: 57, id_project: 'PRJ-2608-0003', nama: 'Gamma', mitra_id: 9, label: 'PRJ-2608-0003 — Gamma' },
+        ],
+    })}</script>
+        `);
+
+        // Ganti gudang tujuan ke nilai yang sudah terpilih: Mitra efektifnya tidak berubah, jadi
+        // daftar Project hanya tersusun ulang bila skrip berangkat dari Mitra yang berbeda.
+        choose(window, field(window, '[data-destination-select]'), '20');
+
+        assert.deepEqual(
+            optionValues(field(window, '[data-project-select]')),
+            ['', '55'],
+            'skrip yang memakai initial_mitra_id dari payload akan menganggap Mitra berubah 9 → 7',
+        );
+    });
+
+    it('ambang klasifikasi dibawa payload, tidak diketik ulang di skrip halaman', () => {
+        assert.match(inlineScript(), /QTY_TOLERANCE = formData\.qty_tolerance/);
+        assert.doesNotMatch(
+            inlineScript(),
+            /QTY_TOLERANCE = [\d.]/,
+            'ambang yang diketik ulang di klien adalah ambang kedua yang bisa menyimpang dari server',
+        );
+    });
 });
