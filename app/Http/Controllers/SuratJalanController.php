@@ -88,9 +88,10 @@ class SuratJalanController extends Controller
             'items.*.serial_number' => ['nullable', 'string', 'max:255'],
             'items.*.drum_id' => ['nullable', 'string', 'max:255'],
             'items.*.catatan' => ['nullable', 'string', 'max:1000'],
-            // Asal-usul baris adalah kenyamanan UI, bukan sumber kebenaran: server tetap
-            // menghitung ulang klasifikasi dan tidak pernah membaca nilai ini.
-            'items.*.asal' => ['nullable', Rule::in(['manual', 'request'])],
+            // `items.*.asal` sengaja tidak punya aturan. Asal-usul baris adalah kenyamanan UI,
+            // bukan sumber kebenaran: server menghitung ulang klasifikasi dan tidak pernah
+            // membaca nilai ini. Memvalidasinya berarti sebuah submit yang isinya sah bisa
+            // ditolak hanya karena string yang tidak dibaca siapa pun tidak cocok.
         ]);
 
         $origin = Warehouse::query()->findOrFail($data['warehouse_asal_id']);

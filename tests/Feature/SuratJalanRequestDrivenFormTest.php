@@ -163,7 +163,13 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $this->assertCount(1, $suratJalan->items()->get());
     }
 
-    public function test_asal_usul_baris_yang_tidak_dikenal_ditolak(): void
+    /**
+     * Asal-usul baris tidak punya konsumen di server: klasifikasi dihitung ulang dari data
+     * request, bukan dari hidden input. Field tanpa konsumen tidak boleh menolak submit yang
+     * isinya sah, jadi nilai apa pun -- termasuk yang tidak dikenal atau kosong -- lewat, dan
+     * sisa payload tetap tersimpan utuh.
+     */
+    public function test_asal_usul_baris_apa_pun_diterima_dan_payload_tersimpan_utuh(): void
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
@@ -178,10 +184,16 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
-            'items' => [['material_id' => $material->id, 'qty' => '4', 'asal' => 'entah']],
-        ])->assertSessionHasErrors('items.0.asal');
+            'items' => [
+                ['material_id' => $material->id, 'qty' => '4', 'asal' => 'entah'],
+                ['material_id' => $material->id, 'qty' => '3', 'asal' => ''],
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertSame(0, SuratJalan::query()->count());
+        $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
+        $items = $suratJalan->items()->get();
+        $this->assertCount(2, $items);
+        $this->assertEqualsCanonicalizing(['4', '3'], $items->map(fn ($item): string => (string) (int) $item->qty)->all());
     }
 
     /**
