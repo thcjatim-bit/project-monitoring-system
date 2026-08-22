@@ -26,3 +26,7 @@ The default five-role vocabulary — each label string equal to its role name. S
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Issue autopilot
+
+When dispatching or working on a scheduled GitHub issue, read `docs/agents/autopilot.md`; it defines eligibility, context boundaries, worker gates, and recovery.
