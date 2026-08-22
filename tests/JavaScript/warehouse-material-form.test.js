@@ -381,7 +381,7 @@ describe('daur hidup tombol submit', { concurrency: true }, () => {
  * yang diuji di sini adalah apa yang klien lakukan terhadapnya, bukan cara server merakitnya.
  */
 const transferFormData = {
-    warehouse_mitra: { 10: null, 20: 7, 30: null },
+    warehouse_mitra: { 10: null, 20: 7, 30: null, 40: 7 },
     requests: {
         10: [],
         20: [
@@ -436,6 +436,26 @@ const transferFormData = {
             },
         ],
         30: [],
+        40: [
+            {
+                id: 96,
+                mitra_id: 7,
+                project_id: 56,
+                tanggal: '2026-08-15',
+                status: 'disetujui',
+                label: '#96 — 15 Aug 2026 · 1 item, 1 belum lengkap',
+                items: [{ material_id: 1, jenis: 'biasa', diminta: 4, terkirim: 0, sisa: 4 }],
+            },
+            {
+                id: 97,
+                mitra_id: 7,
+                project_id: null,
+                tanggal: '2026-08-14',
+                status: 'disetujui',
+                label: '#97 — 14 Aug 2026 · 1 item, 1 belum lengkap',
+                items: [{ material_id: 1, jenis: 'biasa', diminta: 1, terkirim: 0, sisa: 1 }],
+            },
+        ],
     },
     projects: [
         { id: 55, id_project: 'PRJ-2608-0001', nama: 'Alpha', mitra_id: 7, label: 'PRJ-2608-0001 — Alpha' },
@@ -458,6 +478,7 @@ const requestDrivenPage = (t) => openPage(t, `
         <select name="warehouse_tujuan_id" data-destination-select required>
             <option value="20">WH-MITRA</option>
             <option value="30">WH-THC-2</option>
+            <option value="40">WH-MITRA-2</option>
         </select>
         <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
             <option value="">${KOSONG_REQUEST}</option>
@@ -718,6 +739,141 @@ test('memilih Project mempersempit daftar request tapi request tanpa Project tet
     choose(window, field(window, '[data-project-select]'), '56');
 
     assert.deepEqual(optionValues(field(window, '[data-request-select]')), ['', '92']);
+});
+
+/**
+ * Project yang terkunci request adalah pinjaman, bukan pilihan operator. Membatalkan request
+ * harus mengembalikan Project ke keadaan sebelum dikunci — bukan sekadar melepas kuncinya dan
+ * meninggalkan nilai request yang sudah pergi tampak seperti isian operator sendiri.
+ */
+test('membatalkan request mengembalikan Project ke keadaan sebelum request dipilih', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+    assert.equal(field(window, '[data-project-select]').value, '55', 'prasyarat: request mengunci Project');
+
+    choose(window, field(window, '[data-request-select]'), '');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.value, '', 'Project harus pulih ke keadaan semula, bukan menyisakan nilai request');
+    assert.equal(project.disabled, false);
+    assert.equal(field(window, '[data-project-lock]'), null);
+});
+
+/** Pulih berarti kembali ke pilihan operator, jadi isian yang ia buat sendiri tidak boleh ikut terhapus. */
+test('membatalkan request tidak menghapus Project yang diisi operator sendiri', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-project-select]'), '55');
+    choose(window, field(window, '[data-request-select]'), '91');
+    assert.equal(field(window, '[data-project-lock]').value, '55', 'prasyarat: request mengunci Project');
+
+    choose(window, field(window, '[data-request-select]'), '');
+
+    assert.equal(field(window, '[data-project-select]').value, '55', 'pilihan Project operator harus utuh');
+    assert.equal(field(window, '[data-project-select]').disabled, false);
+});
+
+/** Berganti ke request tanpa Project pun melepas pinjaman itu, bukan mewariskannya diam-diam. */
+test('berpindah ke request tanpa Project melepas Project pinjaman request sebelumnya', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.value, '', 'request tanpa Project tidak boleh mewarisi Project request sebelumnya');
+    assert.equal(field(window, '[data-project-lock]'), null);
+});
+
+/**
+ * Nilai pra-kunci terikat pada daftar Project milik satu Mitra. Ganti Mitra menulis ulang daftar
+ * itu, jadi nilai simpanan ikut gugur — memulihkannya berarti menghidupkan Project Mitra lama.
+ */
+test('ganti Mitra membuang nilai Project pra-kunci milik Mitra lama', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-project-select]'), '55');
+    choose(window, field(window, '[data-request-select]'), '91');
+
+    choose(window, field(window, '[data-destination-select]'), '30');
+    choose(window, field(window, '[data-destination-select]'), '20');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.value, '', 'Project Mitra lama tidak boleh hidup kembali setelah Mitra berganti');
+    assert.equal(project.disabled, false);
+    assert.equal(field(window, '[data-project-lock]'), null);
+});
+
+/**
+ * Penyaring daftar request membaca Project yang sedang terpilih. Selama Project masih pinjaman
+ * request lama, daftar yang tersusun lebih sempit daripada yang berhak dilihat operator — jadi
+ * kunci harus lepas sebelum daftar disusun ulang, bukan sesudahnya.
+ */
+test('ganti gudang tujuan menyusun daftar request tanpa disempitkan Project pinjaman', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '91');
+    assert.equal(field(window, '[data-project-select]').value, '55', 'prasyarat: request mengunci Project');
+
+    choose(window, field(window, '[data-destination-select]'), '40');
+
+    assert.equal(field(window, '[data-project-select]').value, '', 'Project pinjaman harus lepas saat request di-reset');
+    assert.deepEqual(
+        optionValues(field(window, '[data-request-select]')),
+        ['', '96', '97'],
+        'daftar request gudang baru tidak boleh disempitkan Project request yang sudah pergi',
+    );
+});
+
+/**
+ * Setelah POST ditolak, Blade merender ulang kunci Project dari `old()`. Yang terkirim hanyalah
+ * nilai terkunci — pilihan operator sebelum request dipilih tidak pernah ikut ke server, jadi
+ * tidak ada yang bisa dipulihkan. Membatalkan request mengosongkan Project: menyisakan nilai
+ * request yang sudah pergi justru mengulang bug yang diperbaiki di sini.
+ */
+const halamanDenganKunciServer = (t) => openPage(t, `
+    <form data-submit-loading data-transfer-form target="_blank">
+        <select name="warehouse_asal_id" data-origin-select required>
+            <option value="10">WH-THC</option>
+        </select>
+        <select name="warehouse_tujuan_id" data-destination-select required>
+            <option value="20" selected>WH-MITRA</option>
+        </select>
+        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
+            <option value="">${KOSONG_REQUEST}</option>
+            <option value="91" selected>${transferFormData.requests[20][0].label}</option>
+        </select>
+        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}" disabled>
+            <option value="">${KOSONG_PROJECT}</option>
+            <option value="55" selected>PRJ-2608-0001 — Alpha</option>
+            <option value="56">PRJ-2608-0002 — Beta</option>
+        </select>
+        <input type="hidden" name="project_id" value="55" data-project-lock>
+        <div data-transfer-items>
+            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
+                <label>Material<select name="items[0][material_id]" required>
+                    <option value="">Pilih Material</option>${materialOptions}
+                </select></label>
+                <label>Qty<input type="number" name="items[0][qty]" required></label>
+                ${identityFields('items[0]')}
+                ${catatanField('items[0]')}
+                <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
+                <button type="button" data-remove-item hidden>Hapus item</button>
+            </div>
+        </div>
+        <button type="button" data-add-item>Tambah item</button>
+        <button type="submit">Terbitkan Surat Jalan</button>
+    </form>
+    <script type="application/json" data-transfer-form-data>${JSON.stringify(transferFormData)}</script>
+`);
+
+test('membatalkan request yang dikunci server melepas Project, bukan menyisakannya', (t) => {
+    const window = halamanDenganKunciServer(t);
+    assert.equal(field(window, '[data-project-lock]').value, '55', 'prasyarat: kunci dirender server dari old()');
+
+    choose(window, field(window, '[data-request-select]'), '');
+
+    const project = field(window, '[data-project-select]');
+    assert.equal(project.value, '', 'Project terkunci server tidak boleh tertinggal sebagai pilihan operator');
+    assert.equal(project.disabled, false);
+    assert.equal(field(window, '[data-project-lock]'), null);
 });
 
 test('jalur tanpa Request Material tidak menambah baris apa pun', (t) => {

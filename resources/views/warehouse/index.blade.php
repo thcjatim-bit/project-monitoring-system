@@ -134,8 +134,16 @@
         // Gudang tujuan adalah filter wajib; Project mempersempit daftar tapi request tanpa Project tetap muncul.
         const availableRequests = () => (formData.requests[destinationSelect.value] ?? []).filter((request) =>
             projectSelect.value === '' || request.project_id === null || String(request.project_id) === projectSelect.value);
+        // Project yang dibawa request adalah pinjaman: nilainya milik request, bukan pilihan operator.
+        // Nilai pra-kunci disimpan saat mengunci, bukan ditebak saat melepas — hanya itu yang bisa
+        // membedakan "operator belum memilih apa-apa" dari "operator memilih Project ini sendiri".
+        // Kunci hasil render Blade (old()) tidak punya nilai pra-kunci, jadi jatuh ke kosong.
+        let projectSebelumKunci = null;
         const renderProjects = () => {
             const mitraId = effectiveMitra();
+            // Daftar Project ditulis ulang karena Mitra berganti, jadi nilai pra-kunci yang
+            // tersimpan menunjuk Mitra lama dan tidak boleh dipulihkan ke daftar yang baru.
+            projectSebelumKunci = null;
             projectSelect.replaceChildren();
             projectSelect.disabled = mitraId === null;
             if (mitraId === null) { projectSelect.append(option('', projectSelect.dataset.lockedLabel)); return; }
@@ -183,8 +191,17 @@
             if (prefillHabis) { dropPrefillRows(); return; }
             ensureTypingRow();
         });
-        const unlockProject = () => { transferForm.querySelector('[data-project-lock]')?.remove(); projectSelect.disabled = effectiveMitra() === null; };
+        const unlockProject = () => {
+            const lock = transferForm.querySelector('[data-project-lock]');
+            if (lock !== null) {
+                lock.remove();
+                projectSelect.value = projectSebelumKunci ?? '';
+                projectSebelumKunci = null;
+            }
+            projectSelect.disabled = effectiveMitra() === null;
+        };
         const lockProject = (projectId) => {
+            projectSebelumKunci = projectSelect.value;
             projectSelect.value = String(projectId); projectSelect.disabled = true;
             // Select yang disabled tidak ikut terkirim, jadi nilai terkuncinya dibawa hidden input.
             const lock = document.createElement('input');
@@ -317,7 +334,10 @@
             if (items.querySelector('[data-row-asal="request"]') !== null && firstRowIsEmpty()) idleFirstRow(true);
             markDeviations();
         };
-        const resetRequest = () => { renderRequests(); requestSelect.value = ''; dropPrefillRows(); unlockProject(); markDeviations(); };
+        // Melepas kunci lebih dulu, baru menyusun ulang daftar: penyaring request membaca
+        // projectSelect, jadi selama Project masih pinjaman request lama daftar yang tersusun
+        // lebih sempit daripada yang berhak dilihat operator.
+        const resetRequest = () => { unlockProject(); renderRequests(); requestSelect.value = ''; dropPrefillRows(); markDeviations(); };
         destinationSelect.addEventListener('change', () => {
             // Ganti gudang tujuan me-reset Project hanya bila Mitra efektif berubah.
             if (effectiveMitra() !== currentMitra) { currentMitra = effectiveMitra(); renderProjects(); }
