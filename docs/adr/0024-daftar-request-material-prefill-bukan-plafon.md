@@ -57,7 +57,7 @@ Kolom ini juga yang menegakkan `catatan` wajib: server perlu tahu baris mana yan
 
 ### Peringatan, bukan penghalang
 
-Form menandai baris menyimpang secara visual dan tidak memblokir submit. Penyimpangan di sini adalah alur kerja yang sah, bukan kesalahan — modal konfirmasi akan menjadi refleks-klik dalam seminggu. Tapi diam total juga salah: salah pilih material yang mirip namanya harus tertangkap, dan data request sudah ada di halaman untuk *prefill* sehingga penandaan itu gratis.
+Form menandai baris menyimpang secara visual dan tidak memblokir submit. Yang tidak memblokir adalah **klien**: tidak ada `required`, tidak ada modal, tidak ada tombol yang dimatikan — server tetap menolak baris menyimpang bercatatan kosong, sesuai jejak lapis 1 di atas. Ditegaskan di [ADR-0026](0026-klasifikasi-penyimpangan-kembar-di-klien.md). Penyimpangan di sini adalah alur kerja yang sah, bukan kesalahan — modal konfirmasi akan menjadi refleks-klik dalam seminggu. Tapi diam total juga salah: salah pilih material yang mirip namanya harus tertangkap, dan data request sudah ada di halaman untuk *prefill* sehingga penandaan itu gratis.
 
 ### Request yang disubstitusi ditutup, bukan digantung
 
