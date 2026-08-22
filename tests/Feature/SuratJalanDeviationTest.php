@@ -7,6 +7,8 @@ use App\Models\Izin;
 use App\Models\Material;
 use App\Models\MaterialRequest;
 use App\Models\Mitra;
+use App\Models\Project;
+use App\Models\ProjectTimeline;
 use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\User;
@@ -168,6 +170,57 @@ class SuratJalanDeviationTest extends TestCase
         $this->assertSame('selesai', $request->fresh()->status);
     }
 
+    public function test_project_deviation_records_timeline_event_with_material_categories(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        [$user, $origin, $destination, $requested, $request] = $this->approvedRequest(4, 10, $project);
+        $substitute = $this->stockedMaterial($user, $origin, 5);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $requested->id, 'qty' => 5, 'catatan' => 'Titipan tambahan'],
+            ['material_id' => $substitute->id, 'qty' => 5, 'catatan' => 'Substitusi material'],
+        ])->assertRedirect();
+
+        $timeline = ProjectTimeline::query()
+            ->where('project_id', $project->id)
+            ->where('event_key', 'surat_jalan_deviation')
+            ->firstOrFail();
+
+        $this->assertSame([$substitute->nama], $timeline->metadata['material_asing']);
+        $this->assertSame([$requested->nama], $timeline->metadata['qty_melebihi']);
+    }
+
+    public function test_deviation_on_a_request_without_a_project_has_no_timeline_event_but_keeps_the_line_note(): void
+    {
+        [$user, $origin, $destination, $requested, $request] = $this->approvedRequest(4, 10);
+        $substitute = $this->stockedMaterial($user, $origin, 5);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $requested->id, 'qty' => 4],
+            ['material_id' => $substitute->id, 'qty' => 5, 'catatan' => 'Substitusi material'],
+        ])->assertRedirect();
+
+        $this->assertDatabaseMissing('project_timelines', ['event_key' => 'surat_jalan_deviation']);
+        $this->assertSame('Substitusi material', $this->itemFor($substitute)->catatan);
+    }
+
+    public function test_compliant_issuance_for_a_project_does_not_record_a_deviation_event(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra);
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4, null, $project);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 4],
+        ])->assertRedirect();
+
+        $this->assertDatabaseMissing('project_timelines', [
+            'project_id' => $project->id,
+            'event_key' => 'surat_jalan_deviation',
+        ]);
+    }
+
     public function test_admin_mitra_still_cannot_reach_the_issuing_endpoint(): void
     {
         [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4);
@@ -199,9 +252,9 @@ class SuratJalanDeviationTest extends TestCase
     }
 
     /** @return array{User, Warehouse, Warehouse, Material, MaterialRequest} */
-    private function approvedRequest(int $requestedQty, ?int $stockQty = null): array
+    private function approvedRequest(int $requestedQty, ?int $stockQty = null, ?Project $project = null): array
     {
-        $mitra = Mitra::factory()->create();
+        $mitra = $project?->mitra ?? Mitra::factory()->create();
         [$origin, $destination] = $this->warehousesFor($mitra);
         $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
         $thc = $this->userWith(null, 'approve_material_request');
@@ -210,6 +263,7 @@ class SuratJalanDeviationTest extends TestCase
         $material = Material::factory()->create(['jenis' => 'biasa']);
 
         $this->actingAs($user)->post('/material-requests', [
+            'project_id' => $project?->id,
             'items' => [['material_id' => $material->id, 'qty' => $requestedQty]],
         ])->assertRedirect('/material-requests');
         $request = MaterialRequest::query()->firstOrFail();
@@ -218,6 +272,16 @@ class SuratJalanDeviationTest extends TestCase
         $this->receiveStock($user, $origin, $material, $stockQty ?? $requestedQty);
 
         return [$user, $origin, $destination, $material, $request];
+    }
+
+    private function projectFor(Mitra $mitra): Project
+    {
+        return $this->asThc(fn (): Project => Project::query()->create([
+            'id_project' => 'PRJ-2608-'.fake()->unique()->numerify('####'),
+            'nama' => 'Project Deviation',
+            'mitra_id' => $mitra->id,
+            'status_project' => 'aktif',
+        ]));
     }
 
     private function stockedMaterial(User $user, Warehouse $origin, int $qty): Material

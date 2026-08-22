@@ -293,10 +293,17 @@ class SuratJalanService
             'plat_nomor' => $data['plat_nomor'] ?? null,
         ]);
 
+        $deviationMaterialNames = [
+            'material_asing' => [],
+            'qty_melebihi' => [],
+        ];
         foreach ($data['items'] as $itemData) {
             $this->ensurePositiveQuantity((string) $itemData['qty']);
             $material = Material::query()->findOrFail($itemData['material_id']);
             $deviation = $deviations[(int) $itemData['material_id']] ?? null;
+            if ($deviation !== null) {
+                $deviationMaterialNames[$deviation][] = $material->nama;
+            }
             $item = $this->createItem($actor, $suratJalan, $material, $origin, $itemData, $mitraId, $deviation);
             $this->moveToTransit($actor, $suratJalan, $item, $origin, $mitraId);
         }
@@ -304,6 +311,12 @@ class SuratJalanService
         $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_issued', [
             'status' => $suratJalan->status,
         ]);
+        if ($deviations !== []) {
+            $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_deviation', [
+                'material_asing' => array_values(array_unique($deviationMaterialNames['material_asing'])),
+                'qty_melebihi' => array_values(array_unique($deviationMaterialNames['qty_melebihi'])),
+            ]);
+        }
 
         return $suratJalan->load(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
     }
