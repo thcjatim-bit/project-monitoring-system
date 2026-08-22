@@ -77,6 +77,20 @@ class SuratJalanDeviationTest extends TestCase
         $this->assertDatabaseCount('surat_jalan_items', 0);
     }
 
+    public function test_a_quantity_above_the_remainder_without_a_note_rejects_the_whole_issuance(): void
+    {
+        [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4, 10);
+
+        $this->issue($user, $origin, $destination, $request, [
+            ['material_id' => $material->id, 'qty' => 6],
+        ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('surat_jalans', 0);
+        $this->assertDatabaseCount('surat_jalan_items', 0);
+    }
+
     public function test_a_compliant_line_needs_no_note(): void
     {
         [$user, $origin, $destination, $material, $request] = $this->approvedRequest(4);

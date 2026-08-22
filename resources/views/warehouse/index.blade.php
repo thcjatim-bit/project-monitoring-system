@@ -42,18 +42,32 @@
                 @php
                     // Render awal dikerjakan server dari payload yang sama dengan yang dipakai JS, supaya
                     // isi dropdown pada muat pertama tidak bergantung pada skrip yang belum sempat jalan.
-                    $initialDestination = $destinationWarehouses->first();
-                    $initialMitraId = $warehouses->first()?->mitra_id ?? $initialDestination?->mitra_id;
+                    // POST yang ditolak kembali ke halaman ini, jadi render awal berangkat dari old():
+                    // konteks gudang/request harus cocok dengan baris yang dipulihkan di bawah.
+                    $initialOrigin = $warehouses->firstWhere('id', (int) old('warehouse_asal_id')) ?? $warehouses->first();
+                    $initialDestination = $destinationWarehouses->firstWhere('id', (int) old('warehouse_tujuan_id')) ?? $destinationWarehouses->first();
+                    $initialMitraId = $initialOrigin?->mitra_id ?? $initialDestination?->mitra_id;
+                    // Baris item hanya ada di klien setelah baris pertama, jadi tanpa render ulang ini
+                    // catatan yang sudah diketik operator tidak punya tempat untuk kembali.
+                    $oldItems = collect(old('items', [[]]))->map(fn ($item) => is_array($item) ? $item : [])->values();
                     $initialRequests = $transferFormData['requests'][(string) $initialDestination?->id] ?? [];
+                    // Request ber-Project mengunci Projectnya di klien; render ulang harus memulihkan
+                    // kunci itu juga, kalau tidak form kembali dalam bentuk yang prefill tidak pernah buat.
+                    $initialRequest = collect($initialRequests)->first(fn (array $candidate): bool => (string) $candidate['id'] === (string) old('material_request_id'));
+                    $initialLockedProjectId = $initialRequest['project_id'] ?? null;
                     $initialProjects = collect($transferFormData['projects'])->where('mitra_id', $initialMitraId)->all();
                     $projectKosongLabel = '— Tanpa Project —';
                     $projectTerkunciLabel = 'Gudang THC ke gudang THC — tanpa Project';
                 @endphp
                 <form class="ui-form" method="POST" action="{{ route('warehouse.transfers.issue') }}" target="_blank" rel="noopener noreferrer" data-submit-loading data-transfer-form>@csrf
-                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-origin-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-destination-select required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
-                    <div class="ui-form__grid"><label>Request Material<select name="material_request_id" data-request-select data-empty-label="— Tanpa Request Material —"><option value="">— Tanpa Request Material —</option>@foreach($initialRequests as $initialRequest)<option value="{{ $initialRequest['id'] }}">{{ $initialRequest['label'] }}</option>@endforeach</select></label><label>Project<select name="project_id" data-project-select data-empty-label="{{ $projectKosongLabel }}" data-locked-label="{{ $projectTerkunciLabel }}" @disabled($initialMitraId === null)>@if($initialMitraId === null)<option value="">{{ $projectTerkunciLabel }}</option>@else<option value="">{{ $projectKosongLabel }}</option>@foreach($initialProjects as $initialProject)<option value="{{ $initialProject['id'] }}">{{ $initialProject['label'] }}</option>@endforeach @endif</select></label></div>
-                    <div class="ui-form__grid"><label>Tanggal<input type="date" name="tanggal" value="{{ now()->toDateString() }}" required></label><label>Pengirim<input name="pengirim" maxlength="255" required></label></div><div class="ui-form__grid"><label>Sopir<input name="sopir" maxlength="255"></label><label>Plat nomor<input name="plat_nomor" maxlength="255"></label></div>
-                    <div class="ui-form"><strong>Item Surat Jalan</strong><div data-transfer-items><div class="ui-list__item" data-transfer-row><div class="ui-form__grid"><label>Material<select name="items[0][material_id]" required><option value="">Pilih Material</option>@foreach($materials as $material)<option value="{{ $material->id }}" data-kind="{{ $material->jenis }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>@endforeach</select></label><label>Qty<input type="number" name="items[0][qty]" min="0.001" step="0.001" required></label></div><div class="ui-form__grid"><label data-identity="serial_number" hidden>Serial Number<input name="items[0][serial_number]"></label><label data-identity="drum_id" hidden>Drum ID<input name="items[0][drum_id]"></label></div><input type="hidden" name="items[0][asal]" value="manual" data-row-origin><button class="ui-button ui-button--muted" type="button" data-remove-item hidden>Hapus item</button></div></div><button class="ui-button ui-button--muted" type="button" data-add-item>Tambah item</button></div>
+                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-origin-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialOrigin?->id === $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-destination-select required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialDestination?->id === $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
+                    <div class="ui-form__grid"><label>Request Material<select name="material_request_id" data-request-select data-empty-label="— Tanpa Request Material —"><option value="">— Tanpa Request Material —</option>@foreach($initialRequests as $initialRequest)<option value="{{ $initialRequest['id'] }}" @selected((string) old('material_request_id') === (string) $initialRequest['id'])>{{ $initialRequest['label'] }}</option>@endforeach</select></label><label>Project<select name="project_id" data-project-select data-empty-label="{{ $projectKosongLabel }}" data-locked-label="{{ $projectTerkunciLabel }}" @disabled($initialMitraId === null || $initialLockedProjectId !== null)>@if($initialMitraId === null)<option value="">{{ $projectTerkunciLabel }}</option>@else<option value="">{{ $projectKosongLabel }}</option>@foreach($initialProjects as $initialProject)<option value="{{ $initialProject['id'] }}" @selected((string) old('project_id') === (string) $initialProject['id'])>{{ $initialProject['label'] }}</option>@endforeach @endif</select>@if($initialLockedProjectId !== null)<input type="hidden" name="project_id" value="{{ $initialLockedProjectId }}" data-project-lock>@endif</label></div>
+                    <div class="ui-form__grid"><label>Tanggal<input type="date" name="tanggal" required value="{{ old('tanggal', now()->toDateString()) }}"></label><label>Pengirim<input name="pengirim" maxlength="255" required value="{{ old('pengirim') }}"></label></div><div class="ui-form__grid"><label>Sopir<input name="sopir" maxlength="255" value="{{ old('sopir') }}"></label><label>Plat nomor<input name="plat_nomor" maxlength="255" value="{{ old('plat_nomor') }}"></label></div>
+                    <div class="ui-form"><strong>Item Surat Jalan</strong><div data-transfer-items>@foreach($oldItems as $index => $oldItem)@php
+                        $oldMaterial = $materials->firstWhere('id', (int) ($oldItem['material_id'] ?? 0));
+                        $oldAsal = ($oldItem['asal'] ?? 'manual') === 'request' ? 'request' : 'manual';
+                        $oldTerkunci = $oldAsal === 'request' && $oldMaterial !== null;
+                    @endphp<div class="ui-list__item" data-transfer-row data-row-asal="{{ $oldAsal }}"><div class="ui-form__grid"><label>Material<select name="items[{{ $index }}][material_id]" required @disabled($oldTerkunci)><option value="">Pilih Material</option>@foreach($materials as $material)<option value="{{ $material->id }}" data-kind="{{ $material->jenis }}" @selected($oldMaterial?->id === $material->id)>{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>@endforeach</select>@if($oldTerkunci)<input type="hidden" name="items[{{ $index }}][material_id]" value="{{ $oldMaterial->id }}">@endif</label><label>Qty<input type="number" name="items[{{ $index }}][qty]" min="0.001" step="0.001" required value="{{ $oldItem['qty'] ?? '' }}"></label></div>{{-- Cat awal kotak identitas mengikuti toggleIdentity(); begitu skrip jalan, ia yang jadi pemiliknya. --}}<div class="ui-form__grid"><label data-identity="serial_number" @if($oldMaterial?->jenis !== 'ber_sn') hidden @endif>Serial Number<input name="items[{{ $index }}][serial_number]" @required($oldMaterial?->jenis === 'ber_sn') value="{{ $oldItem['serial_number'] ?? '' }}"></label><label data-identity="drum_id" @if($oldMaterial?->jenis !== 'drum_kabel') hidden @endif>Drum ID<input name="items[{{ $index }}][drum_id]" @required($oldMaterial?->jenis === 'drum_kabel') value="{{ $oldItem['drum_id'] ?? '' }}"></label></div><label>Catatan<input name="items[{{ $index }}][catatan]" maxlength="1000" data-catatan-input value="{{ $oldItem['catatan'] ?? '' }}"></label><input type="hidden" name="items[{{ $index }}][asal]" value="{{ $oldAsal }}" data-row-origin><button class="ui-button ui-button--muted" type="button" data-remove-item @if($index === 0 && ! $oldTerkunci) hidden @endif>Hapus item</button></div>@endforeach</div><button class="ui-button ui-button--muted" type="button" data-add-item>Tambah item</button></div>
                     <button class="ui-button" type="submit">Terbitkan Surat Jalan</button>
                 </form>@endif
                 {{-- Kontrak data form request-driven: prefill dan penyaringan berjalan murni di klien, tanpa endpoint JSON baru. --}}
@@ -82,7 +96,9 @@
     // Satu selector untuk halaman maupun baris klon, supaya baris tidak pernah terikat separuh.
     const bindSelects = (root) => root.querySelectorAll('[data-material-select], [data-transfer-row] select').forEach(bindIdentity);
     bindSelects(document);
-    const items = document.querySelector('[data-transfer-items]'); let nextTransferIndex = 1;
+    // Indeks klon melanjutkan baris yang sudah dirender server — old() bisa memulihkan lebih dari satu.
+    const items = document.querySelector('[data-transfer-items]');
+    let nextTransferIndex = items?.querySelectorAll('[data-transfer-row]').length ?? 1;
     // Klon diambil dari salinan bersih baris pertama, bukan dari baris pertama yang hidup: baris itu
     // boleh dinonaktifkan saat prefill mengambil alih, dan klon tidak boleh ikut mewarisi keadaannya.
     const rowTemplate = items?.querySelector('[data-transfer-row]')?.cloneNode(true) ?? null;
@@ -90,6 +106,10 @@
     const buildRow = (asal) => {
         const source = rowTemplate; const index = nextTransferIndex++; const row = source.cloneNode(true);
         row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[0\]/g, `items[${index}]`); input.value = ''; });
+        // Baris pertama bisa saja baris prefill yang dipulihkan old(), lengkap dengan material terkunci.
+        // Klon selalu baris ketikan baru, jadi kunci itu dilepas alih-alih diwariskan.
+        row.querySelector('input[type="hidden"][name$="[material_id]"]')?.remove();
+        row.querySelectorAll('select, input').forEach((field) => { field.disabled = false; });
         // Asal-usul baris dibawa hidden input, bukan sekadar atribut DOM, supaya bertahan melewati repopulasi old().
         const asalInput = row.querySelector('[data-row-origin]'); if (asalInput) asalInput.value = asal;
         row.dataset.rowAsal = asal;
@@ -198,22 +218,40 @@
         const rowMaterial = (row) => row.querySelector('input[type="hidden"][name$="[material_id]"]')?.value
             ?? row.querySelector('select')?.value ?? '';
         const rowQty = (row) => Number.parseFloat(row.querySelector('input[type="number"]')?.value ?? '') || 0;
+        let nextNoteId = 0;
         const deviationNote = (row) => {
             const existing = row.querySelector('[data-deviation-note]');
             if (existing) return existing;
             const note = document.createElement('p');
             note.className = 'ui-help'; note.setAttribute('data-deviation-note', ''); note.setAttribute('role', 'status');
+            // Catatan penandaan sekaligus jadi deskripsi field catatan, jadi ia butuh id sendiri.
+            note.id = 'deviation-note-' + (nextNoteId += 1);
             row.append(note);
             return note;
         };
+        // Panduan, bukan penghakiman: field catatan tidak pernah diberi `required`. Penyimpangan
+        // diputuskan server saat terbit, dan baris yang klien kira patuh bisa saja tidak patuh.
+        const CATATAN_PLACEHOLDER = 'Wajib: alasan penyimpangan baris ini';
+        const guideCatatan = (row, note) => {
+            const catatan = row.querySelector('[data-catatan-input]');
+            if (!catatan) return;
+            if (note === null) { catatan.removeAttribute('aria-describedby'); catatan.placeholder = ''; return; }
+            catatan.setAttribute('aria-describedby', note.id); catatan.placeholder = CATATAN_PLACEHOLDER;
+        };
         const markRow = (row, jenis, sisa) => {
             row.classList.toggle(DEVIATING_CLASS, jenis !== null);
-            if (jenis === null) { delete row.dataset.deviation; row.querySelector('[data-deviation-note]')?.remove(); return; }
+            if (jenis === null) {
+                delete row.dataset.deviation; row.querySelector('[data-deviation-note]')?.remove(); guideCatatan(row, null);
+                return;
+            }
             row.dataset.deviation = jenis;
             // Warna saja tidak cukup: alasannya harus terbaca, dan sisa harus disebut angkanya.
-            deviationNote(row).textContent = jenis === 'material_asing'
+            const note = deviationNote(row);
+            note.textContent = (jenis === 'material_asing'
                 ? 'Menyimpang: material ini tidak ada di Request Material yang dipilih.'
-                : 'Menyimpang: total qty material ini melebihi sisa Request Material (sisa ' + sisa + ').';
+                : 'Menyimpang: total qty material ini melebihi sisa Request Material (sisa ' + sisa + ').')
+                + ' Isi Catatan baris ini — baris menyimpang tanpa catatan tidak bisa terbit.';
+            guideCatatan(row, note);
         };
         const markDeviations = () => {
             const request = availableRequests().find((candidate) => String(candidate.id) === requestSelect.value);
@@ -275,6 +313,9 @@
             requestSelect.value = ''; dropPrefillRows(); markDeviations();
         });
         requestSelect.addEventListener('change', applyRequest);
+        // Baris hasil old() sudah ada sebelum ada event apa pun; tanpa ini penolakan server
+        // mengembalikan baris menyimpang tanpa penandaan maupun panduan catatannya.
+        markDeviations();
     }
     const RESTORE_SUBMIT_AFTER_MS = 1000;
     const NAVIGATES_THIS_PAGE = ['', '_self', '_parent', '_top'];

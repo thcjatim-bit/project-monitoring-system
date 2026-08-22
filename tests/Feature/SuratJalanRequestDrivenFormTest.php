@@ -184,6 +184,75 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $this->assertSame(0, SuratJalan::query()->count());
     }
 
+    /**
+     * Catatan baris menyimpang ditegakkan server, dan baris kedua dan seterusnya hanya ada di
+     * klien. Tanpa render ulang dari `old()`, satu penolakan berarti mengetik ulang seluruh
+     * Surat Jalan -- dan baris yang ditolak kembali tanpa penandaan maupun panduan catatannya.
+     */
+    public function test_penolakan_mengembalikan_setiap_baris_yang_sudah_diketik(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'A Gudang Mitra');
+        $origin->users()->attach($operator);
+        $diminta = Material::factory()->create(['jenis' => 'biasa']);
+        $asing = Material::factory()->create(['jenis' => 'biasa']);
+        $project = $this->project($mitra, 'PRJ-2608-0001');
+        $request = $this->materialRequest($mitra, 'disetujui', [[$diminta, 4]], $project);
+        $this->terimaStok($operator, $origin, $diminta, '4');
+        $this->terimaStok($operator, $origin, $asing, '5');
+
+        $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $tujuan->id,
+            'material_request_id' => $request->id,
+            'project_id' => $project->id,
+            'tanggal' => '2026-08-22',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $diminta->id, 'qty' => '4', 'asal' => 'request', 'catatan' => 'Sesuai permintaan'],
+                ['material_id' => $asing->id, 'qty' => '5', 'asal' => 'manual', 'catatan' => ''],
+            ],
+        ])
+            ->assertRedirect('/warehouse')
+            ->assertSessionHasErrors('items');
+
+        $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/name="items\[0\]\[catatan\]"[^>]*value="Sesuai permintaan"/',
+            $html,
+            'catatan yang sudah diketik harus kembali',
+        );
+        $this->assertMatchesRegularExpression(
+            '/name="items\[1\]\[catatan\]"/',
+            $html,
+            'baris kedua hanya ada di klien, jadi tanpa render ulang catatannya tidak punya tempat',
+        );
+        $this->assertMatchesRegularExpression(
+            '/name="items\[1\]\[qty\]"[^>]*value="5"/',
+            $html,
+            'catatan yang kembali tanpa barisnya tidak berarti apa-apa',
+        );
+        // Baris prefill kembali dalam bentuk prefill, bukan sebagai baris ketikan biasa.
+        $this->assertMatchesRegularExpression(
+            '/<select name="items\[0\]\[material_id\]"[^>]*\bdisabled\b/',
+            $html,
+            'material baris prefill tidak boleh jadi bisa diubah hanya karena POST ditolak',
+        );
+        $this->assertStringContainsString(
+            '<input type="hidden" name="items[0][material_id]" value="'.$diminta->id.'">',
+            $html,
+            'select yang disabled tidak terkirim, jadi materialnya dibawa hidden input',
+        );
+        $this->assertStringContainsString(
+            '<input type="hidden" name="project_id" value="'.$project->id.'" data-project-lock>',
+            $html,
+            'request ber-Project mengunci Projectnya; kuncinya ikut dipulihkan',
+        );
+    }
+
     private function terimaStok(User $operator, Warehouse $warehouse, Material $material, string $qty): void
     {
         $this->actingAs($operator)->post('/warehouse/stock/receive', [

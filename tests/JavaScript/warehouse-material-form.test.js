@@ -37,6 +37,11 @@ const identityFields = (prefix) => `
     <label data-identity="drum_id" hidden>Drum ID<input name="${prefix}[drum_id]"></label>
 `;
 
+/** Catatan ikut di setiap baris fixture karena Blade merendernya di setiap baris. */
+const catatanField = (prefix) => `
+    <label>Catatan<input name="${prefix}[catatan]" maxlength="1000" data-catatan-input></label>
+`;
+
 /** Fixture happy-dom ditutup lewat `t.after`, seperti tests/JavaScript/searchable-select.test.js. */
 const openPage = (t, body) => {
     const window = new Window({ url: 'https://example.test/warehouse' });
@@ -72,6 +77,7 @@ const warehousePage = (t) => openPage(t, `
                 </select></label>
                 <label>Qty<input type="number" name="items[0][qty]" required></label>
                 ${identityFields('items[0]')}
+                ${catatanField('items[0]')}
                 <button type="button" data-remove-item hidden>Hapus item</button>
             </div>
         </div>
@@ -178,7 +184,8 @@ test('baris item Surat Jalan dimulai tanpa material terpilih dan tanpa kotak ide
 });
 
 test('markup baris item Surat Jalan menyediakan opsi placeholder Pilih Material', () => {
-    const select = blade().match(/<select name="items\[0\]\[material_id\]"[^>]*>([\s\S]*?)<\/select>/);
+    // Indeks baris dirender Blade dari old(), jadi markup dicocokkan tanpa memaku angkanya.
+    const select = blade().match(/<select name="items\[[^"]*\]\[material_id\]"[^>]*>([\s\S]*?)<\/select>/);
 
     assert.ok(select, 'select Material baris item Surat Jalan tidak ditemukan');
     assert.match(
@@ -472,6 +479,7 @@ const requestDrivenPage = (t) => openPage(t, `
                 </select></label>
                 <label>Qty<input type="number" name="items[0][qty]" required></label>
                 ${identityFields('items[0]')}
+                ${catatanField('items[0]')}
                 <input type="hidden" name="items[0][asal]" value="manual" data-row-origin>
                 <button type="button" data-remove-item hidden>Hapus item</button>
             </div>
@@ -848,4 +856,187 @@ test('membatalkan pilihan request menghapus peringatan pecahan', (t) => {
     choose(window, field(window, '[data-request-select]'), '');
 
     assert.equal(peringatanPecahan(window), null, 'peringatan yang tertinggal akan berbohong');
+});
+
+/**
+ * Catatan per baris (ADR-0024). Penyimpangan diputuskan server saat terbit, jadi field ini
+ * ada di setiap baris — bukan hanya di baris yang klien kebetulan sudah menandai.
+ */
+const catatanInput = (row) => row.querySelector('[data-catatan-input]');
+
+test('markup baris item Surat Jalan menyediakan field catatan', () => {
+    const row = blade().match(/<div class="ui-list__item" data-transfer-row[^>]*>([\s\S]*?)<button class="ui-button ui-button--muted" type="button" data-remove-item/);
+
+    assert.ok(row, 'baris item Surat Jalan tidak ditemukan di markup');
+    assert.match(row[1], /name="items\[[^"]*\]\[catatan\]"/, 'baris menyimpang tidak bisa terbit tanpa field catatan');
+});
+
+test('baris item Surat Jalan hasil klon punya field catatan sendiri yang kosong', (t) => {
+    const window = warehousePage(t);
+    rows(window)[0].querySelector('[data-catatan-input]').value = 'Catatan baris pertama';
+
+    window.document.querySelector('[data-add-item]').click();
+
+    const clone = rows(window)[1];
+    assert.equal(catatanInput(clone).name, 'items[1][catatan]', 'catatan klon harus punya indeksnya sendiri');
+    assert.equal(catatanInput(clone).value, '', 'catatan baris lain bukan warisan');
+});
+
+test('baris prefill punya field catatan yang siap diisi operator', (t) => {
+    const window = requestDrivenPage(t);
+
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const [prefilled] = prefillRows(window);
+    assert.ok(catatanInput(prefilled), 'baris prefill juga bisa jadi menyimpang begitu qty-nya dinaikkan');
+    assert.equal(catatanInput(prefilled).value, '');
+    assert.match(catatanInput(prefilled).name, /^items\[\d+\]\[catatan\]$/);
+});
+
+test('field catatan tidak pernah wajib secara HTML', () => {
+    const input = blade().match(/<input name="items\[[^"]*\]\[catatan\]"[^>]*>/);
+
+    assert.ok(input, 'field catatan baris item Surat Jalan tidak ditemukan');
+    assert.doesNotMatch(
+        input[0],
+        /\brequired\b/,
+        'penyimpangan diputuskan server; required di klien akan salah menuduh baris patuh',
+    );
+});
+
+test('baris yang ditandai menyimpang tetap tidak mewajibkan catatan lewat HTML', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const manual = barisManual(window);
+    ketik(window, manual, '3', '5');
+
+    assert.equal(penyimpangan(manual), 'material_asing', 'prasyarat: baris ditandai');
+    assert.equal(catatanInput(manual).required, false, 'penandaan klien memandu, bukan menghakimi');
+});
+
+test('baris menyimpang memandu operator ke field catatannya', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+
+    const manual = barisManual(window);
+    ketik(window, manual, '3', '5');
+
+    const note = manual.querySelector('[data-deviation-note]');
+    assert.ok(note.id, 'panduan baru tersambung ke field-nya kalau catatan penandaan punya id');
+    assert.equal(catatanInput(manual).getAttribute('aria-describedby'), note.id);
+    assert.match(catatanInput(manual).placeholder, /[Ww]ajib/, 'panduan harus terbaca tanpa pembaca layar juga');
+    assert.match(catatanPenyimpangan(manual), /[Cc]atatan/, 'operator harus tahu apa yang diminta darinya');
+});
+
+test('panduan catatan hilang begitu qty dikoreksi kembali ke dalam sisa', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+    const [prefilled] = prefillRows(window);
+    isiQty(window, prefilled, '5');
+    assert.ok(catatanInput(prefilled).getAttribute('aria-describedby'), 'prasyarat: baris dipandu');
+
+    isiQty(window, prefilled, '2');
+
+    assert.equal(catatanInput(prefilled).getAttribute('aria-describedby'), null);
+    assert.equal(catatanInput(prefilled).placeholder, '', 'panduan yang tertinggal akan berbohong');
+});
+
+test('panduan tidak menghapus catatan yang sudah diketik operator', (t) => {
+    const window = requestDrivenPage(t);
+    choose(window, field(window, '[data-request-select]'), '92');
+    const [prefilled] = prefillRows(window);
+    catatanInput(prefilled).value = 'Titipan tambahan atas permintaan lapangan';
+
+    isiQty(window, prefilled, '5');
+    isiQty(window, prefilled, '2');
+
+    assert.equal(catatanInput(prefilled).value, 'Titipan tambahan atas permintaan lapangan');
+});
+
+/**
+ * Setelah POST ditolak, Blade merender ulang setiap baris dari `old()`. Fixture ini meniru
+ * hasil render itu: request tetap terpilih, dan baris kedua membawa material di luar request.
+ */
+const halamanSetelahDitolak = (t) => openPage(t, `
+    <form data-submit-loading data-transfer-form target="_blank">
+        <select name="warehouse_asal_id" data-origin-select required>
+            <option value="10">WH-THC</option>
+            <option value="20">WH-MITRA</option>
+        </select>
+        <select name="warehouse_tujuan_id" data-destination-select required>
+            <option value="20" selected>WH-MITRA</option>
+            <option value="30">WH-THC-2</option>
+        </select>
+        <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">
+            <option value="">${KOSONG_REQUEST}</option>
+            <option value="92" selected>${transferFormData.requests[20][1].label}</option>
+        </select>
+        <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}">
+            <option value="">${KOSONG_PROJECT}</option>
+        </select>
+        <div data-transfer-items>
+            <div class="ui-list__item" data-transfer-row data-row-asal="request">
+                <label>Material<select name="items[0][material_id]" required disabled>
+                    <option value="">Pilih Material</option>
+                    <option value="1" data-kind="biasa" selected>MAT-1 — Kabel Patch</option>
+                </select><input type="hidden" name="items[0][material_id]" value="1"></label>
+                <label>Qty<input type="number" name="items[0][qty]" required value="2"></label>
+                ${identityFields('items[0]')}
+                ${catatanField('items[0]')}
+                <input type="hidden" name="items[0][asal]" value="request" data-row-origin>
+                <button type="button" data-remove-item>Hapus item</button>
+            </div>
+            <div class="ui-list__item" data-transfer-row data-row-asal="manual">
+                <label>Material<select name="items[1][material_id]" required>
+                    <option value="">Pilih Material</option>
+                    <option value="3" data-kind="drum_kabel" selected>MAT-3 — Drum Kabel</option>
+                </select></label>
+                <label>Qty<input type="number" name="items[1][qty]" required value="5"></label>
+                ${identityFields('items[1]')}
+                ${catatanField('items[1]')}
+                <input type="hidden" name="items[1][asal]" value="manual" data-row-origin>
+                <button type="button" data-remove-item>Hapus item</button>
+            </div>
+        </div>
+        <button type="button" data-add-item>Tambah item</button>
+        <button type="submit">Terbitkan Surat Jalan</button>
+    </form>
+    <script type="application/json" data-transfer-form-data>${JSON.stringify(transferFormData)}</script>
+`);
+
+test('baris tambahan melanjutkan indeks baris yang sudah dirender server', (t) => {
+    const window = halamanSetelahDitolak(t);
+
+    window.document.querySelector('[data-add-item]').click();
+
+    const baru = rows(window).at(-1);
+    assert.equal(catatanInput(baru).name, 'items[2][catatan]', 'indeks yang bertabrakan akan menimpa baris yang dipulihkan');
+    assert.equal(baru.querySelector('input[type="number"]').name, 'items[2][qty]');
+});
+
+test('baris yang dipulihkan old() sudah ditandai dan dipandu tanpa menunggu operator mengetik', (t) => {
+    const window = halamanSetelahDitolak(t);
+
+    const [patuh, menyimpang] = rows(window);
+    assert.equal(penyimpangan(patuh), null, 'baris sesuai sisa request tidak boleh ikut tertuduh');
+    assert.equal(penyimpangan(menyimpang), 'material_asing');
+    assert.ok(
+        catatanInput(menyimpang).getAttribute('aria-describedby'),
+        'baris yang membuat POST ditolak justru yang paling perlu dipandu',
+    );
+});
+
+test('baris tambahan tidak mewarisi kunci material baris prefill yang dipulihkan', (t) => {
+    const window = halamanSetelahDitolak(t);
+
+    window.document.querySelector('[data-add-item]').click();
+
+    const baru = rows(window).at(-1);
+    assert.equal(baru.querySelector('select').disabled, false, 'baris ketikan baru harus bisa dipilih materialnya');
+    assert.equal(
+        baru.querySelector('input[type="hidden"][name$="[material_id]"]'),
+        null,
+        'kunci material milik baris prefill, bukan warisan untuk baris berikutnya',
+    );
 });
