@@ -153,6 +153,56 @@ class SuratJalanFormDataTest extends TestCase
         $response->assertDontSee('SN-MITRA-LAIN');
     }
 
+    public function test_form_surat_jalan_merender_pemilih_identitas_yang_terbatas_material_dan_gudang_asal(): void
+    {
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang Asal');
+        $otherOrigin = $this->warehouse(null, 'WH-ASAL-LAIN', 'B Gudang Asal');
+        $destination = $this->warehouse(null, 'WH-TUJUAN', 'C Gudang Tujuan');
+        $origin->users()->attach($operator);
+        $otherOrigin->users()->attach($operator);
+
+        $serialised = Material::factory()->create(['jenis' => 'ber_sn']);
+        $drumCable = Material::factory()->create(['jenis' => 'drum_kabel']);
+
+        foreach ([[$origin, 'SN-ASAL-1'], [$otherOrigin, 'SN-ASAL-LAIN']] as [$warehouse, $serialNumber]) {
+            $this->actingAs($operator)->post('/warehouse/stock/receive', [
+                'warehouse_id' => $warehouse->id,
+                'material_id' => $serialised->id,
+                'qty' => '1',
+                'serial_number' => $serialNumber,
+                'reason' => 'Penerimaan awal',
+            ])->assertRedirect();
+        }
+        $this->actingAs($operator)->post('/warehouse/stock/receive', [
+            'warehouse_id' => $origin->id,
+            'material_id' => $drumCable->id,
+            'qty' => '250',
+            'drum_id' => 'DRM-ASAL-1',
+            'reason' => 'Penerimaan awal',
+        ])->assertRedirect();
+
+        $response = $this->actingAs($operator)
+            ->withSession(['_old_input' => [
+                'warehouse_asal_id' => (string) $origin->id,
+                'warehouse_tujuan_id' => (string) $destination->id,
+                'items' => [
+                    ['material_id' => $serialised->id, 'qty' => '1', 'serial_number' => 'SN-ASAL-1'],
+                    ['material_id' => $drumCable->id, 'qty' => '25', 'drum_id' => 'DRM-ASAL-1'],
+                ],
+            ]])
+            ->get('/warehouse')
+            ->assertOk();
+
+        $response->assertSee('data-identity-select', false)
+            ->assertSee('data-ui-select-native', false)
+            ->assertDontSee('<input name="items[0][serial_number]" maxlength="255">', false)
+            ->assertDontSee('<input name="items[1][drum_id]" maxlength="255">', false);
+
+        $this->assertSame(['SN-ASAL-1'], $this->identityOptionValues($response, 'serial_number'));
+        $this->assertSame(['DRM-ASAL-1'], $this->identityOptionValues($response, 'drum_id'));
+    }
+
     public function test_warehouse_mitra_menyertakan_gudang_asal_dan_tujuan(): void
     {
         $mitra = Mitra::factory()->create();
@@ -279,6 +329,23 @@ class SuratJalanFormDataTest extends TestCase
     {
         $response->assertSee(sprintf('<option value="%d" selected>%s', $asal->id, $asal->kode), false);
         $response->assertSee(sprintf('<option value="%d" selected>%s', $tujuan->id, $tujuan->kode), false);
+    }
+
+    /** @return list<string> */
+    private function identityOptionValues(TestResponse $response, string $identity): array
+    {
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+        $options = $xpath->query(sprintf(
+            '//label[@data-identity="%s"]//div[@data-identity-select]//button[@data-ui-select-option]',
+            $identity,
+        ));
+
+        return collect($options === false ? [] : iterator_to_array($options))
+            ->map(fn (\DOMElement $option): string => $option->getAttribute('data-value'))
+            ->values()
+            ->all();
     }
 
     /**

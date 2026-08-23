@@ -85,6 +85,7 @@
 .ui-select__search input:focus { border-color: #4656d8; box-shadow: 0 0 0 3px #edf0ff; outline: 0; }
 .ui-select__options { display: grid; gap: 2px; }
 .ui-select__option { background: #fff; border: 0; border-radius: 6px; color: #172033; cursor: pointer; display: block; font: inherit; padding: 9px 10px; text-align: left; width: 100%; }
+.ui-select__option:disabled { color: #98a2b3; cursor: not-allowed; opacity: .7; }
 .ui-select__option:hover, .ui-select__option:focus, .ui-select__option.is-active { background: #edf0ff; outline: 0; }
 .ui-select__option.is-selected { background: #e8edf1; font-weight: 750; }
 .ui-select__option.is-selected:focus, .ui-select__option.is-selected:hover { background: #dfe5ff; }

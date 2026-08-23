@@ -19,6 +19,7 @@
                 'value' => (string) ($option['value'] ?? $optionValue),
                 'label' => (string) ($option['label'] ?? $option['value'] ?? $optionValue),
                 'search' => (string) ($option['search'] ?? $option['label'] ?? $optionValue),
+                'disabled' => (bool) ($option['disabled'] ?? false),
             ];
         }
 
@@ -26,6 +27,7 @@
             'value' => (string) $optionValue,
             'label' => (string) $option,
             'search' => (string) $option,
+            'disabled' => false,
         ];
     })->values();
     $selectedValue = (string) ($value ?? '');
@@ -41,7 +43,7 @@
 >
     <option value="" @selected($selectedValue === '')>{{ $placeholder }}</option>
     @foreach ($normalizedOptions as $option)
-        <option value="{{ $option['value'] }}" @selected($option['value'] === $selectedValue)>{{ $option['label'] }}</option>
+        <option value="{{ $option['value'] }}" @selected($option['value'] === $selectedValue) @disabled($option['disabled'])>{{ $option['label'] }}</option>
     @endforeach
 </select>
 
@@ -82,7 +84,7 @@
             </label>
         @endif
 
-        <div class="ui-select__options">
+        <div class="ui-select__options" data-ui-select-options>
             @if ($loading)
                 <div class="ui-select__state">Memuat data...</div>
             @elseif ($normalizedOptions->isEmpty())
@@ -97,6 +99,8 @@
                         data-value="{{ $option['value'] }}"
                         data-label="{{ $option['label'] }}"
                         data-search-text="{{ $option['search'] }}"
+                        @disabled($option['disabled'])
+                        aria-disabled="{{ $option['disabled'] ? 'true' : 'false' }}"
                         aria-selected="{{ $option['value'] === $selectedValue ? 'true' : 'false' }}"
                     >{{ $option['label'] }}</button>
                 @endforeach

@@ -1,4 +1,9 @@
 import { initializeSubmitLoading } from './submit-loading.js';
+import {
+    initializeSearchableSelects,
+    refreshSearchableSelectOptions,
+    setSearchableSelectValue,
+} from './searchable-select.js';
 
 /**
  * Logika klien halaman Warehouse: kotak identitas, siklus hidup baris Surat Jalan, dan form
@@ -23,18 +28,36 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
     // di realm-nya sendiri, dan Event di sana bukan Event yang sama dengan milik realm ini.
     const window = document.defaultView ?? globalThis;
 
+    let refreshTransferIdentityState = () => {};
     const identityScope = (select) => select.closest('[data-transfer-row]') ?? select.closest('form');
     const toggleIdentity = (select) => {
         const kind = select.options[select.selectedIndex]?.dataset.kind ?? '';
-        identityScope(select)?.querySelectorAll('[data-identity]').forEach((field) => {
+        const scope = identityScope(select);
+        scope?.querySelectorAll('[data-identity]').forEach((field) => {
             const visible = (field.dataset.identity === 'serial_number' && kind === 'ber_sn') || (field.dataset.identity === 'drum_id' && kind === 'drum_kabel');
             field.hidden = !visible;
-            field.querySelectorAll('input').forEach((input) => input.toggleAttribute('required', visible));
+            const nativeSelect = field.querySelector('[data-ui-select-native]');
+            if (nativeSelect) {
+                nativeSelect.required = visible;
+            } else {
+                field.querySelectorAll('input:not([type="hidden"]):not([type="search"])').forEach((input) => input.toggleAttribute('required', visible));
+            }
         });
+        const quantity = scope?.querySelector('input[type="number"]');
+        if (quantity && kind === 'ber_sn') {
+            quantity.value = '1';
+            quantity.readOnly = true;
+            quantity.setAttribute('aria-readonly', 'true');
+        } else if (quantity) {
+            quantity.readOnly = false;
+            quantity.removeAttribute('aria-readonly');
+        }
+        refreshTransferIdentityState();
     };
     const bindIdentity = (select) => { select.addEventListener('change', () => toggleIdentity(select)); toggleIdentity(select); };
-    // Satu selector untuk halaman maupun baris klon, supaya baris tidak pernah terikat separuh.
-    const bindSelects = (root) => root.querySelectorAll('[data-material-select], [data-transfer-row] select').forEach(bindIdentity);
+    // Satu selector untuk halaman maupun baris klon, supaya identity select tidak ikut dianggap
+    // sebagai material select setelah komponen searchable-select masuk ke dalam baris.
+    const bindSelects = (root) => root.querySelectorAll('[data-material-select]').forEach(bindIdentity);
     bindSelects(document);
     // Indeks klon melanjutkan baris yang sudah dirender server — old() bisa memulihkan lebih dari satu.
     const items = document.querySelector('[data-transfer-items]');
@@ -46,17 +69,34 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
     const buildRow = (asal) => {
         const source = rowTemplate; const index = nextTransferIndex++; const row = source.cloneNode(true);
         row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[0\]/g, `items[${index}]`); input.value = ''; });
+        row.querySelectorAll('[id], [aria-controls]').forEach((element) => {
+            ['id', 'aria-controls'].forEach((attribute) => {
+                const value = element.getAttribute(attribute);
+                if (value) element.setAttribute(attribute, value.replace(/transfer-item-0-/g, `transfer-item-${index}-`));
+            });
+        });
         // Baris pertama bisa saja baris prefill yang dipulihkan old(), lengkap dengan material terkunci.
         // Klon selalu baris ketikan baru, jadi kunci itu dilepas alih-alih diwariskan.
         row.querySelector('input[type="hidden"][name$="[material_id]"]')?.remove();
         row.querySelectorAll('select, input').forEach((field) => { field.disabled = false; });
+        row.querySelectorAll('[data-ui-select]').forEach((root) => {
+            root.removeAttribute('data-ui-select-bound');
+            root.dataset.open = 'false';
+            root.hidden = true;
+            root.querySelector('[data-ui-select-native]')?.removeAttribute('hidden');
+            root.querySelector('[data-ui-select-native]')?.removeAttribute('disabled');
+            root.querySelector('[data-ui-select-value]')?.setAttribute('disabled', 'disabled');
+            root.querySelectorAll('[data-ui-select-option]').forEach((option) => option.removeAttribute('data-ui-select-option-bound'));
+        });
         // Asal-usul baris dibawa hidden input, bukan sekadar atribut DOM, supaya bertahan melewati repopulasi old().
         const asalInput = row.querySelector('[data-row-origin]'); if (asalInput) asalInput.value = asal;
         row.dataset.rowAsal = asal;
         row.querySelector('[data-remove-item]').hidden = false; items.append(row); bindSelects(row);
+        initializeSearchableSelects(document);
+        row.querySelectorAll('[data-ui-select]').forEach((root) => setSearchableSelectValue(root, ''));
         return { row, index };
     };
-    document.querySelector('[data-add-item]')?.addEventListener('click', () => buildRow('manual'));
+    document.querySelector('[data-add-item]')?.addEventListener('click', () => { buildRow('manual'); refreshTransferIdentityState(); });
     items?.addEventListener('click', (event) => { if (event.target.matches('[data-remove-item]')) event.target.closest('[data-transfer-row]').remove(); });
     // Form request-driven: penyaringan dan prefill berjalan murni di klien di atas payload yang diserialisasi Blade.
     const transferForm = document.querySelector('[data-transfer-form]');
@@ -131,8 +171,9 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
             if (! event.target.matches('[data-remove-item]')) return;
             const prefillHabis = event.target.closest('[data-transfer-row]')?.dataset.rowAsal === 'request'
                 && items.querySelector('[data-row-asal="request"]') === null;
-            if (prefillHabis) { dropPrefillRows(); return; }
+            if (prefillHabis) { dropPrefillRows(); refreshTransferIdentityState(); return; }
             ensureTypingRow();
+            refreshTransferIdentityState();
         });
         const unlockProject = () => {
             const lock = transferForm.querySelector('[data-project-lock]');
@@ -200,6 +241,102 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         const rowMaterial = (row) => row.querySelector('input[type="hidden"][name$="[material_id]"]')?.value
             ?? row.querySelector('select')?.value ?? '';
         const rowQty = (row) => Number.parseFloat(row.querySelector('input[type="number"]')?.value ?? '') || 0;
+        const identityRoot = (row, identity) => row.querySelector(`[data-identity="${identity}"] [data-identity-select]`);
+        const identityValue = (root) => root?.querySelector('[data-ui-select-value]')?.value
+            ?? root?.querySelector('[data-ui-select-native]')?.value
+            ?? '';
+        const identityType = (identity) => identity === 'serial_number' ? 'sn' : 'drum';
+        const identitySource = (warehouseId, materialId, type) => formData.identities?.[warehouseId]?.[materialId]
+            ?.filter((identity) => identity.type === type) ?? [];
+        const identityKey = (materialId, type, value) => `${materialId}|${type}|${value}`;
+        const lastIdentityValues = new WeakMap();
+        let identityStateInitialized = false;
+        const updateIdentityQuantity = (row, kind) => {
+            const quantity = row.querySelector('input[type="number"]');
+            if (!quantity) return;
+
+            const serialRoot = identityRoot(row, 'serial_number');
+            const drumRoot = identityRoot(row, 'drum_id');
+            const selectedRoot = kind === 'ber_sn' ? serialRoot : kind === 'drum_kabel' ? drumRoot : null;
+            const selectedValue = identityValue(selectedRoot);
+            const previousValue = lastIdentityValues.get(row);
+
+            if (kind === 'ber_sn') {
+                quantity.value = '1';
+                quantity.readOnly = true;
+                quantity.setAttribute('aria-readonly', 'true');
+            } else if (kind === 'drum_kabel') {
+                quantity.readOnly = false;
+                quantity.removeAttribute('aria-readonly');
+                if (selectedValue !== '' && selectedValue !== previousValue) {
+                    const selected = identitySource(originSelect.value, rowMaterial(row), 'drum')
+                        .find((identity) => identity.value === selectedValue);
+                    if (selected) quantity.value = String(selected.sisa);
+                }
+            } else {
+                quantity.readOnly = false;
+                quantity.removeAttribute('aria-readonly');
+            }
+
+            lastIdentityValues.set(row, selectedValue);
+        };
+        refreshTransferIdentityState = () => {
+            const selectedByIdentity = new Map();
+            const transferRows = [...items.querySelectorAll('[data-transfer-row]')];
+
+            if (!identityStateInitialized) {
+                transferRows.forEach((row) => {
+                    const materialId = rowMaterial(row);
+                    const kind = row.querySelector('[data-material-select]')?.options[row.querySelector('[data-material-select]')?.selectedIndex]?.dataset.kind ?? '';
+                    const selectedRoot = kind === 'ber_sn' ? identityRoot(row, 'serial_number') : kind === 'drum_kabel' ? identityRoot(row, 'drum_id') : null;
+                    lastIdentityValues.set(row, identityValue(selectedRoot));
+                });
+                identityStateInitialized = true;
+            }
+
+            transferRows.forEach((row) => {
+                const materialId = rowMaterial(row);
+                for (const identity of ['serial_number', 'drum_id']) {
+                    const value = identityValue(identityRoot(row, identity));
+                    if (materialId !== '' && value !== '') {
+                        const key = identityKey(materialId, identityType(identity), value);
+                        if (!selectedByIdentity.has(key)) selectedByIdentity.set(key, new Set());
+                        selectedByIdentity.get(key).add(row);
+                    }
+                }
+            });
+
+            transferRows.forEach((row) => {
+                const materialId = rowMaterial(row);
+                const materialSelect = row.querySelector('[data-material-select]');
+                const kind = materialSelect?.options[materialSelect.selectedIndex]?.dataset.kind ?? '';
+
+                for (const identity of ['serial_number', 'drum_id']) {
+                    const root = identityRoot(row, identity);
+                    if (!root) continue;
+
+                    const visible = (identity === 'serial_number' && kind === 'ber_sn')
+                        || (identity === 'drum_id' && kind === 'drum_kabel');
+                    const currentValue = identityValue(root);
+                    const entries = visible ? identitySource(originSelect.value, materialId, identityType(identity)) : [];
+                    const options = entries.map((entry) => ({
+                        value: entry.value,
+                        label: entry.type === 'drum' ? `${entry.value} — sisa ${angka(entry.sisa)}` : entry.value,
+                        searchText: entry.value,
+                        disabled: selectedByIdentity.get(identityKey(materialId, entry.type, entry.value))?.size > 0
+                            && !selectedByIdentity.get(identityKey(materialId, entry.type, entry.value)).has(row),
+                    }));
+
+                    refreshSearchableSelectOptions(root, options);
+                    if (currentValue !== '' && !entries.some((entry) => entry.value === currentValue)) {
+                        setSearchableSelectValue(root, '');
+                    }
+                }
+
+                updateIdentityQuantity(row, kind);
+            });
+        };
+        items.addEventListener('change', refreshTransferIdentityState);
         let nextNoteId = 0;
         const deviationNote = (row) => {
             const existing = row.querySelector('[data-deviation-note]');
@@ -288,7 +425,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
             resetRequest();
         });
         originSelect.addEventListener('change', () => {
-            if (effectiveMitra() === currentMitra) return;
+            if (effectiveMitra() === currentMitra) { refreshTransferIdentityState(); return; }
             currentMitra = effectiveMitra(); renderProjects(); resetRequest();
         });
         projectSelect.addEventListener('change', () => {
@@ -300,8 +437,8 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         requestSelect.addEventListener('change', applyRequest);
         // Baris hasil old() sudah ada sebelum ada event apa pun; tanpa ini penolakan server
         // mengembalikan baris menyimpang tanpa penandaan maupun panduan catatannya.
+        refreshTransferIdentityState();
         markDeviations();
     }
     initializeSubmitLoading(document);
 }
-

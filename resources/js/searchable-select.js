@@ -20,7 +20,7 @@ function optionElements(root) {
 }
 
 function visibleOptionElements(root) {
-    return optionElements(root).filter((option) => !option.hidden);
+    return optionElements(root).filter((option) => !option.hidden && !option.disabled && option.dataset.disabled !== 'true');
 }
 
 function setActiveOption(root, option) {
@@ -41,6 +41,12 @@ function updateSelectedState(root, value) {
 
     if (valueInput) {
         valueInput.value = selectedOption?.dataset.value || '';
+    }
+    const nativeSelect = root.previousElementSibling?.matches?.('[data-ui-select-native]')
+        ? root.previousElementSibling
+        : null;
+    if (nativeSelect) {
+        nativeSelect.value = selectedOption?.dataset.value || '';
     }
 
     if (label) {
@@ -103,13 +109,113 @@ function openSelect(root) {
 }
 
 function chooseOption(root, option) {
-    if (!option || option.hidden) {
+    if (!option || option.hidden || option.disabled || option.dataset.disabled === 'true') {
         return;
     }
 
     updateSelectedState(root, option.dataset.value || '');
     closeSelect(root);
     root.querySelector('[data-ui-select-trigger]')?.focus();
+    root.querySelector('[data-ui-select-value]')?.dispatchEvent(new root.ownerDocument.defaultView.Event('change', { bubbles: true }));
+}
+
+function bindOption(root, option) {
+    if (option.dataset.uiSelectOptionBound === 'true') {
+        return;
+    }
+
+    option.dataset.uiSelectOptionBound = 'true';
+    option.addEventListener('click', () => chooseOption(root, option));
+    option.addEventListener('keydown', (event) => {
+        const visible = visibleOptionElements(root);
+        const index = visible.indexOf(option);
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1;
+            setActiveOption(root, visible[Math.max(0, Math.min(nextIndex, visible.length - 1))]);
+        } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            chooseOption(root, option);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeSelect(root);
+            root.querySelector('[data-ui-select-trigger]')?.focus();
+        }
+    });
+}
+
+/**
+ * Replace the options in an enhanced or not-yet-enhanced searchable select.
+ * Dynamic form rows use the same component contract as server-rendered selects.
+ *
+ * @param {HTMLElement} root
+ * @param {Array<{value: string|number, label: string, searchText?: string, disabled?: boolean}>} options
+ */
+export function refreshSearchableSelectOptions(root, options = []) {
+    const optionsContainer = root?.querySelector('[data-ui-select-options]');
+    if (!optionsContainer) {
+        return;
+    }
+
+    const empty = optionsContainer.querySelector('[data-ui-select-empty]');
+    optionsContainer.querySelectorAll('[data-ui-select-option]').forEach((option) => option.remove());
+    const nativeSelect = root.previousElementSibling?.matches?.('[data-ui-select-native]')
+        ? root.previousElementSibling
+        : null;
+    if (nativeSelect) {
+        nativeSelect.replaceChildren();
+        const placeholder = root.dataset.placeholder || 'Pilih';
+        const emptyOption = root.ownerDocument.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = placeholder;
+        nativeSelect.append(emptyOption);
+    }
+
+    for (const option of options) {
+        const button = root.ownerDocument.createElement('button');
+        button.type = 'button';
+        button.className = 'ui-select__option';
+        button.setAttribute('role', 'option');
+        button.setAttribute('data-ui-select-option', '');
+        button.dataset.value = String(option.value ?? '');
+        button.dataset.label = String(option.label ?? option.value ?? '');
+        button.dataset.searchText = String(option.searchText ?? option.label ?? option.value ?? '');
+        button.dataset.disabled = option.disabled ? 'true' : 'false';
+        button.disabled = Boolean(option.disabled);
+        button.setAttribute('aria-disabled', option.disabled ? 'true' : 'false');
+        button.setAttribute('aria-selected', 'false');
+        button.textContent = button.dataset.label;
+        optionsContainer.insertBefore(button, empty);
+        if (nativeSelect) {
+            const nativeOption = root.ownerDocument.createElement('option');
+            nativeOption.value = button.dataset.value;
+            nativeOption.textContent = button.dataset.label;
+            nativeOption.disabled = Boolean(option.disabled);
+            nativeSelect.append(nativeOption);
+        }
+        if (root.dataset.uiSelectBound === 'true') {
+            bindOption(root, button);
+        }
+    }
+
+    const selectedValue = root.querySelector('[data-ui-select-value]')?.value || '';
+    updateSelectedState(root, selectedValue);
+    if (root.dataset.uiSelectBound === 'true') {
+        filterOptions(root, root.querySelector('[data-ui-select-search]')?.value || '');
+    }
+}
+
+/** @param {HTMLElement} root */
+export function setSearchableSelectValue(root, value, { emitChange = false } = {}) {
+    if (!root) {
+        return;
+    }
+
+    updateSelectedState(root, value ?? '');
+    if (emitChange) {
+        root.querySelector('[data-ui-select-value]')?.dispatchEvent(new root.ownerDocument.defaultView.Event('change', { bubbles: true }));
+    }
 }
 
 function bindSearchableSelect(root, document) {
@@ -156,26 +262,7 @@ function bindSearchableSelect(root, document) {
         trigger.focus();
     });
 
-    optionElements(root).forEach((option) => {
-        option.addEventListener('click', () => chooseOption(root, option));
-        option.addEventListener('keydown', (event) => {
-            const visible = visibleOptionElements(root);
-            const index = visible.indexOf(option);
-
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                event.preventDefault();
-                const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1;
-                setActiveOption(root, visible[Math.max(0, Math.min(nextIndex, visible.length - 1))]);
-            } else if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                chooseOption(root, option);
-            } else if (event.key === 'Escape') {
-                event.preventDefault();
-                closeSelect(root);
-                trigger.focus();
-            }
-        });
-    });
+    optionElements(root).forEach((option) => bindOption(root, option));
 
     root.querySelector('[data-ui-select-search]')?.addEventListener('input', (event) => {
         filterOptions(root, event.currentTarget.value);

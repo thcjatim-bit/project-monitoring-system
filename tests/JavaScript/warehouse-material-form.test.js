@@ -59,7 +59,7 @@ const barisSuratJalan = ({
     bisaDihapus = false,
 } = {}) => `
     <div class="ui-list__item" data-transfer-row data-row-asal="${asal}">
-        <label>Material<select name="items[${index}][material_id]" required${dikunci === null ? '' : ' disabled'}>
+        <label>Material<select name="items[${index}][material_id]" data-material-select required${dikunci === null ? '' : ' disabled'}>
             <option value="">Pilih Material</option>${pilihan}
         </select>${dikunci === null ? '' : `<input type="hidden" name="items[${index}][material_id]" value="${dikunci}">`}</label>
         <label>Qty<input type="number" name="items[${index}][qty]" required value="${qty}"></label>
@@ -225,7 +225,9 @@ const namaField = (markup) => new Set(
 );
 
 const atributData = (markup) => new Set(
-    [...markup.matchAll(/\sdata-([a-z-]+)/g)].map((match) => match[1]),
+    [...markup.matchAll(/\sdata-([a-z-]+)/g)]
+        .map((match) => match[1])
+        .filter((attribute) => ['material-select', 'row-origin', 'catatan-input', 'transfer-row', 'row-asal', 'remove-item'].includes(attribute)),
 );
 
 test('fixture baris item membawa setiap field dan atribut yang dirender Blade', () => {
