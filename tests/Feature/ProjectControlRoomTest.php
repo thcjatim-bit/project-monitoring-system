@@ -7,6 +7,7 @@ use App\Models\Izin;
 use App\Models\Mitra;
 use App\Models\Project;
 use App\Models\ProjectPhoto;
+use App\Models\ProjectTimeline;
 use App\Models\User;
 use App\Services\ProjectPlanningService;
 use App\Support\TenantDatabaseContext;
@@ -89,6 +90,61 @@ class ProjectControlRoomTest extends TestCase
             ->assertOk()
             ->assertSee($project->id_project)
             ->assertSee($project->nama);
+    }
+
+    public function test_project_timeline_renders_surat_jalan_deviation_metadata_as_a_readable_sentence(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0049',
+            'nama' => 'Project Penyimpangan',
+            'mitra_id' => $mitra->id,
+        ]));
+
+        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
+            $project,
+            null,
+            'surat_jalan_deviation',
+            [
+                'material_asing' => ['Kabel FO 12C'],
+                'qty_melebihi' => ['Splitter 1:8'],
+            ],
+        ));
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('Material di luar request')
+            ->assertSee('Kabel FO 12C')
+            ->assertSee('Qty melebihi sisa')
+            ->assertSee('Splitter 1:8')
+            ->assertDontSee('Surat Jalan Deviation');
+    }
+
+    public function test_project_timeline_keeps_raw_event_label_for_other_system_events(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => 'PRJ-2608-0050',
+            'nama' => 'Project Event Biasa',
+            'mitra_id' => $mitra->id,
+        ]));
+
+        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
+            $project,
+            null,
+            'step_changed',
+            ['from' => 'design', 'to' => 'survey'],
+        ));
+
+        $this->actingAs($thc)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertSee('Step Changed')
+            ->assertDontSee('Material di luar request')
+            ->assertDontSee('Qty melebihi sisa');
     }
 
     public function test_control_room_renders_photo_empty_state_and_photo_project_step_sync_context(): void
