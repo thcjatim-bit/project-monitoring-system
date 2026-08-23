@@ -43,6 +43,10 @@ Development, testing, and production databases are separate. Tests must use the 
 
 Never run `migrate:fresh` or `db:wipe` against production. Never intentionally use `RefreshDatabase` with production credentials or automatically roll back a production schema. Production migrations are forward migrations through the approved deployment workflow; prefer backward-compatible, additive migrations.
 
+## Session context budget
+
+`docs/agents/context-budget.md` is the binding contract for how much work one session takes on. The implementation workflow below sits in phase 3 and phase 4 of that contract: a session may close phase 3 and carry the same issue through review and deployment, but it does not also plan or specify new work, and it takes one issue at a time. Before a session ends, its decisions, commit SHAs, and next step belong in the issue.
+
 ## Implementation workflow
 
 For every `/implement` ticket:

@@ -13,6 +13,13 @@ When I need to make a decision:
 Do not give long summaries of routine work.
 Do not invent options when there is no meaningful decision.
 
+## Session context budget
+
+Every session in this repo — interactive, autopilot worker, or wayfinder — is bound by
+`docs/agents/context-budget.md`. Read it before starting work. It defines the phase
+boundary rule (one session crosses at most one phase boundary), the read-unit quota that
+backs it up, tool output discipline, and what a session must make durable before it ends.
+
 ## Agent skills
 
 ### Issue tracker

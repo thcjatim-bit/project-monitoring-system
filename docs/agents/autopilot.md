@@ -38,9 +38,12 @@ decision needed.
 
 ## Context hygiene
 
-Planning and implementation are separate contexts. A worker receives one issue,
-one worktree, and one fresh context. Durable decisions belong in the issue,
-`CONTEXT.md`, or an ADR; the worker must not depend on a previous conversation.
+The rules are in `docs/agents/context-budget.md`; the worker follows them as written.
+Autopilot-specific: a worker receives one issue, one worktree, and one fresh context,
+and never depends on a previous conversation — the issue and its comments are the only
+inbound state. A worker that hits the read-unit quota finishes its issue comment and
+commit, then stops rather than starting another unit of work; the issue stays open with
+what is left recorded, and is requeued through Recovery below.
 
 ## Recovery
 
