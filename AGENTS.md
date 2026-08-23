@@ -45,20 +45,44 @@ Never run `migrate:fresh` or `db:wipe` against production. Never intentionally u
 
 ## Session context budget
 
-`docs/agents/context-budget.md` is the binding contract for how much work one session takes on. The implementation workflow below sits in phase 3 and phase 4 of that contract: a session may close phase 3 and carry the same issue through review and deployment, but it does not also plan or specify new work, and it takes one issue at a time. Before a session ends, its decisions, commit SHAs, and next step belong in the issue.
+`docs/agents/context-budget.md` is the binding contract for how much work one session takes on. TDD, implementation, and review/release are separate phases and separate sessions. A session takes one issue at a time and ends by recording its decisions, evidence, commit SHA, and next step in the issue.
+
+## TDD workflow
+
+For every `/tdd` ticket:
+
+1. Read the ticket, specification, ADRs, `CONTEXT.md`, and applicable repository instructions.
+2. Identify the required testing seams and write the focused tests or test contract before production implementation.
+3. Run the focused tests and record whether they are red because the requested behavior is not implemented, or green because the behavior already exists.
+4. Record the test files, commands, result, and the next `/implement` step in the issue. Commit the test-first change when it is useful as the handoff fixed point.
+
+End the TDD session after the test handoff is durable. Do not implement production behavior or run `/code-review` in the same session.
 
 ## Implementation workflow
 
 For every `/implement` ticket:
 
-1. Read the ticket, specification, ADRs, `CONTEXT.md`, and applicable repository instructions.
-2. Identify required testing seams and implement using the repository TDD workflow.
-3. Run available local checks.
+1. Read the ticket and comments, including the durable TDD handoff, then read the specification, ADRs, `CONTEXT.md`, and applicable repository instructions.
+2. Implement the requested behavior against the agreed test seams.
+3. Run available local checks and the focused tests.
 4. Synchronize and verify the implementation on `pms-dev`.
-5. Run PostgreSQL integration tests on `pms-dev`, fix failures, and repeat until required checks are green.
-6. Run code review and commit the completed work.
+5. Run PostgreSQL integration tests and the required full checks on `pms-dev`, fix failures, and repeat until the required checks are green.
+6. Commit the verified implementation and record the changed files, checks, full Git SHA, and next `/code-review` step in the issue.
 
 Do not complete a backend or database ticket while required remote integration tests are failing.
+
+End the implementation session after the verified implementation commit and durable issue handoff. Do not run `/tdd` or `/code-review` in the same session.
+
+## Code review and release workflow
+
+For every `/code-review` handoff:
+
+1. Read the issue, TDD handoff, implementation evidence, ADRs, and the exact commit or merge-base being reviewed.
+2. Review the change against the specification and repository standards, then run the review checks required by the repository.
+3. If findings require code changes, record them in the issue and return to a fresh `/implement` session. Do not silently fix implementation findings inside the review session.
+4. If the review is clean, record the review result and proceed with the push and production deployment gates below when deployment is requested.
+
+The review session is the release gate; it must not review an uncommitted working tree when a verified implementation commit is available.
 
 ## Production deployment
 
@@ -102,17 +126,22 @@ Perform application infrastructure changes only through approved automation such
 
 For ordinary development, testing, deployment, service restart, and server-verification work, act directly rather than asking the user to run commands. On command failure, inspect the error and environment, make an appropriate non-destructive correction, retest, and continue until success or a genuine external blocker.
 
-A ticket affecting the running application is complete only when implementation, required tests, development integration verification, code review, and a commit all exist; when deployment is requested, production deployment and health verification must also succeed. For `/implement` tickets where production deployment is expected, complete the full workflow without pausing between implementation, testing, and deployment.
+A ticket affecting the running application is complete only when the TDD handoff, implementation, required tests, development integration verification, verified implementation commit, and clean code review all exist; when deployment is requested, production deployment and health verification must also succeed. `/implement` ends at its commit and review handoff. `/code-review` is the next session and owns the review/release gate.
 
 The permanent `/implement` workflow is:
 
 ```text
-implement
-→ TDD
+/tdd (fresh session)
+→ test contract / focused tests
+→ issue handoff
+→ /implement (fresh session)
+→ implementation
 → pms-dev verification
 → full tests
-→ code review
-→ commit
+→ verified commit
+→ issue handoff
+→ /code-review (fresh session)
+→ review
 → push
 → pms-prod exact-SHA deploy
 → deploythc.web.id smoke test

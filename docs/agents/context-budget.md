@@ -11,20 +11,22 @@ bisa — lihat bagian terakhir.
 
 ## Batas fase — aturan yang mengikat
 
-Pekerjaan di repo ini melewati empat fase:
+Pekerjaan di repo ini melewati lima fase:
 
 1. **Peta dan keputusan** — grilling, domain modeling, wayfinding.
 2. **Spesifikasi jadi issue** — keputusan diubah menjadi issue dengan acceptance
    criteria.
-3. **Implementasi satu issue** — kode, tes, verifikasi lokal dan `pms-dev`.
-4. **Review dan deploy** — `/code-review`, commit, push, smoke produksi.
+3. **TDD satu issue** — test seam, focused tests, dan test contract.
+4. **Implementasi satu issue** — kode, verifikasi lokal, `pms-dev`, full checks,
+   dan commit.
+5. **Review dan deploy** — `/code-review`, push, exact-SHA deploy, smoke produksi.
 
-**Satu sesi tidak melewati lebih dari satu batas fase.** Sesi yang mulai di fase
-2 boleh menutup fase 2 dan masuk fase 3, lalu berhenti — ia tidak melanjutkan ke
-fase 4. Berhenti berarti menulis state durable, lalu melaporkan fase berikutnya
-dan issue-nya.
+**Satu sesi tidak melewati lebih dari satu batas fase.** Fase TDD, implementasi,
+dan review/deploy selalu memakai sesi terpisah agar konteks kerja tidak dibawa
+melewati batas tersebut. Sesi yang menutup satu fase wajib menulis state durable,
+lalu melaporkan fase berikutnya dan issue-nya.
 
-Fase 3 dibatasi lebih jauh: **satu issue per sesi**. Dua issue kecil yang
+Fase 3 dan 4 dibatasi lebih jauh: **satu issue per sesi**. Dua issue kecil yang
 "sekalian" adalah dua sesi.
 
 ## Kuota unit baca — jaring pengaman
@@ -88,7 +90,7 @@ berlaku.
 | Jenis sesi | State durable ditulis ke | Batas fase khas |
 | --- | --- | --- |
 | Interaktif | Issue, `CONTEXT.md`, ADR di `docs/adr/` | Bergantung fase yang dimasuki |
-| Worker autopilot | Komentar issue yang diklaim, lalu commit | Fase 3 → 4, satu issue; lihat `docs/agents/autopilot.md` |
+| Worker autopilot | Komentar issue yang diklaim, lalu commit dan handoff review | Fase 4 → 5, satu issue; lihat `docs/agents/autopilot.md` |
 | Wayfinder | Komentar resolusi tiket, lalu body peta | Fase 1 → 2, satu tiket per sesi |
 
 ## Untuk manusia: angka token

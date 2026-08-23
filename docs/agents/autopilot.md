@@ -1,7 +1,7 @@
 # Issue Autopilot
 
 This document is the durable contract for the scheduled issue dispatcher and its
-single-ticket workers. The dispatcher is implemented by
+single-ticket implementation workers. The dispatcher is implemented by
 `scripts/issue-autopilot.mjs`.
 
 ## Queue contract
@@ -22,14 +22,15 @@ The worker must:
 
 1. read the complete issue and comments, then read `AGENTS.md`, `CLAUDE.md`,
    `CONTEXT.md`, and the relevant ADRs;
-2. work only on the claimed issue and use `/implement`, including TDD where the
-   repository workflow calls for it;
+2. verify that the issue has a durable TDD handoff, then work only on the
+   claimed issue with `/implement`;
 3. run local checks and the required `pms-dev` integration checks;
-4. run `/code-review`, commit the verified change, and follow `AGENTS.md` for
-   push, deployment, and production smoke verification;
-5. comment on the issue with the changed files, checks, and full commit SHA;
-6. close the issue only after every acceptance criterion and repository gate is
-   green.
+4. commit the verified implementation and comment on the issue with the changed
+   files, checks, full commit SHA, and the next `/code-review` step;
+5. stop after the implementation handoff. A fresh review/release session owns
+   `/code-review`, push, deployment, and production smoke verification;
+6. leave the issue open until the review/release session confirms every
+   acceptance criterion and repository gate is green.
 
 If a business decision, credential, security decision, destructive migration,
 or repeated verification failure blocks the work, the worker leaves the issue
@@ -42,8 +43,9 @@ The rules are in `docs/agents/context-budget.md`; the worker follows them as wri
 Autopilot-specific: a worker receives one issue, one worktree, and one fresh context,
 and never depends on a previous conversation — the issue and its comments are the only
 inbound state. A worker that hits the read-unit quota finishes its issue comment and
-commit, then stops rather than starting another unit of work; the issue stays open with
-what is left recorded, and is requeued through Recovery below.
+implementation commit, then stops rather than starting another unit of work; the issue
+stays open with the review handoff recorded, and the next session continues from that
+state.
 
 ## Recovery
 

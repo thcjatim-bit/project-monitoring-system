@@ -195,9 +195,9 @@ function workerPrompt(repo, issue) {
 
 Start by reading the complete issue and comments with gh, then read AGENTS.md, CLAUDE.md, CONTEXT.md, docs/agents/autopilot.md, and the relevant ADRs. Use /implement for this issue only. Work in this fresh worktree and context; do not select or modify another issue.
 
-Follow the repository completion contract: use the agreed testing seams and TDD where applicable, run local checks, synchronize and verify on pms-dev, run PostgreSQL integration/full tests required by AGENTS.md, run /code-review, commit the verified change, and follow the exact-SHA push/deployment/smoke-test rules in AGENTS.md.
+Follow the repository implementation contract: consume the durable TDD handoff, implement the change, run local checks, synchronize and verify on pms-dev, and run the PostgreSQL integration/full tests required by AGENTS.md. Commit the verified implementation and stop at the /code-review handoff. A fresh review/release session owns /code-review and the exact-SHA push/deployment/smoke-test rules in AGENTS.md.
 
-On success, comment on issue #${issue.number} with the changed files, tests and verification commands, and the full commit SHA. Close the issue only when every acceptance criterion and required gate is green. If a business decision, credential, security decision, destructive migration, or repeated verification failure blocks progress, leave the issue open, add the autopilot:blocked label, and comment with evidence and the exact decision needed.`;
+On success, comment on issue #${issue.number} with the changed files, tests and verification commands, the full commit SHA, and the next review step. Leave the issue open for review. If the TDD handoff is missing, or a business decision, credential, security decision, destructive migration, or repeated verification failure blocks progress, leave the issue open, add the autopilot:blocked label, and comment with evidence and the exact decision needed.`;
 }
 
 function claimIssue(repo, issueNumber, cwd) {
