@@ -127,6 +127,13 @@ development server, run `bash scripts/bootstrap-testing.sh`, verify the
 `pms_app` database and role fidelity, rerun the focused test, then the
 PostgreSQL integration/security tests and full suite.
 
+The bootstrap reaches PostgreSQL two ways. `PMS_TESTING_PROVIDER=docker` is the
+default and the `pms-dev` path. On a workstation that runs PostgreSQL directly
+on the host, set `PMS_TESTING_PROVIDER=native` and supply
+`PMS_SUPERUSER_PASSWORD` (plus `PMS_PSQL` when `psql` is not on PATH); the
+native path only ever targets a loopback server. Refusals for both providers
+are covered offline by `bash scripts/bootstrap-testing.test.sh`.
+
 The bootstrap is allowed to recreate only the explicitly named disposable
 testing database `project_monitoring_system_testing`. It must refuse production
 environments and production-looking targets. Human escalation is appropriate

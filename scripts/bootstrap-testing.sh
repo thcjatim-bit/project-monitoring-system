@@ -6,6 +6,8 @@ readonly testing_database="project_monitoring_system_testing"
 readonly testing_container="pms-dev-postgres-testing"
 readonly app_role="pms_app"
 readonly migrator_role="pms_migrator"
+readonly superuser_role="${PMS_SUPERUSER:-postgres}"
+readonly psql_bin="${PMS_PSQL:-psql}"
 
 if [[ "${APP_ENV:-testing}" == "production" ]]; then
     echo "Refusing to bootstrap testing database with APP_ENV=production." >&2
@@ -22,31 +24,77 @@ if [[ "${PMS_TESTING_DATABASE:-$testing_database}" != "$testing_database" ]]; th
     exit 1
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-    echo "Docker is required to locate the dedicated testing PostgreSQL service." >&2
-    exit 1
-fi
+# Dua cara menjangkau PostgreSQL testing yang berdedikasi. Docker adalah jalur pms-dev dan
+# tetap default; `native` melayani mesin pengembang yang menjalankan PostgreSQL langsung di
+# host, karena tanpanya seluruh feature suite tidak bisa dijalankan di sana sama sekali.
+#
+# Skrip ini menjatuhkan database, jadi setiap jalur wajib membuktikan bahwa sasarannya memang
+# server testing. Docker membuktikannya lewat nama, image, dan status container. Native tidak
+# punya identitas sekuat itu, jadi ia dibatasi dari dua sisi: host wajib loopback -- server
+# jauh mustahil disentuh -- dan password superuser wajib disebut eksplisit, tidak pernah
+# jatuh diam-diam ke autentikasi trust.
+readonly provider="${PMS_TESTING_PROVIDER:-docker}"
 
-if [[ "$(docker inspect --format '{{.Name}}' "$testing_container" 2>/dev/null || true)" != "/$testing_container" ]]; then
-    echo "Refusing: dedicated testing PostgreSQL container was not found." >&2
-    exit 1
-fi
+case "$provider" in
+docker)
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "Docker is required to locate the dedicated testing PostgreSQL service." >&2
+        echo "Set PMS_TESTING_PROVIDER=native to use a PostgreSQL server on this host instead." >&2
+        exit 1
+    fi
 
-if [[ "$(docker inspect --format '{{.Config.Image}}' "$testing_container")" != postgres:* ]]; then
-    echo "Refusing: target container is not a PostgreSQL image." >&2
-    exit 1
-fi
+    if [[ "$(docker inspect --format '{{.Name}}' "$testing_container" 2>/dev/null || true)" != "/$testing_container" ]]; then
+        echo "Refusing: dedicated testing PostgreSQL container was not found." >&2
+        exit 1
+    fi
 
-if [[ "$(docker inspect --format '{{.State.Status}}' "$testing_container")" != "running" ]]; then
-    echo "Dedicated testing PostgreSQL container is not running." >&2
-    exit 1
-fi
+    if [[ "$(docker inspect --format '{{.Config.Image}}' "$testing_container")" != postgres:* ]]; then
+        echo "Refusing: target container is not a PostgreSQL image." >&2
+        exit 1
+    fi
 
-readonly database_host="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$testing_container")"
-if [[ -z "$database_host" ]]; then
-    echo "Refusing: testing PostgreSQL container has no inspectable network address." >&2
+    if [[ "$(docker inspect --format '{{.State.Status}}' "$testing_container")" != "running" ]]; then
+        echo "Dedicated testing PostgreSQL container is not running." >&2
+        exit 1
+    fi
+
+    database_host="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$testing_container")"
+    if [[ -z "$database_host" ]]; then
+        echo "Refusing: testing PostgreSQL container has no inspectable network address." >&2
+        exit 1
+    fi
+    database_port=5432
+    ;;
+native)
+    database_host="${PMS_TESTING_HOST:-127.0.0.1}"
+    database_port="${PMS_TESTING_PORT:-5432}"
+
+    if [[ "$database_host" != "127.0.0.1" && "$database_host" != "::1" && "$database_host" != "localhost" ]]; then
+        echo "Refusing: native bootstrap only targets a loopback PostgreSQL server." >&2
+        exit 1
+    fi
+
+    if [[ ! "$database_port" =~ ^[0-9]+$ ]]; then
+        echo "Refusing: testing PostgreSQL port is not numeric." >&2
+        exit 1
+    fi
+
+    if [[ -z "${PMS_SUPERUSER_PASSWORD:-}" ]]; then
+        echo "PMS_SUPERUSER_PASSWORD is required to create the testing roles on a native server." >&2
+        exit 1
+    fi
+
+    if ! command -v "$psql_bin" >/dev/null 2>&1; then
+        echo "psql was not found; set PMS_PSQL to its path." >&2
+        exit 1
+    fi
+    ;;
+*)
+    echo "Refusing: unknown PMS_TESTING_PROVIDER '$provider'; expected 'docker' or 'native'." >&2
     exit 1
-fi
+    ;;
+esac
+readonly database_host database_port
 
 readonly app_password="${PMS_APP_PASSWORD:-$(openssl rand -hex 32)}"
 readonly migrator_password="${PMS_MIGRATOR_PASSWORD:-$(openssl rand -hex 32)}"
@@ -56,13 +104,25 @@ if [[ ! "$app_password" =~ ^[A-Za-z0-9]+$ || ! "$migrator_password" =~ ^[A-Za-z0
     exit 1
 fi
 
-run_admin_sql() {
-    printf '%s\n' "$1" | docker exec -i "$testing_container" sh -c 'psql -AtF "|" -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres'
-}
+if [[ "$provider" == "docker" ]]; then
+    run_admin_sql() {
+        printf '%s\n' "$1" | docker exec -i "$testing_container" sh -c 'psql -AtF "|" -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres'
+    }
 
-run_app_sql() {
-    printf '%s\n' "$1" | docker exec -i -e "PGPASSWORD=$app_password" "$testing_container" psql -AtF '|' -v ON_ERROR_STOP=1 -U "$app_role" -d "$testing_database"
-}
+    run_app_sql() {
+        printf '%s\n' "$1" | docker exec -i -e "PGPASSWORD=$app_password" "$testing_container" psql -AtF '|' -v ON_ERROR_STOP=1 -U "$app_role" -d "$testing_database"
+    }
+else
+    run_admin_sql() {
+        printf '%s\n' "$1" | PGPASSWORD="$PMS_SUPERUSER_PASSWORD" "$psql_bin" -AtF '|' -v ON_ERROR_STOP=1 \
+            -h "$database_host" -p "$database_port" -U "$superuser_role" -d postgres
+    }
+
+    run_app_sql() {
+        printf '%s\n' "$1" | PGPASSWORD="$app_password" "$psql_bin" -AtF '|' -v ON_ERROR_STOP=1 \
+            -h "$database_host" -p "$database_port" -U "$app_role" -d "$testing_database"
+    }
+fi
 
 echo "Preparing dedicated PostgreSQL testing database: $testing_database"
 
@@ -97,12 +157,12 @@ cat > .env.testing <<EOF
 APP_ENV=testing
 DB_CONNECTION=pgsql
 DB_HOST=$database_host
-DB_PORT=5432
+DB_PORT=$database_port
 DB_DATABASE=$testing_database
 DB_USERNAME=$app_role
 DB_PASSWORD=$app_password
 DB_MIGRATOR_HOST=$database_host
-DB_MIGRATOR_PORT=5432
+DB_MIGRATOR_PORT=$database_port
 DB_MIGRATOR_DATABASE=$testing_database
 DB_MIGRATOR_USERNAME=$migrator_role
 DB_MIGRATOR_PASSWORD=$migrator_password
