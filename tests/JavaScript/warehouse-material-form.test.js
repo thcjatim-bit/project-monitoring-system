@@ -1322,6 +1322,19 @@ test('baris tambahan melanjutkan indeks baris yang sudah dirender server', (t) =
     assert.equal(baru.querySelector('input[type="number"]').name, 'items[2][qty]');
 });
 
+test('baris tambahan memakai indeks terbesar yang ada di DOM setelah baris dihapus', (t) => {
+    const window = openPage(t, formSuratJalan({
+        baris: barisSuratJalan({ index: 4, qty: 2, bisaDihapus: true })
+            + barisSuratJalan({ index: 9, pilihan: '<option value="3" data-kind="drum_kabel" selected>MAT-3 — Drum Kabel</option>', qty: 5, bisaDihapus: true }),
+    }));
+
+    window.document.querySelector('[data-add-item]').click();
+
+    const baru = rows(window).at(-1);
+    assert.equal(catatanInput(baru).name, 'items[10][catatan]');
+    assert.equal(baru.querySelector('input[type="number"]').name, 'items[10][qty]');
+});
+
 test('baris yang dipulihkan old() sudah ditandai dan dipandu tanpa menunggu operator mengetik', (t) => {
     const window = halamanSetelahDitolak(t);
 

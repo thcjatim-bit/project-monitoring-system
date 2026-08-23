@@ -30,9 +30,15 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
 
     let refreshTransferIdentityState = () => {};
     const identityScope = (select) => select.closest('[data-transfer-row]') ?? select.closest('form');
-    const toggleIdentity = (select) => {
+    const toggleIdentity = (select, clearUnavailable = false) => {
         const kind = select.options[select.selectedIndex]?.dataset.kind ?? '';
         const scope = identityScope(select);
+        if (clearUnavailable) {
+            scope?.querySelectorAll('[data-identity-unavailable]').forEach((field) => {
+                field.removeAttribute('data-identity-unavailable');
+                field.querySelector('[data-identity-unavailable-note]')?.remove();
+            });
+        }
         scope?.querySelectorAll('[data-identity]').forEach((field) => {
             const visible = (field.dataset.identity === 'serial_number' && kind === 'ber_sn') || (field.dataset.identity === 'drum_id' && kind === 'drum_kabel');
             field.hidden = !visible;
@@ -54,30 +60,43 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         }
         refreshTransferIdentityState();
     };
-    const bindIdentity = (select) => { select.addEventListener('change', () => toggleIdentity(select)); toggleIdentity(select); };
+    const bindIdentity = (select) => { select.addEventListener('change', () => toggleIdentity(select, true)); toggleIdentity(select); };
     // Satu selector untuk halaman maupun baris klon, supaya identity select tidak ikut dianggap
     // sebagai material select setelah komponen searchable-select masuk ke dalam baris.
     const bindSelects = (root) => root.querySelectorAll('[data-material-select]').forEach(bindIdentity);
     bindSelects(document);
-    // Indeks klon melanjutkan baris yang sudah dirender server — old() bisa memulihkan lebih dari satu.
+    // Indeks klon melanjutkan indeks terbesar yang dirender server — old() bisa memulihkan baris
+    // dengan indeks renggang setelah operator menghapus baris di tengah.
     const items = document.querySelector('[data-transfer-items]');
-    let nextTransferIndex = items?.querySelectorAll('[data-transfer-row]').length ?? 1;
+    const itemIndex = (name) => name?.match(/^items\[(\d+)\]/)?.[1];
+    const nextItemIndex = () => {
+        let largest = -1;
+        items?.querySelectorAll('[name]').forEach((field) => {
+            const index = Number.parseInt(itemIndex(field.name) ?? '', 10);
+            if (Number.isInteger(index)) largest = Math.max(largest, index);
+        });
+
+        return largest + 1;
+    };
+    let nextTransferIndex = nextItemIndex();
     // Klon diambil dari salinan bersih baris pertama, bukan dari baris pertama yang hidup: baris itu
     // boleh dinonaktifkan saat prefill mengambil alih, dan klon tidak boleh ikut mewarisi keadaannya.
     const rowTemplate = items?.querySelector('[data-transfer-row]')?.cloneNode(true) ?? null;
     // Semua baris baru adalah klon baris pertama, jadi indeks dan binding-nya tidak pernah dirakit tangan.
     const buildRow = (asal) => {
         const source = rowTemplate; const index = nextTransferIndex++; const row = source.cloneNode(true);
-        row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[0\]/g, `items[${index}]`); input.value = ''; });
+        row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[\d+\]/g, `items[${index}]`); input.value = ''; });
         row.querySelectorAll('[id], [aria-controls]').forEach((element) => {
             ['id', 'aria-controls'].forEach((attribute) => {
                 const value = element.getAttribute(attribute);
-                if (value) element.setAttribute(attribute, value.replace(/transfer-item-0-/g, `transfer-item-${index}-`));
+                if (value) element.setAttribute(attribute, value.replace(/transfer-item-\d+-/g, `transfer-item-${index}-`));
             });
         });
         // Baris pertama bisa saja baris prefill yang dipulihkan old(), lengkap dengan material terkunci.
         // Klon selalu baris ketikan baru, jadi kunci itu dilepas alih-alih diwariskan.
         row.querySelector('input[type="hidden"][name$="[material_id]"]')?.remove();
+        row.querySelectorAll('[data-identity-unavailable]').forEach((field) => field.removeAttribute('data-identity-unavailable'));
+        row.querySelectorAll('[data-identity-unavailable-note]').forEach((note) => note.remove());
         row.querySelectorAll('select, input').forEach((field) => { field.disabled = false; });
         row.querySelectorAll('[data-ui-select]').forEach((root) => {
             root.removeAttribute('data-ui-select-bound');
@@ -336,7 +355,16 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
                 updateIdentityQuantity(row, kind);
             });
         };
-        items.addEventListener('change', refreshTransferIdentityState);
+        const clearUnavailableIdentity = (root) => {
+            const field = root?.closest('[data-identity]');
+            if (!field) return;
+            field.removeAttribute('data-identity-unavailable');
+            field.querySelector('[data-identity-unavailable-note]')?.remove();
+        };
+        items.addEventListener('change', (event) => {
+            clearUnavailableIdentity(event.target.closest?.('[data-identity-select]'));
+            refreshTransferIdentityState();
+        });
         let nextNoteId = 0;
         const deviationNote = (row) => {
             const existing = row.querySelector('[data-deviation-note]');

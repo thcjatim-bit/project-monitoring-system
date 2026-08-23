@@ -308,6 +308,77 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         );
     }
 
+    public function test_penolakan_mempertahankan_indeks_lama_dan_menandai_identitas_yang_sudah_tidak_tersedia(): void
+    {
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $destination = $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
+        $origin->users()->attach($operator);
+        $material = Material::factory()->create(['jenis' => 'ber_sn']);
+
+        $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-22',
+            'items' => [
+                4 => [
+                    'material_id' => $material->id,
+                    'qty' => '1',
+                    'serial_number' => 'SN-KEBURU-DIPAKAI',
+                    'catatan' => 'Identitas lama',
+                    'asal' => 'manual',
+                ],
+            ],
+        ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
+
+        $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
+
+        $this->assertStringContainsString('name="items[4][serial_number]"', $html);
+        $this->assertStringContainsString('name="items[4][catatan]"', $html);
+        $this->assertStringContainsString('value="Identitas lama"', $html);
+        $this->assertStringNotContainsString('SN-KEBURU-DIPAKAI', $html);
+        $this->assertStringContainsString('data-identity-unavailable', $html);
+        $this->assertStringContainsString('Identitas ini sudah tidak tersedia. Pilih ulang.', $html);
+    }
+
+    public function test_request_selesai_dan_ditutup_di_reset_tanpa_membuang_baris(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $origin->users()->attach($operator);
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+
+        foreach (['selesai', 'ditutup'] as $status) {
+            $request = $this->materialRequest($mitra, $status, [[$material, 4]]);
+
+            $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'material_request_id' => $request->id,
+                'tanggal' => '2026-08-22',
+                'items' => [
+                    7 => [
+                        'material_id' => $material->id,
+                        'qty' => '3',
+                        'catatan' => 'Tetap kirim langsung',
+                        'asal' => 'request',
+                    ],
+                ],
+            ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
+
+            $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
+
+            $this->assertDoesNotMatchRegularExpression('/<option value="'.$request->id.'"/', $html);
+            $this->assertStringContainsString('data-row-asal="manual"', $html);
+            $this->assertDoesNotMatchRegularExpression('/<select name="items\[7\]\[material_id\]"[^>]*disabled/', $html);
+            $this->assertStringNotContainsString('<input type="hidden" name="items[7][material_id]"', $html);
+            $this->assertStringContainsString('name="items[7][qty]"', $html);
+            $this->assertStringContainsString('value="Tetap kirim langsung"', $html);
+        }
+    }
+
     private function terimaStok(User $operator, Warehouse $warehouse, Material $material, string $qty): void
     {
         $this->actingAs($operator)->post('/warehouse/stock/receive', [
