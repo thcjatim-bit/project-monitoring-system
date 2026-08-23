@@ -7,7 +7,7 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root, and
-- **`docs/adr/`** — read ADRs that touch the area you're about to work in.
+- **`docs/adr/README.md`** — the ADR index: one line per ADR with **when it's relevant to open**. Read the index first, then open only the ADRs that touch the area you're about to work in. Don't open ADR files to find out what they contain — that's what the index is for.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
@@ -17,6 +17,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 /
 ├── CONTEXT.md
 ├── docs/adr/
+│   ├── README.md        <- index: judul + kapan relevan
 │   ├── 0001-....md
 │   └── 0002-....md
 └── src/
@@ -35,3 +36,7 @@ If the concept you need isn't in the glossary yet, that's a signal — either yo
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
 > _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+
+## Adding an ADR
+
+When `/domain-modeling` writes a new ADR, add its row to `docs/adr/README.md` in the same step — title plus when it's relevant to open. An ADR missing from the index is invisible to the next session.
