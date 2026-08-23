@@ -819,4 +819,106 @@ class SuratJalanTransferTest extends TestCase
             app(TenantDatabaseContext::class)->set(null, false);
         }
     }
+
+
+
+    public function test_transfer_requires_catatan_for_deviating_rows_and_saves_it_for_compliant_ones(): void
+    {
+        $mitra = Mitra::factory()->create();
+        [$origin, $destination] = $this->warehousesFor($mitra);
+        $compliant = Material::factory()->create(['jenis' => 'biasa']);
+        $excess = Material::factory()->create(['jenis' => 'biasa']);
+        $alien = Material::factory()->create(['jenis' => 'biasa']);
+        $user = $this->userWithWarehousePermission($mitra);
+        $origin->users()->attach($user);
+        $destination->users()->attach($user);
+
+        foreach ([$compliant, $excess, $alien] as $material) {
+            $this->actingAs($user)->post('/warehouse/stock/receive', [
+                'warehouse_id' => $origin->id,
+                'material_id' => $material->id,
+                'qty' => '100',
+                'reason' => 'Penerimaan awal',
+            ]);
+        }
+
+        $request = $this->asThc(fn () => \App\Models\MaterialRequest::query()->create([
+            'mitra_id' => $mitra->id,
+            'requested_by' => $user->id,
+            'status' => 'disetujui',
+        ]));
+        
+        $this->asThc(function () use ($request, $mitra, $compliant, $excess) {
+            \App\Models\MaterialRequestItem::query()->create([
+                'material_request_id' => $request->id,
+                'mitra_id' => $mitra->id,
+                'material_id' => $compliant->id,
+                'qty' => '10',
+            ]);
+            \App\Models\MaterialRequestItem::query()->create([
+                'material_request_id' => $request->id,
+                'mitra_id' => $mitra->id,
+                'material_id' => $excess->id,
+                'qty' => '5',
+            ]);
+        });
+
+        $postData = [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'tanggal' => '2026-08-15',
+            'pengirim' => 'Petugas Gudang',
+            'material_request_id' => $request->id,
+        ];
+
+        // 1. Deviating row without catatan is rejected
+        $response = $this->actingAs($user)->post('/warehouse/transfers', $postData + [
+            'items' => [
+                ['material_id' => $compliant->id, 'qty' => '10', 'catatan' => 'Patuh'],
+                ['material_id' => $excess->id, 'qty' => '6', 'catatan' => '  '],
+            ],
+        ]);
+        $response->assertSessionHasErrors('items');
+
+        $response = $this->actingAs($user)->post('/warehouse/transfers', $postData + [
+            'items' => [
+                ['material_id' => $alien->id, 'qty' => '1', 'catatan' => null],
+            ],
+        ]);
+        $response->assertSessionHasErrors('items');
+
+        // 2. Deviating row with catatan is accepted, and compliant row saves its catatan too
+        $response = $this->actingAs($user)->post('/warehouse/transfers', $postData + [
+            'items' => [
+                ['material_id' => $compliant->id, 'qty' => '10', 'catatan' => 'Pesan untuk tujuan'],
+                ['material_id' => $excess->id, 'qty' => '6', 'catatan' => 'Minta lebih dari RAB'],
+                ['material_id' => $alien->id, 'qty' => '2', 'catatan' => 'Material mendadak'],
+            ],
+        ]);
+        $response->assertRedirect();
+
+        $suratJalanId = DB::table('surat_jalans')->value('id');
+        
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'surat_jalan_id' => $suratJalanId,
+            'material_id' => $compliant->id,
+            'qty' => '10.000',
+            'catatan' => 'Pesan untuk tujuan',
+            'jenis_penyimpangan' => null,
+        ]);
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'surat_jalan_id' => $suratJalanId,
+            'material_id' => $excess->id,
+            'qty' => '6.000',
+            'catatan' => 'Minta lebih dari RAB',
+            'jenis_penyimpangan' => 'qty_melebihi',
+        ]);
+        $this->assertDatabaseHas('surat_jalan_items', [
+            'surat_jalan_id' => $suratJalanId,
+            'material_id' => $alien->id,
+            'qty' => '2.000',
+            'catatan' => 'Material mendadak',
+            'jenis_penyimpangan' => 'material_asing',
+        ]);
+    }
 }
