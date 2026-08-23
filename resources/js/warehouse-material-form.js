@@ -152,9 +152,20 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
             projectSelect.append(option('', projectSelect.dataset.emptyLabel));
             formData.projects.filter((project) => project.mitra_id === mitraId).forEach((project) => projectSelect.append(option(project.id, project.label)));
         };
-        const renderRequests = () => {
+        const renderRequests = (preserveUnavailable = false) => {
+            const selectedValue = requestSelect.value;
+            const selectedOption = requestSelect.options[requestSelect.selectedIndex];
+            const selectedLabel = selectedOption?.textContent ?? '';
+            const requests = availableRequests();
             requestSelect.replaceChildren(option('', requestSelect.dataset.emptyLabel));
-            availableRequests().forEach((request) => requestSelect.append(option(request.id, request.label)));
+            requests.forEach((request) => requestSelect.append(option(request.id, request.label)));
+            if (preserveUnavailable && selectedValue !== ''
+                && ! requests.some((request) => String(request.id) === selectedValue)) {
+                requestSelect.append(option(selectedValue, selectedLabel));
+            }
+            if (selectedValue !== '' && requestSelect.querySelector('option[value="' + selectedValue + '"]') !== null) {
+                requestSelect.value = selectedValue;
+            }
         };
         // Baris pertama selalu ada sebagai baris ketikan operator, dan field-nya wajib diisi. Begitu
         // prefill mengisi form, baris itu tinggal hampa tapi tetap menahan submit; dinonaktifkan
@@ -465,6 +476,10 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         requestSelect.addEventListener('change', applyRequest);
         // Baris hasil old() sudah ada sebelum ada event apa pun; tanpa ini penolakan server
         // mengembalikan baris menyimpang tanpa penandaan maupun panduan catatannya.
+        // Project yang dipulihkan dari old() juga harus menyaring dropdown Request sejak awal.
+        // Request yang tidak lagi tersedia tetap dipertahankan sebagai pilihan oleh Blade agar
+        // submit berikutnya bisa ditolak secara eksplisit, bukan diam-diam menjadi kiriman langsung.
+        renderRequests(true);
         refreshTransferIdentityState();
         markDeviations();
     }

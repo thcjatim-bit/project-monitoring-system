@@ -187,7 +187,9 @@ class SuratJalanFormQuery
 
         return SuratJalanItem::query()
             ->join('surat_jalans', 'surat_jalans.id', '=', 'surat_jalan_items.surat_jalan_id')
+            ->join('material_requests', 'material_requests.id', '=', 'surat_jalans.material_request_id')
             ->whereIn('surat_jalans.material_request_id', $requestIds)
+            ->whereColumn('surat_jalans.mitra_id', 'material_requests.mitra_id')
             ->where('surat_jalans.status', '!=', 'dibatalkan')
             ->groupBy('surat_jalans.material_request_id', 'surat_jalan_items.material_id')
             ->select(

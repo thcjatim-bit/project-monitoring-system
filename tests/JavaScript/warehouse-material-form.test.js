@@ -968,6 +968,45 @@ const halamanDenganKunciServer = (t) => openPage(t, formSuratJalan({
     kunciProject: 55,
 }));
 
+const requestProjectLain = {
+    id: 98,
+    mitra_id: 7,
+    project_id: 56,
+    tanggal: '2026-08-13',
+    status: 'disetujui',
+    label: '#98 — 13 Aug 2026 · 1 item, 1 belum lengkap',
+    items: [{ material_id: 1, jenis: 'biasa', diminta: 7, terkirim: 0, sisa: 7 }],
+};
+
+const halamanDenganProjectDipulihkan = (t) => openPage(t, formSuratJalan({
+    requests: [...transferFormData.requests[20], requestProjectLain].map((request) => ({
+        value: request.id,
+        label: request.label,
+    })),
+    projects: [
+        { value: 55, label: 'PRJ-2608-0001 — Alpha', selected: true },
+        { value: 56, label: 'PRJ-2608-0002 — Beta' },
+    ],
+    payload: {
+        ...transferFormData,
+        requests: {
+            ...transferFormData.requests,
+            20: [...transferFormData.requests[20], requestProjectLain],
+        },
+    },
+}));
+
+test('Project yang dipulihkan menyaring Request sejak inisialisasi halaman', (t) => {
+    const window = halamanDenganProjectDipulihkan(t);
+
+    assert.equal(field(window, '[data-project-select]').value, '55');
+    assert.deepEqual(
+        optionValues(field(window, '[data-request-select]')),
+        ['', '91', '92', '93', '94', '95'],
+        'Request dari Project lain tidak boleh muncul setelah validasi mengembalikan Project lama',
+    );
+});
+
 test('membatalkan request yang dikunci server melepas Project, bukan menyisakannya', (t) => {
     const window = halamanDenganKunciServer(t);
     assert.equal(field(window, '[data-project-lock]').value, '55', 'prasyarat: kunci dirender server dari old()');

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Material;
 use App\Models\MaterialSn;
 use App\Models\Mitra;
+use App\Models\SuratJalan;
+use App\Models\SuratJalanItem;
 use App\Models\Warehouse;
 use App\Support\QtyTolerance;
 use Illuminate\Testing\TestResponse;
@@ -85,6 +87,50 @@ class SuratJalanFormDataTest extends TestCase
         $this->assertSame($mitra->id, $serialized['mitra_id']);
         $this->assertSame([10.0, 4.0, 6.0], $this->quantities($items[$material->id]));
         $this->assertSame([5.0, 0.0, 5.0], $this->quantities($items[$lain->id]));
+    }
+
+    public function test_sisa_mengabaikan_surat_jalan_request_dengan_mitra_tidak_cocok(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN');
+        $origin->users()->attach($operator);
+        $tujuan->users()->attach($operator);
+
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $request = $this->materialRequest($mitra, 'disetujui', [[$material, 10]]);
+        $issuer = $this->userWith(null, 'operate_warehouse');
+
+        // `mitra_id` nullable pada Surat Jalan untuk arah THC ke THC. FK komposit tetap
+        // mengizinkan row ini dengan Request Material Mitra, tetapi bukan pemenuhan request
+        // yang sah dan harus diabaikan sama seperti klasifikator sisi server.
+        $this->asThc(function () use ($origin, $tujuan, $request, $issuer, $material): void {
+            $suratJalan = SuratJalan::query()->create([
+                'nomor' => 'SJ-FORM-INVALID-TENANT-'.$request->id,
+                'tanggal' => '2026-08-22',
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $tujuan->id,
+                'mitra_id' => null,
+                'material_request_id' => $request->id,
+                'issued_by' => $issuer->id,
+                'issued_at' => now(),
+                'status' => 'terbit',
+                'pengirim' => 'Petugas Gudang',
+            ]);
+
+            SuratJalanItem::query()->create([
+                'surat_jalan_id' => $suratJalan->id,
+                'mitra_id' => null,
+                'material_id' => $material->id,
+                'qty' => '4',
+            ]);
+        });
+
+        $payload = $this->transferFormData($this->actingAs($operator)->get('/warehouse'));
+        $serialized = collect($payload['requests'][(string) $tujuan->id])->firstWhere('id', $request->id);
+
+        $this->assertSame([10.0, 0.0, 10.0], $this->quantities($serialized['items'][0]));
     }
 
     public function test_daftar_project_hanya_project_aktif_milik_mitra_surat_jalan(): void

@@ -6,6 +6,8 @@ use App\Models\Drum;
 use App\Models\Grup;
 use App\Models\Izin;
 use App\Models\Material;
+use App\Models\MaterialRequest;
+use App\Models\MaterialRequestItem;
 use App\Models\MaterialSn;
 use App\Models\MaterialTransaksi;
 use App\Models\Mitra;
@@ -820,8 +822,6 @@ class SuratJalanTransferTest extends TestCase
         }
     }
 
-
-
     public function test_transfer_requires_catatan_for_deviating_rows_and_saves_it_for_compliant_ones(): void
     {
         $mitra = Mitra::factory()->create();
@@ -842,20 +842,20 @@ class SuratJalanTransferTest extends TestCase
             ]);
         }
 
-        $request = $this->asThc(fn () => \App\Models\MaterialRequest::query()->create([
+        $request = $this->asThc(fn () => MaterialRequest::query()->create([
             'mitra_id' => $mitra->id,
             'requested_by' => $user->id,
             'status' => 'disetujui',
         ]));
-        
+
         $this->asThc(function () use ($request, $mitra, $compliant, $excess) {
-            \App\Models\MaterialRequestItem::query()->create([
+            MaterialRequestItem::query()->create([
                 'material_request_id' => $request->id,
                 'mitra_id' => $mitra->id,
                 'material_id' => $compliant->id,
                 'qty' => '10',
             ]);
-            \App\Models\MaterialRequestItem::query()->create([
+            MaterialRequestItem::query()->create([
                 'material_request_id' => $request->id,
                 'mitra_id' => $mitra->id,
                 'material_id' => $excess->id,
@@ -898,7 +898,7 @@ class SuratJalanTransferTest extends TestCase
         $response->assertRedirect();
 
         $suratJalanId = DB::table('surat_jalans')->value('id');
-        
+
         $this->assertDatabaseHas('surat_jalan_items', [
             'surat_jalan_id' => $suratJalanId,
             'material_id' => $compliant->id,
