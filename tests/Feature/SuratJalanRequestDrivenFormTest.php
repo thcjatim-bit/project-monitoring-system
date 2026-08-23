@@ -164,6 +164,49 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     }
 
     /**
+     * Catatan ada di setiap baris, bukan hanya di baris menyimpang: operator memakainya untuk
+     * menitipkan keterangan bagi penerima. Server tidak menyaring catatan baris patuh, dan
+     * catatan tetap utuh ketika dikirim bersama Request Material dan Project.
+     */
+    public function test_catatan_setiap_baris_tersimpan_utuh_bersama_request_dan_project(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $origin->users()->attach($operator);
+        $diminta = Material::factory()->create(['jenis' => 'biasa']);
+        $asing = Material::factory()->create(['jenis' => 'biasa']);
+        $project = $this->project($mitra, 'PRJ-2608-0001');
+        $request = $this->materialRequest($mitra, 'disetujui', [[$diminta, 10]], $project);
+        $this->terimaStok($operator, $origin, $diminta, '4');
+        $this->terimaStok($operator, $origin, $asing, '2');
+
+        $this->actingAs($operator)->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $tujuan->id,
+            'material_request_id' => $request->id,
+            'project_id' => $project->id,
+            'tanggal' => '2026-08-22',
+            'pengirim' => 'Petugas Gudang',
+            'items' => [
+                ['material_id' => $diminta->id, 'qty' => '4', 'asal' => 'request', 'catatan' => 'Sisanya menyusul minggu depan'],
+                ['material_id' => $asing->id, 'qty' => '2', 'asal' => 'operator', 'catatan' => 'Diminta lisan oleh pengawas lapangan'],
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
+        $this->assertSame($request->id, $suratJalan->material_request_id);
+        $this->assertSame($project->id, $suratJalan->project_id);
+
+        $items = $suratJalan->items()->get()->keyBy('material_id');
+        $this->assertNull($items[$diminta->id]->jenis_penyimpangan);
+        $this->assertSame('Sisanya menyusul minggu depan', $items[$diminta->id]->catatan);
+        $this->assertSame('material_asing', $items[$asing->id]->jenis_penyimpangan);
+        $this->assertSame('Diminta lisan oleh pengawas lapangan', $items[$asing->id]->catatan);
+    }
+
+    /**
      * Asal-usul baris tidak punya konsumen di server: klasifikasi dihitung ulang dari data
      * request, bukan dari hidden input. Field tanpa konsumen tidak boleh menolak submit yang
      * isinya sah, jadi nilai apa pun -- termasuk yang tidak dikenal atau kosong -- lewat, dan
