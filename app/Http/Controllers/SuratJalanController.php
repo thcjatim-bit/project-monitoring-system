@@ -51,7 +51,8 @@ class SuratJalanController extends Controller
     {
         $suratJalan->load([
             'origin', 'destination', 'mitra', 'issuer', 'receiver',
-            'returnedFrom', 'items.material.unit', 'items.serialNumber', 'items.drum',
+            'returnedFrom', 'materialRequest', 'project',
+            'items.material.unit', 'items.serialNumber', 'items.drum',
         ]);
         $canOperateOrigin = $request->user()->canOperateWarehouse($suratJalan->origin, 'operate_warehouse');
         $canOperateDestination = $request->user()->canOperateWarehouse($suratJalan->destination, 'operate_warehouse');

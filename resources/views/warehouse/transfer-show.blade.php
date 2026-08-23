@@ -27,6 +27,12 @@
                 <dt class="ui-muted">Status</dt>
                 <dd><span class="ui-badge ui-badge--{{ $suratJalan->status === 'terbit' ? 'pending' : ($suratJalan->status === 'diterima' ? 'done' : 'cancelled') }}">{{ ucfirst($suratJalan->status) }}</span></dd>
                 <dt class="ui-muted">Tanggal</dt><dd>{{ $suratJalan->tanggal?->format('d M Y') }}</dd>
+                @if($suratJalan->project !== null)
+                    <dt class="ui-muted">Project</dt><dd>{{ $suratJalan->project->id_project }} — {{ $suratJalan->project->nama }}</dd>
+                @endif
+                @if($suratJalan->materialRequest !== null)
+                    <dt class="ui-muted">Request Material</dt><dd><a href="{{ route('material-requests.show', $suratJalan->materialRequest) }}">Request Material #{{ $suratJalan->materialRequest->id }}</a></dd>
+                @endif
                 <dt class="ui-muted">Pengirim</dt><dd>{{ $suratJalan->pengirim }}</dd>
                 <dt class="ui-muted">Sopir / Plat</dt><dd>{{ $suratJalan->sopir ?: '—' }} / {{ $suratJalan->plat_nomor ?: '—' }}</dd>
             </dl>
@@ -44,9 +50,15 @@
 
     <section class="ui-panel ui-panel--wide" style="margin-top:18px">
         <h2>Item Material</h2>
-        <div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Material</th><th>Identitas</th><th>Diterbitkan</th><th>Diterima</th><th>Diretur</th><th>Sisa Transit</th></tr></thead><tbody>
+        <div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Material</th><th>Identitas</th><th>Diterbitkan</th><th>Diterima</th><th>Diretur</th><th>Sisa Transit</th><th>Catatan</th></tr></thead><tbody>
         @foreach($suratJalan->items as $item)
-            <tr><td>{{ $item->material->kode }} — {{ $item->material->nama }}<div class="ui-muted">{{ $item->material->unit->nama }}</div></td><td>{{ $item->serialNumber?->serial_number ?? $item->drum?->drum_id ?? '—' }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty_diterima) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty_diretur) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($remaining($item)) }}</td></tr>
+            <tr><td>{{ $item->material->kode }} — {{ $item->material->nama }}<div class="ui-muted">{{ $item->material->unit->nama }}</div>
+                @if($item->jenis_penyimpangan === 'material_asing')
+                    <x-ui.badge tone="warning" label="Material di luar request" />
+                @elseif($item->jenis_penyimpangan === 'qty_melebihi')
+                    <x-ui.badge tone="warning" label="Qty melebihi sisa" />
+                @endif
+            </td><td>{{ $item->serialNumber?->serial_number ?? $item->drum?->drum_id ?? '—' }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty_diterima) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty_diretur) }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($remaining($item)) }}</td><td>{{ $item->catatan ?? '-' }}</td></tr>
         @endforeach
         </tbody></table></div>
     </section>
