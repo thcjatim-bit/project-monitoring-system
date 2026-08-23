@@ -1,4 +1,5 @@
 <x-layouts.app>
+    @inject('timelineEventRenderer', 'App\Support\ProjectTimelineEventRenderer')
     @php
         $statusLabel = $project->status_project === 'selesai' ? 'Selesai' : 'Aktif';
         $progressStatusLabels = ['pending' => 'Pending', 'verified' => 'Verified', 'rejected' => 'Ditolak'];
@@ -479,7 +480,7 @@
                                     @if ($entry->edited_at)<span>edited</span>@endif
                                 </div>
                                 @if ($entry->type === 'system_log')
-                                    <p class="control-room__timeline-body">{{ ucwords(str_replace('_', ' ', $entry->event_key ?? 'Aktivitas sistem')) }}</p>
+                                    <p class="control-room__timeline-body">{{ $timelineEventRenderer->render($entry) }}</p>
                                 @else
                                     <p class="control-room__timeline-body">{{ $entry->body }}</p>
                                     @if (auth()->user()->hasIzin('edit_project_comment') && (auth()->id() === $entry->actor_id || auth()->user()->mitra_id === null))
