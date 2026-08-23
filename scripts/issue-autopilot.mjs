@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -16,7 +17,7 @@ function commandResult(command, args, options = {}) {
         windowsHide: true,
     });
 
-    if (result.error) {
+    if (result.error && !options.allowFailure) {
         throw result.error;
     }
 
@@ -174,20 +175,76 @@ function enrichBlockers(issue, repo, cwd) {
 }
 
 function activeWorkerCount(cwd) {
-    const result = commandResult("paseo", ["ls", "--json"], { cwd });
+    return activeWorkers(cwd).length;
+}
+
+function isActiveWorker(agent) {
+    const status = String(agent.status ?? "").toLowerCase();
+    const title = String(agent.name ?? agent.title ?? "");
+    const labels = agent.labels ?? {};
+    const isWorkerLabel = Array.isArray(labels)
+        ? labels.some((label) => String(label).includes("autopilot=pms"))
+        : labels.autopilot === "pms";
+
+    return ["running", "starting", "pending", "pending_init", "queued"].includes(status)
+        && (title.startsWith(WORKER_TITLE_PREFIX) || isWorkerLabel);
+}
+
+export function activeWorkers(cwd, run = commandResult) {
+    const result = run("paseo", ["ls", "--json"], { cwd });
     const agents = jsonFrom(result, []);
 
-    return agents.filter((agent) => {
-        const status = String(agent.status ?? "").toLowerCase();
-        const title = String(agent.name ?? agent.title ?? "");
-        const labels = agent.labels ?? {};
-        const isWorkerLabel = Array.isArray(labels)
-            ? labels.some((label) => String(label).includes("autopilot=pms"))
-            : labels.autopilot === "pms";
+    return agents.filter(isActiveWorker);
+}
 
-        return ["running", "starting", "pending", "pending_init", "queued"].includes(status)
-            && (title.startsWith(WORKER_TITLE_PREFIX) || isWorkerLabel);
-    }).length;
+function usageFields(usage) {
+    return {
+        inputTokens: usage?.InputTokens ?? usage?.inputTokens ?? null,
+        outputTokens: usage?.OutputTokens ?? usage?.outputTokens ?? null,
+        cachedTokens: usage?.CachedTokens ?? usage?.cachedTokens ?? null,
+    };
+}
+
+export function sampleActiveWorkers(cwd, options = {}) {
+    const run = options.run ?? commandResult;
+    const append = options.append ?? appendFileSync;
+    const now = options.now ?? (() => new Date().toISOString());
+    const env = options.env ?? process.env;
+    const logPath = options.logPath
+        ?? env.AUTOPILOT_USAGE_LOG
+        ?? path.join(env.USERPROFILE ?? env.HOME ?? ".", ".pms-autopilot", "context-usage.jsonl");
+
+    try {
+        const workers = activeWorkers(cwd, run);
+        if (workers.length === 0) {
+            return;
+        }
+
+        mkdirSync(path.dirname(logPath), { recursive: true });
+        for (const worker of workers) {
+            try {
+                const inspect = run(
+                    "paseo",
+                    ["inspect", String(worker.id), "--json"],
+                    { cwd, allowFailure: true },
+                );
+                const details = inspect.status === 0 ? jsonFrom(inspect, {}) : {};
+                const sample = {
+                    ts: now(),
+                    issue: Number(String(worker.name ?? worker.title ?? "").match(/#(\d+)/)?.[1]) || null,
+                    agentId: worker.id,
+                    status: details.status ?? worker.status,
+                    ...usageFields(details.LastUsage ?? details.lastUsage),
+                };
+
+                append(logPath, `${JSON.stringify(sample)}\n`, { encoding: "utf8" });
+            } catch {
+                // A single worker's telemetry failure must not hide other workers.
+            }
+        }
+    } catch {
+        // Telemetry is observation-only and must never stop dispatching.
+    }
 }
 
 function workerPrompt(repo, issue) {
@@ -316,6 +373,7 @@ export function main(argv = process.argv.slice(2), env = process.env) {
     const cwd = env.AUTOPILOT_CWD ?? REPO_ROOT;
     const repo = resolveRepository(cwd);
     const issues = loadOpenIssues(repo, cwd).map((issue) => enrichBlockers(issue, repo, cwd));
+    sampleActiveWorkers(cwd, { env });
     const active = options.mode === "dispatch" ? activeWorkerCount(cwd) : 0;
     const inProgress = issues.some((issue) => labelNames(issue).has(IN_PROGRESS_LABEL));
     const candidate = active >= options.maxActive || inProgress ? undefined : selectCandidate(issues);
