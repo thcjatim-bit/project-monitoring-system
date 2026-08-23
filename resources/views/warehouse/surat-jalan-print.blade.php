@@ -47,11 +47,17 @@
     </div>
 
     <div><strong>Mitra:</strong> {{ $suratJalan->mitra?->nama ?? 'THC' }}</div>
+    @if($suratJalan->project !== null)
+        <div><strong>Project:</strong> {{ $suratJalan->project->id_project }} — {{ $suratJalan->project->nama }}</div>
+    @endif
+    @if($suratJalan->materialRequest !== null)
+        <div><strong>Request Material #{{ $suratJalan->materialRequest->id }}</strong></div>
+    @endif
     <div><strong>Pengirim:</strong> {{ $suratJalan->pengirim }} &nbsp; <strong>Sopir:</strong> {{ $suratJalan->sopir ?? '-' }} &nbsp; <strong>Plat:</strong> {{ $suratJalan->plat_nomor ?? '-' }}</div>
 
     <table>
         <thead>
-        <tr><th>No.</th><th>Material</th><th>Identitas</th><th>Qty</th><th>Unit</th></tr>
+        <tr><th>No.</th><th>Material</th><th>Identitas</th><th>Qty</th><th>Unit</th><th>Catatan</th></tr>
         </thead>
         <tbody>
         @foreach($suratJalan->items as $item)
@@ -61,6 +67,7 @@
                 <td>{{ $item->serialNumber?->serial_number ?? $item->drum?->drum_id ?? '-' }}</td>
                 <td>{{ \App\Support\QuantityDisplayFormatter::format($item->qty) }}</td>
                 <td>{{ $item->material->unit?->nama ?? '-' }}</td>
+                <td>{{ $item->catatan ?? '-' }}</td>
             </tr>
         @endforeach
         </tbody>

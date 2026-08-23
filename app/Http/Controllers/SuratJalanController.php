@@ -174,7 +174,7 @@ class SuratJalanController extends Controller
     public function print(SuratJalan $suratJalan): Response
     {
         return response()->view('warehouse.surat-jalan-print', [
-            'suratJalan' => $suratJalan->load(['origin', 'destination', 'mitra', 'issuer', 'receiver', 'items.material.unit', 'items.serialNumber', 'items.drum']),
+            'suratJalan' => $suratJalan->load(['origin', 'destination', 'mitra', 'materialRequest', 'project', 'issuer', 'receiver', 'items.material.unit', 'items.serialNumber', 'items.drum']),
         ]);
     }
 
