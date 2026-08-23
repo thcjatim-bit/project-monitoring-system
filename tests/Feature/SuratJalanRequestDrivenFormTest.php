@@ -379,6 +379,92 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         }
     }
 
+    public function test_request_yang_belum_terminal_tidak_diubah_menjadi_kiriman_langsung_dan_asal_dipertahankan(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $origin->users()->attach($operator);
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+
+        foreach (['diajukan', 'ditolak'] as $status) {
+            $request = $this->materialRequest($mitra, $status, [[$material, 4]]);
+
+            $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'material_request_id' => $request->id,
+                'tanggal' => '2026-08-22',
+                'items' => [
+                    7 => [
+                        'material_id' => $material->id,
+                        'qty' => '3',
+                        'catatan' => 'Tetap pertahankan konteks',
+                        'asal' => 'asal-yang-tidak-dinormalisasi',
+                    ],
+                    8 => [
+                        'material_id' => $material->id,
+                        'qty' => '2',
+                        'asal' => 'request',
+                    ],
+                ],
+            ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
+
+            $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
+
+            $this->assertStringContainsString('data-row-asal="asal-yang-tidak-dinormalisasi"', $html);
+            $this->assertStringContainsString(
+                '<input type="hidden" name="items[7][asal]" value="asal-yang-tidak-dinormalisasi" data-row-origin>',
+                $html,
+            );
+            $this->assertStringContainsString('value="Tetap pertahankan konteks"', $html);
+            $this->assertStringContainsString('data-row-asal="request"', $html);
+            $this->assertStringContainsString(
+                '<select name="items[8][material_id]" data-material-select required disabled',
+                $html,
+            );
+        }
+    }
+
+    public function test_request_terminal_milik_mitra_lain_tidak_diubah_menjadi_kiriman_langsung(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $mitraLain = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $origin->users()->attach($operator);
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $request = $this->materialRequest($mitraLain, 'ditutup', [[$material, 4]]);
+
+        $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'material_request_id' => $request->id,
+            'tanggal' => '2026-08-22',
+            'items' => [
+                7 => [
+                    'material_id' => $material->id,
+                    'qty' => '3',
+                    'asal' => 'request',
+                ],
+            ],
+        ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
+
+        $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
+
+        $this->assertStringContainsString('data-row-asal="request"', $html);
+        $this->assertStringContainsString(
+            '<input type="hidden" name="items[7][material_id]" value="'.$material->id.'">',
+            $html,
+        );
+        $this->assertStringContainsString(
+            '<select name="items[7][material_id]" data-material-select required disabled',
+            $html,
+        );
+    }
+
     private function terimaStok(User $operator, Warehouse $warehouse, Material $material, string $qty): void
     {
         $this->actingAs($operator)->post('/warehouse/stock/receive', [

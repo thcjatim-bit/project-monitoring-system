@@ -55,11 +55,11 @@
                     $oldItems = collect(old('items', [[]]))->map(fn ($item) => is_array($item) ? $item : []);
                     $oldRequestId = old('material_request_id');
                     $initialRequests = $transferFormData['requests'][(string) $initialDestinationId] ?? [];
-                    // Request yang sudah selesai/ditutup tidak lagi ada di payload. Nilai Request
-                    // di-reset, tetapi baris old() tetap dipulihkan sebagai kiriman langsung.
-                    $oldRequestAvailable = $oldRequestId === null || $oldRequestId === ''
-                        || collect($initialRequests)->contains(fn (array $candidate): bool => (string) $candidate['id'] === (string) $oldRequestId);
-                    $resetOldRequest = $oldRequestId !== null && $oldRequestId !== '' && ! $oldRequestAvailable;
+                    // Hanya Request terminal milik Mitra yang sedang dilayani yang boleh di-reset.
+                    // Request ditolak, belum diputuskan, tidak ditemukan, atau milik Mitra lain tetap
+                    // membawa asal-usul old() agar tidak diam-diam berubah menjadi kiriman langsung.
+                    $resetOldRequest = $oldRequestId !== null && $oldRequestId !== ''
+                        && (string) ($transferFormData['terminal_request_id'] ?? '') === (string) $oldRequestId;
                     // Request ber-Project mengunci Projectnya di klien; render ulang harus memulihkan
                     // kunci itu juga, kalau tidak form kembali dalam bentuk yang prefill tidak pernah buat.
                     $initialRequest = collect($initialRequests)->first(fn (array $candidate): bool => (string) $candidate['id'] === (string) old('material_request_id'));
@@ -75,7 +75,9 @@
                     <div class="ui-form__grid"><label>Tanggal<input type="date" name="tanggal" required value="{{ old('tanggal', now()->toDateString()) }}"></label><label>Pengirim<input name="pengirim" maxlength="255" required value="{{ old('pengirim') }}"></label></div><div class="ui-form__grid"><label>Sopir<input name="sopir" maxlength="255" value="{{ old('sopir') }}"></label><label>Plat nomor<input name="plat_nomor" maxlength="255" value="{{ old('plat_nomor') }}"></label></div>
                     <div class="ui-form"><strong>Item Surat Jalan</strong><div data-transfer-items>@foreach($oldItems as $index => $oldItem)@php
                         $oldMaterial = $materials->firstWhere('id', (int) ($oldItem['material_id'] ?? 0));
-                        $oldAsal = ! $resetOldRequest && ($oldItem['asal'] ?? 'manual') === 'request' ? 'request' : 'manual';
+                        $oldAsal = $resetOldRequest
+                            ? 'manual'
+                            : (array_key_exists('asal', $oldItem) ? (string) $oldItem['asal'] : 'manual');
                         $oldTerkunci = $oldAsal === 'request' && $oldMaterial !== null;
                         $identityOptionsFor = function (string $type) use ($transferFormData, $initialOriginId, $oldMaterial): array {
                             if ($oldMaterial === null) {

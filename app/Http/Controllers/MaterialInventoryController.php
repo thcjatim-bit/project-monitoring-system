@@ -41,8 +41,9 @@ class MaterialInventoryController extends Controller
                 ? $transferForm->forOperator(
                     $warehouses,
                     $destinationWarehouses,
-                    $this->oldWarehouseId('warehouse_asal_id'),
-                    $this->oldWarehouseId('warehouse_tujuan_id'),
+                    $this->oldInteger('warehouse_asal_id'),
+                    $this->oldInteger('warehouse_tujuan_id'),
+                    $this->oldInteger('material_request_id'),
                 )
                 : null,
             'materials' => $this->activeMaterials(),
@@ -144,7 +145,7 @@ class MaterialInventoryController extends Controller
             ->get();
     }
 
-    private function oldWarehouseId(string $field): ?int
+    private function oldInteger(string $field): ?int
     {
         $value = old($field);
 

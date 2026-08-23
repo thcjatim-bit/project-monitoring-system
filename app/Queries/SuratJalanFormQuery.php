@@ -33,6 +33,7 @@ class SuratJalanFormQuery
      *     initial_destination_id: int|null,
      *     initial_mitra_id: int|null,
      *     qty_tolerance: float,
+     *     terminal_request_id: int|null,
      *     requests: array<string, list<array<string, mixed>>>,
      *     projects: list<array<string, mixed>>,
      *     identities: array<string, array<string, list<array<string, mixed>>>>,
@@ -43,6 +44,7 @@ class SuratJalanFormQuery
         Collection $destinationWarehouses,
         ?int $selectedOriginId,
         ?int $selectedDestinationId,
+        ?int $selectedRequestId = null,
     ): array {
         $warehouseMitra = $originWarehouses->concat($destinationWarehouses)
             ->keyBy('id')
@@ -59,10 +61,29 @@ class SuratJalanFormQuery
             'initial_destination_id' => $initialDestinationId,
             'initial_mitra_id' => $this->effectiveMitra($warehouseMitra, $initialOriginId, $initialDestinationId),
             'qty_tolerance' => QtyTolerance::VALUE,
+            'terminal_request_id' => $this->terminalRequestId(
+                $selectedRequestId,
+                $this->effectiveMitra($warehouseMitra, $initialOriginId, $initialDestinationId),
+            ),
             'requests' => $this->requestsPerDestination($destinationWarehouses),
             'projects' => $this->activeProjects($originWarehouses, $destinationWarehouses),
             'identities' => $this->identitiesPerOrigin($originWarehouses),
         ];
+    }
+
+    private function terminalRequestId(?int $requestId, ?int $mitraId): ?int
+    {
+        if ($requestId === null || $mitraId === null) {
+            return null;
+        }
+
+        $terminalRequestId = MaterialRequest::query()
+            ->whereKey($requestId)
+            ->where('mitra_id', $mitraId)
+            ->whereIn('status', MaterialRequest::TERMINAL_STATUSES)
+            ->value('id');
+
+        return $terminalRequestId === null ? null : (int) $terminalRequestId;
     }
 
     /**

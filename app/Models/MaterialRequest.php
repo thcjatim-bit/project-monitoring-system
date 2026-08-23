@@ -14,6 +14,9 @@ class MaterialRequest extends Model
     /** Status Request Material yang masih boleh dipenuhi Surat Jalan. */
     public const FULFILLABLE_STATUSES = ['disetujui', 'terpenuhi_sebagian'];
 
+    /** Status Request Material yang tidak boleh dipilih lagi setelah validasi form gagal. */
+    public const TERMINAL_STATUSES = ['selesai', 'ditutup'];
+
     protected $fillable = [
         'mitra_id',
         'project_id',
