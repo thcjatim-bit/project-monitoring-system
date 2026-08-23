@@ -427,6 +427,41 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         }
     }
 
+    public function test_request_yang_tidak_lagi_tersedia_tetap_terpilih_setelah_validasi_gagal(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $operator = $this->userWith(null, 'operate_warehouse');
+        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $origin->users()->attach($operator);
+        $material = Material::factory()->create(['jenis' => 'biasa']);
+        $request = $this->materialRequest($mitra, 'diajukan', [[$material, 4]]);
+
+        $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+            'warehouse_asal_id' => $origin->id,
+            'warehouse_tujuan_id' => $destination->id,
+            'material_request_id' => $request->id,
+            'tanggal' => '2026-08-22',
+            'items' => [
+                7 => [
+                    'material_id' => $material->id,
+                    'qty' => '3',
+                    'asal' => 'request',
+                ],
+            ],
+        ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
+
+        $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
+
+        preg_match('/<select name="material_request_id"[^>]*>(.*?)<\/select>/s', $html, $matches);
+        $this->assertArrayHasKey(1, $matches);
+        $this->assertStringContainsString(
+            '<option value="'.$request->id.'" selected',
+            $matches[1],
+            'Request Material yang tidak lagi tersedia harus tetap menjadi pilihan otoritatif saat retry',
+        );
+    }
+
     public function test_request_terminal_milik_mitra_lain_tidak_diubah_menjadi_kiriman_langsung(): void
     {
         $mitra = Mitra::factory()->create();
