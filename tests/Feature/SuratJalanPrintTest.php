@@ -15,6 +15,8 @@ use App\Support\TenantDatabaseContext;
 use Closure;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
+use Illuminate\View\View as ViewInstance;
 use Tests\Concerns\RefreshDatabase;
 use Tests\TestCase;
 
@@ -76,6 +78,12 @@ class SuratJalanPrintTest extends TestCase
         DB::listen(function (QueryExecuted $query) use (&$queries): void {
             $queries[] = strtolower($query->sql);
         });
+        $provenanceWasEagerLoaded = false;
+        View::composer('warehouse.surat-jalan-print', function (ViewInstance $view) use (&$provenanceWasEagerLoaded): void {
+            $suratJalan = $view->getData()['suratJalan'];
+            $provenanceWasEagerLoaded = $suratJalan->relationLoaded('materialRequest')
+                && $suratJalan->relationLoaded('project');
+        });
 
         $this->actingAs($user)
             ->get(route('warehouse.transfers.print', $suratJalanId))
@@ -85,6 +93,7 @@ class SuratJalanPrintTest extends TestCase
             ->assertSee('Catatan baris patuh')
             ->assertSee('Catatan material asing');
 
+        $this->assertTrue($provenanceWasEagerLoaded);
         $this->assertSame(1, count(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'material_requests'))));
         $this->assertSame(1, count(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'projects'))));
     }
