@@ -424,6 +424,19 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                 '<select name="items[8][material_id]" data-material-select required disabled',
                 $html,
             );
+
+            $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
+                'warehouse_asal_id' => $origin->id,
+                'warehouse_tujuan_id' => $destination->id,
+                'material_request_id' => $request->id,
+                'tanggal' => '2026-08-22',
+                'pengirim' => 'Petugas Gudang',
+                'items' => [
+                    ['material_id' => $material->id, 'qty' => '3', 'asal' => 'request'],
+                ],
+            ])->assertRedirect('/warehouse')->assertSessionHasErrors('status');
+
+            $this->assertDatabaseCount('surat_jalans', 0);
         }
     }
 
