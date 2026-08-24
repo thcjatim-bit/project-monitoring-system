@@ -6,6 +6,32 @@ use App\Models\ProjectTimeline;
 
 final class ProjectTimelineEventRenderer
 {
+    private const EVENT_LABELS = [
+        'surat_jalan_issued' => 'Surat Jalan diterbitkan',
+        'surat_jalan_received' => 'Surat Jalan diterima',
+        'surat_jalan_cancelled' => 'Surat Jalan dibatalkan',
+        'step_changed' => 'Step Project diperbarui',
+        'toc_changed' => 'TOC Project diperbarui',
+        'baseline_proposal_submitted' => 'Usulan Baseline diajukan',
+        'baseline_proposal_approved' => 'Usulan Baseline disetujui',
+        'variation_order_created' => 'Variation Order dibuat',
+        'variation_order_approved' => 'Variation Order disetujui',
+        'progress_submitted' => 'Progres jasa diajukan',
+        'progress_verified' => 'Progres jasa diverifikasi',
+        'progress_rejected' => 'Progres jasa ditolak',
+        'photo_uploaded' => 'Foto Pekerjaan ditambahkan',
+        'rab_material_added' => 'RAB Material ditambahkan',
+        'material_usage_submitted' => 'Pemakaian Material diajukan',
+        'material_usage_cancelled' => 'Pemakaian Material dibatalkan',
+        'material_usage_approved' => 'Pemakaian Material disetujui',
+        'material_usage_rejected' => 'Pemakaian Material ditolak',
+        'material_installed' => 'Material Terpasang dicatat',
+        'material_rekon_opened' => 'Rekon Material dibuka',
+        'material_rekon_updated' => 'Rekon Material diperbarui',
+        'material_rekon_approved' => 'Rekon Material disetujui',
+        'material_rekon_rejected' => 'Rekon Material ditolak',
+    ];
+
     public function render(ProjectTimeline $entry): string
     {
         if ($entry->event_key === 'surat_jalan_deviation') {
@@ -33,7 +59,7 @@ final class ProjectTimelineEventRenderer
 
         return $parts !== []
             ? implode('; ', $parts)
-            : 'Penyimpangan Surat Jalan';
+            : 'Baris Menyimpang pada Surat Jalan';
     }
 
     /** @return list<string> */
@@ -60,6 +86,15 @@ final class ProjectTimelineEventRenderer
 
     private function formatSystemEventLabel(?string $eventKey): string
     {
-        return ucwords(str_replace('_', ' ', $eventKey ?? 'Aktivitas sistem'));
+        if ($eventKey === null || $eventKey === '') {
+            return 'Aktivitas sistem';
+        }
+
+        return self::EVENT_LABELS[$eventKey] ?? $this->formatLegacyEventLabel($eventKey);
+    }
+
+    private function formatLegacyEventLabel(string $eventKey): string
+    {
+        return ucwords(str_replace('_', ' ', $eventKey));
     }
 }

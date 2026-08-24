@@ -92,13 +92,13 @@ class ProjectControlRoomTest extends TestCase
             ->assertSee($project->nama);
     }
 
-    public function test_project_timeline_renders_surat_jalan_deviation_metadata_as_a_readable_sentence(): void
+    public function test_linimasa_gabungan_merender_baris_menyimpang_surat_jalan_sebagai_kalimat_terbaca(): void
     {
         $mitra = Mitra::factory()->create();
         $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
         $project = $this->asThc(fn (): Project => Project::create([
             'id_project' => 'PRJ-2608-0049',
-            'nama' => 'Project Penyimpangan',
+            'nama' => 'Project Baris Menyimpang',
             'mitra_id' => $mitra->id,
         ]));
 
@@ -122,7 +122,7 @@ class ProjectControlRoomTest extends TestCase
             ->assertDontSee('Surat Jalan Deviation');
     }
 
-    public function test_project_timeline_keeps_raw_event_label_for_existing_system_events(): void
+    public function test_linimasa_gabungan_memakai_label_glosarium_dan_fallback_mentah(): void
     {
         $mitra = Mitra::factory()->create();
         $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
@@ -139,10 +139,18 @@ class ProjectControlRoomTest extends TestCase
             ['from' => 'design', 'to' => 'survey'],
         ));
 
+        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
+            $project,
+            null,
+            'event_tidak_dikenal',
+        ));
+
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Step Changed')
+            ->assertSee('Step Project diperbarui')
+            ->assertDontSee('Step Changed')
+            ->assertSee('Event Tidak Dikenal')
             ->assertDontSee('Material di luar request')
             ->assertDontSee('Qty melebihi sisa');
     }
