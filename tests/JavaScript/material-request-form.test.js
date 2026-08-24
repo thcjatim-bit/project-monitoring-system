@@ -67,13 +67,21 @@ test('memilih material ber-SN mengunci Qty ke bilangan bulat', (t) => {
     assert.equal(qty(row).getAttribute('min'), '1', 'setengah pcs bukan benda');
 });
 
-test('material tanpa Serial Number belum ikut dikunci', (t) => {
+test('material biasa dan drum kabel sama-sama mengunci Qty ke bilangan bulat', (t) => {
     const window = requestPage(t);
-    const [row] = rows(window);
+    const [biasa] = rows(window);
 
-    choose(window, row, '1');
+    choose(window, biasa, '1');
 
-    assert.equal(qty(row).getAttribute('step'), '0.001', 'penegakan jenis lain dikerjakan terpisah');
+    assert.equal(qty(biasa).getAttribute('step'), '1', 'material biasa dihitung per unit utuh');
+    assert.equal(qty(biasa).getAttribute('min'), '1');
+
+    window.document.getElementById('add-material-request-item').click();
+    const drum = rows(window).at(-1);
+    choose(window, drum, '3');
+
+    assert.equal(qty(drum).getAttribute('step'), '1', 'kabel dihitung per meter utuh');
+    assert.equal(qty(drum).getAttribute('min'), '1');
 });
 
 test('mengganti pilihan kembali ke material biasa melepas kuncinya', (t) => {
@@ -82,7 +90,7 @@ test('mengganti pilihan kembali ke material biasa melepas kuncinya', (t) => {
     choose(window, row, '2');
     assert.equal(qty(row).getAttribute('step'), '1', 'prasyarat: qty terkunci');
 
-    choose(window, row, '3');
+    choose(window, row, '1');
 
     assert.equal(qty(row).getAttribute('step'), '0.001');
 });
