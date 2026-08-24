@@ -93,6 +93,7 @@ const warehousePage = (t) => openPage(t, `
         <label>Material<select name="material_id" data-material-select required>
             <option value="">Pilih Material</option>${materialOptions}
         </select></label>
+        <input type="number" name="qty" min="0.001" step="0.001">
         ${identityFields('receive')}
         <button type="submit">Catat penerimaan</button>
     </form>
@@ -100,6 +101,7 @@ const warehousePage = (t) => openPage(t, `
         <label>Material<select name="material_id" data-material-select required>
             <option value="">Pilih Material</option>${materialOptions}
         </select></label>
+        <input type="number" name="qty" min="0.001" step="0.001">
         ${identityFields('issue')}
         <button type="submit">Catat pengeluaran</button>
     </form>
@@ -354,6 +356,24 @@ test('memilih material ber-SN pada form Penerimaan membuka kotak Serial Number',
     assert.equal(identity(form, 'serial_number').hidden, false);
     assert.equal(identity(form, 'serial_number').querySelector('input').required, true);
     assert.equal(identity(form, 'drum_id').hidden, true);
+});
+
+test('form stok dan baris Surat Jalan memakai step satu untuk material berqty utuh', (t) => {
+    const window = warehousePage(t);
+
+    for (const action of ['receive', 'issue']) {
+        const form = stockForm(window, action);
+        choose(window, form.querySelector('[data-material-select]'), '3');
+
+        assert.equal(form.querySelector('input[name="qty"]').getAttribute('step'), '1');
+        assert.equal(form.querySelector('input[name="qty"]').getAttribute('min'), '1');
+    }
+
+    const row = rows(window)[0];
+    choose(window, row.querySelector('select'), '3');
+
+    assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('step'), '1');
+    assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('min'), '1');
 });
 
 test('identitas form Penerimaan tidak bocor ke form Pengeluaran', (t) => {
