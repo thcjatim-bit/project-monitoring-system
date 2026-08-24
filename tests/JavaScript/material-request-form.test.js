@@ -26,7 +26,7 @@ const materialOptions = `
 const itemMarkup = (index) => `
     <div class="material-request-item">
         <label>Material<select name="items[${index}][material_id]" required>${materialOptions}</select></label>
-        <label>Qty <input name="items[${index}][qty]" type="number" min="0.001" step="0.001" required></label>
+        <label>Qty <input name="items[${index}][qty]" type="number" min="1" step="1" required></label>
     </div>
 `;
 
@@ -104,11 +104,18 @@ test('baris Material tambahan ikut mengunci Qty-nya sendiri', (t) => {
     choose(window, tambahan, '2');
 
     assert.equal(qty(tambahan).getAttribute('step'), '1', 'baris klon tidak boleh lolos dari aturan yang sama');
-    assert.equal(qty(rows(window)[0]).getAttribute('step'), '0.001', 'baris lain tidak ikut terpengaruh');
+    assert.equal(qty(rows(window)[0]).getAttribute('step'), '1', 'baris lain tidak ikut terpengaruh');
 });
 
-test('markup awal Qty tidak mengunci apa pun sebelum material dipilih', (t) => {
+test('markup awal Qty sudah mengikuti aturan bilangan bulat sebelum material dipilih', (t) => {
     const window = requestPage(t);
 
-    assert.equal(qty(rows(window)[0]).getAttribute('step'), '0.001');
+    assert.equal(qty(rows(window)[0]).getAttribute('step'), '1');
+    assert.equal(qty(rows(window)[0]).getAttribute('min'), '1');
+});
+
+test('Blade Request Material tidak lagi merender atribut qty pecahan', () => {
+    const source = readFileSync(bladePath, 'utf8');
+
+    assert.doesNotMatch(source, /0\.001/);
 });

@@ -93,7 +93,7 @@ const warehousePage = (t) => openPage(t, `
         <label>Material<select name="material_id" data-material-select required>
             <option value="">Pilih Material</option>${materialOptions}
         </select></label>
-        <input type="number" name="qty" min="0.001" step="0.001">
+        <input type="number" name="qty" min="1" step="1">
         ${identityFields('receive')}
         <button type="submit">Catat penerimaan</button>
     </form>
@@ -101,13 +101,13 @@ const warehousePage = (t) => openPage(t, `
         <label>Material<select name="material_id" data-material-select required>
             <option value="">Pilih Material</option>${materialOptions}
         </select></label>
-        <input type="number" name="qty" min="0.001" step="0.001">
+        <input type="number" name="qty" min="1" step="1">
         ${identityFields('issue')}
         <button type="submit">Catat pengeluaran</button>
     </form>
     <form data-submit-loading action="/warehouse/stock/drum-split">
         <label>Drum<select name="drum_id" required><option value="DRM-1">DRM-1</option></select></label>
-        <input type="number" name="qty" data-quantity-kind="drum_kabel" min="0.001" step="0.001">
+        <input type="number" name="qty" data-quantity-kind="drum_kabel" min="1" step="1">
         <button type="submit">Catat split drum</button>
     </form>
     <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
@@ -370,6 +370,8 @@ test('form stok dan baris Surat Jalan memakai step satu untuk material berqty ut
 
     for (const action of ['receive', 'issue']) {
         const form = stockForm(window, action);
+        assert.equal(form.querySelector('input[name="qty"]').getAttribute('step'), '1');
+        assert.equal(form.querySelector('input[name="qty"]').getAttribute('min'), '1');
         choose(window, form.querySelector('[data-material-select]'), '3');
 
         assert.equal(form.querySelector('input[name="qty"]').getAttribute('step'), '1');
@@ -377,6 +379,8 @@ test('form stok dan baris Surat Jalan memakai step satu untuk material berqty ut
     }
 
     const row = rows(window)[0];
+    assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('step'), '1');
+    assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('min'), '1');
     choose(window, row.querySelector('select'), '3');
 
     assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('step'), '1');
@@ -399,6 +403,10 @@ test('Blade form Split Drum mengiklankan qty meter utuh', (t) => {
     assert.notEqual(splitFormStart, -1, 'form Split Drum tidak ditemukan');
     assert.match(splitForm, /data-quantity-kind="drum_kabel"/);
     assert.match(splitForm, /name="qty"[^>]*min="1"[^>]*step="1"/);
+});
+
+test('Blade Warehouse tidak lagi merender atribut qty pecahan', () => {
+    assert.doesNotMatch(blade(), /0\.001/);
 });
 
 test('identitas form Penerimaan tidak bocor ke form Pengeluaran', (t) => {
