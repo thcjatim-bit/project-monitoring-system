@@ -29,6 +29,12 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
     const window = document.defaultView ?? globalThis;
 
     let refreshTransferIdentityState = () => {};
+    const wholeQuantityKinds = new Set(['biasa', 'ber_sn', 'drum_kabel']);
+    const updateQuantityAttributes = (quantity, kind) => {
+        const whole = wholeQuantityKinds.has(kind);
+        quantity.step = whole ? '1' : '0.001';
+        quantity.min = whole ? '1' : '0.001';
+    };
     const identityScope = (select) => select.closest('[data-transfer-row]') ?? select.closest('form');
     const toggleIdentity = (select, clearUnavailable = false) => {
         const kind = select.options[select.selectedIndex]?.dataset.kind ?? '';
@@ -51,9 +57,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         });
         const quantity = scope?.querySelector('input[type="number"]');
         if (quantity) {
-            const whole = ['biasa', 'ber_sn', 'drum_kabel'].includes(kind);
-            quantity.step = whole ? '1' : '0.001';
-            quantity.min = whole ? '1' : '0.001';
+            updateQuantityAttributes(quantity, kind);
         }
         if (quantity && kind === 'ber_sn') {
             quantity.value = '1';
@@ -66,6 +70,9 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         refreshTransferIdentityState();
     };
     const bindIdentity = (select) => { select.addEventListener('change', () => toggleIdentity(select, true)); toggleIdentity(select); };
+    document.querySelectorAll('input[type="number"][data-quantity-kind]').forEach((quantity) => {
+        updateQuantityAttributes(quantity, quantity.dataset.quantityKind);
+    });
     // Satu selector untuk halaman maupun baris klon, supaya identity select tidak ikut dianggap
     // sebagai material select setelah komponen searchable-select masuk ke dalam baris.
     const bindSelects = (root) => root.querySelectorAll('[data-material-select]').forEach(bindIdentity);
