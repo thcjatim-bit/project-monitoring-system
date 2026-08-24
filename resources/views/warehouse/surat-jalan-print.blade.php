@@ -47,10 +47,10 @@
     </div>
 
     <div><strong>Mitra:</strong> {{ $suratJalan->mitra?->nama ?? 'THC' }}</div>
-    @if($suratJalan->project !== null)
+    @if($suratJalan->retur_dari_id === null && $suratJalan->project !== null)
         <div><strong>Project:</strong> {{ $suratJalan->project->id_project }} — {{ $suratJalan->project->nama }}</div>
     @endif
-    @if($suratJalan->materialRequest !== null)
+    @if($suratJalan->retur_dari_id === null && $suratJalan->materialRequest !== null)
         <div><strong>Request Material #{{ $suratJalan->materialRequest->id }}</strong></div>
     @endif
     <div><strong>Pengirim:</strong> {{ $suratJalan->pengirim }} &nbsp; <strong>Sopir:</strong> {{ $suratJalan->sopir ?? '-' }} &nbsp; <strong>Plat:</strong> {{ $suratJalan->plat_nomor ?? '-' }}</div>

@@ -184,7 +184,7 @@ class SuratJalanService
                 'tanggal' => $data['tanggal'],
                 'pengirim' => $data['pengirim'],
                 'project_id' => $original->project_id,
-                'material_request_id' => $original->material_request_id,
+                'material_request_id' => null,
                 'sopir' => $data['sopir'] ?? null,
                 'plat_nomor' => $data['plat_nomor'] ?? null,
                 'items' => $items,

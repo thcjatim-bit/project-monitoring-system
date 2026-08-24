@@ -267,7 +267,7 @@ class PortfolioCockpitTest extends TestCase
             ->assertOk()
             ->assertSee('<strong data-kpi="active-projects">1</strong>', false)
             ->assertSee('<strong data-kpi="active-rab-value">Rp 1.000.000</strong>', false)
-            ->assertSee('Step Project diperbarui')
+            ->assertSee('Step Changed')
             ->assertSee('Project Alpha')
             ->assertDontSee('Rp 1.500.000')
             ->assertDontSee('Project Beta')
@@ -418,6 +418,33 @@ class PortfolioCockpitTest extends TestCase
             ->assertDontSee('Rahasia internal tidak boleh tampil')
             ->assertSee('40.00%', false)
             ->assertSee('50.00%', false);
+    }
+
+    public function test_portfolio_activity_renders_surat_jalan_deviation_metadata(): void
+    {
+        CarbonImmutable::setTestNow('2026-08-15 09:00:00');
+        $mitra = Mitra::factory()->create();
+        $project = $this->projectFor($mitra, 'PRJ-2608-0024', 'Project Activity Deviation');
+
+        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
+            $project,
+            null,
+            'surat_jalan_deviation',
+            [
+                'material_asing' => ['Kabel FO 12C'],
+                'qty_melebihi' => ['Splitter 1:8'],
+            ],
+        ));
+
+        $thc = $this->userWithPermissions(null, 'read_dashboard', 'read_project_timeline');
+
+        $this->actingAs($thc)
+            ->get(route('portfolio.index'))
+            ->assertOk()
+            ->assertSee('Material di luar request')
+            ->assertSee('Kabel FO 12C')
+            ->assertSee('Qty melebihi sisa')
+            ->assertSee('Splitter 1:8');
     }
 
     public function test_portfolio_panels_follow_risk_and_period_filters_together(): void

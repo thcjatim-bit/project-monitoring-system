@@ -63,6 +63,7 @@ class PortfolioCockpitQuery
         private ProjectCurveQuery $curveQuery,
         private ProjectMaterialReadinessQuery $materialQuery,
         private PortfolioDecisionQueueQuery $decisionQueueQuery,
+        private ProjectTimelineEventRenderer $timelineEventRenderer,
     ) {}
 
     /**
@@ -538,7 +539,7 @@ class PortfolioCockpitQuery
                 $isComment = $timeline->type === 'comment';
                 $title = $isComment
                     ? 'Komentar Project'
-                    : (ProjectTimelineEventRenderer::labelFor($timeline->event_key) ?? 'Aktivitas Project');
+                    : $this->timelineEventRenderer->render($timeline);
                 $url = $viewer->hasIzin('read_project_timeline')
                     ? route('projects.timeline.index', $project)
                     : ($viewer->hasIzin('read_project') ? route('projects.show', $project) : null);

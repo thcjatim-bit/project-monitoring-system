@@ -104,14 +104,14 @@ class ProjectControlRoomTest extends TestCase
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Material di luar Request Material')
+            ->assertSee('Material di luar request')
             ->assertSee('Kabel FO 12C')
             ->assertSee('Qty melebihi sisa')
             ->assertSee('Splitter 1:8')
             ->assertDontSee('Surat Jalan Deviation');
     }
 
-    public function test_linimasa_gabungan_memakai_label_glosarium_dan_fallback_mentah(): void
+    public function test_linimasa_gabungan_mempertahankan_label_mentah_untuk_event_lain(): void
     {
         [$project, $thc] = $this->timelineProject('PRJ-2608-0050', 'Project Event Biasa');
 
@@ -124,15 +124,12 @@ class ProjectControlRoomTest extends TestCase
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Step Project diperbarui')
-            ->assertDontSee('Step Changed')
-            ->assertSee('TOC Project diperbarui')
-            ->assertSee('Transit diselesaikan')
-            ->assertSee('Retur Surat Jalan diterbitkan')
-            ->assertDontSee('Surat Jalan Resolved')
-            ->assertDontSee('Surat Jalan Returned')
+            ->assertSee('Step Changed')
+            ->assertSee('Toc Changed')
+            ->assertSee('Surat Jalan Resolved')
+            ->assertSee('Surat Jalan Returned')
             ->assertSee('Event Tidak Dikenal')
-            ->assertDontSee('Material di luar Request Material')
+            ->assertDontSee('Material di luar request')
             ->assertDontSee('Qty melebihi sisa');
     }
 
