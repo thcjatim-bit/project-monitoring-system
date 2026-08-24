@@ -135,14 +135,14 @@ class ProjectControlRoomTest extends TestCase
         $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
             $project,
             null,
-            'step_changed',
+            'unrelated_event',
             ['from' => 'design', 'to' => 'survey'],
         ));
 
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Step Changed')
+            ->assertSee('Unrelated Event')
             ->assertDontSee('Material di luar request')
             ->assertDontSee('Qty melebihi sisa');
     }

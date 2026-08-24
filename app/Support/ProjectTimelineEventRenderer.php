@@ -6,13 +6,17 @@ use App\Models\ProjectTimeline;
 
 final class ProjectTimelineEventRenderer
 {
+    private const EVENT_LABELS = [
+        'step_changed' => 'Step Project diperbarui',
+    ];
+
     public function render(ProjectTimeline $entry): string
     {
         if ($entry->event_key === 'surat_jalan_deviation') {
             return $this->renderDeviation($entry->metadata);
         }
 
-        return $this->rawEventLabel($entry->event_key);
+        return $this->formatSystemEventLabel($entry->event_key);
     }
 
     /** @param array<string, mixed>|null $metadata */
@@ -58,8 +62,12 @@ final class ProjectTimelineEventRenderer
         return array_values(array_unique($names));
     }
 
-    private function rawEventLabel(?string $eventKey): string
+    private function formatSystemEventLabel(?string $eventKey): string
     {
+        if ($eventKey !== null && isset(self::EVENT_LABELS[$eventKey])) {
+            return self::EVENT_LABELS[$eventKey];
+        }
+
         return ucwords(str_replace('_', ' ', $eventKey ?? 'Aktivitas sistem'));
     }
 }

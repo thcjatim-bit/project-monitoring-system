@@ -64,7 +64,7 @@ class ProjectStepTest extends TestCase
         $this->actingAs($user)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Step Changed');
+            ->assertSee('Step Project diperbarui');
     }
 
     public function test_completing_a_step_records_actual_date_and_activates_the_next_step(): void
@@ -112,7 +112,7 @@ class ProjectStepTest extends TestCase
         $this->actingAs($user)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Step Changed');
+            ->assertSee('Step Project diperbarui');
     }
 
     public function test_step_without_update_permission_cannot_be_changed_directly(): void
