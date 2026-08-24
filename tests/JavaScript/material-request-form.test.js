@@ -84,7 +84,7 @@ test('material biasa dan drum kabel sama-sama mengunci Qty ke bilangan bulat', (
     assert.equal(qty(drum).getAttribute('min'), '1');
 });
 
-test('mengganti pilihan kembali ke material biasa melepas kuncinya', (t) => {
+test('mengganti pilihan ke material biasa tetap memakai qty utuh', (t) => {
     const window = requestPage(t);
     const [row] = rows(window);
     choose(window, row, '2');
@@ -92,7 +92,8 @@ test('mengganti pilihan kembali ke material biasa melepas kuncinya', (t) => {
 
     choose(window, row, '1');
 
-    assert.equal(qty(row).getAttribute('step'), '0.001');
+    assert.equal(qty(row).getAttribute('step'), '1');
+    assert.equal(qty(row).getAttribute('min'), '1');
 });
 
 test('baris Material tambahan ikut mengunci Qty-nya sendiri', (t) => {

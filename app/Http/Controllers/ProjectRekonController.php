@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\ProjectRekon;
 use App\Queries\ProjectRekonQuery;
+use App\Rules\WholeMaterialQty;
 use App\Services\ProjectRekonService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -48,11 +49,11 @@ class ProjectRekonController extends Controller
         $data = $request->validate([
             'items' => ['present', 'array'],
             'items.*.id' => ['required', 'integer'],
-            'items.*.keluar_gudang' => ['required', 'numeric', 'min:0'],
-            'items.*.terpasang' => ['required', 'numeric', 'min:0'],
-            'items.*.sisa_project' => ['required', 'numeric', 'min:0'],
-            'items.*.dikembalikan' => ['required', 'numeric', 'min:0'],
-            'items.*.hilang_rusak' => ['required', 'numeric', 'min:0'],
+            'items.*.keluar_gudang' => ['required', 'numeric', 'min:0', WholeMaterialQty::forProjectRekonItem()],
+            'items.*.terpasang' => ['required', 'numeric', 'min:0', WholeMaterialQty::forProjectRekonItem()],
+            'items.*.sisa_project' => ['required', 'numeric', 'min:0', WholeMaterialQty::forProjectRekonItem()],
+            'items.*.dikembalikan' => ['required', 'numeric', 'min:0', WholeMaterialQty::forProjectRekonItem()],
+            'items.*.hilang_rusak' => ['required', 'numeric', 'min:0', WholeMaterialQty::forProjectRekonItem()],
             'items.*.kategori_hilang_rusak' => ['nullable', 'string', 'in:hilang,rusak,waste_wajar'],
             'items.*.penanggung_jawab' => ['required', 'string', 'in:mitra,thc'],
             'items.*.catatan' => ['nullable', 'string', 'max:2000'],
