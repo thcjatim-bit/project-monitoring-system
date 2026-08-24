@@ -50,6 +50,11 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
             }
         });
         const quantity = scope?.querySelector('input[type="number"]');
+        if (quantity) {
+            const whole = ['biasa', 'ber_sn', 'drum_kabel'].includes(kind);
+            quantity.step = whole ? '1' : '0.001';
+            quantity.min = whole ? '1' : '0.001';
+        }
         if (quantity && kind === 'ber_sn') {
             quantity.value = '1';
             quantity.readOnly = true;

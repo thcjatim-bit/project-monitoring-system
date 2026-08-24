@@ -30,7 +30,7 @@ class MaterialRequestTest extends TestCase
             ->post('/material-requests', [
                 'catatan' => 'Kebutuhan untuk pekerjaan lapangan',
                 'items' => [
-                    ['material_id' => $material->id, 'qty' => '12.500'],
+                    ['material_id' => $material->id, 'qty' => '12.000'],
                 ],
             ])
             ->assertRedirect('/material-requests');
@@ -40,7 +40,7 @@ class MaterialRequestTest extends TestCase
         $this->assertSame($mitra->id, $request->mitra_id);
         $this->assertSame($user->id, $request->requested_by);
         $this->assertSame('diajukan', $request->status);
-        $this->assertSame('12.500', $request->items->first()->qty);
+        $this->assertSame('12.000', $request->items->first()->qty);
         $this->assertSame($mitra->id, $request->items->first()->mitra_id);
     }
 
@@ -70,7 +70,7 @@ class MaterialRequestTest extends TestCase
         $this->assertSame('3.000', MaterialRequest::query()->with('items')->firstOrFail()->items->first()->qty);
     }
 
-    public function test_fractional_qty_names_the_row_that_is_wrong_not_the_whole_request(): void
+    public function test_fractional_qty_is_rejected_for_every_material_row(): void
     {
         $mitra = Mitra::factory()->create();
         $biasa = Material::factory()->create(['jenis' => 'biasa']);
@@ -82,8 +82,7 @@ class MaterialRequestTest extends TestCase
                 ['material_id' => $biasa->id, 'qty' => '12.5'],
                 ['material_id' => $berSn->id, 'qty' => '0.5'],
             ]])
-            ->assertSessionHasErrors('items.1.qty')
-            ->assertSessionDoesntHaveErrors('items.0.qty');
+            ->assertSessionHasErrors(['items.0.qty', 'items.1.qty']);
     }
 
     public function test_request_rows_are_isolated_between_mitras_even_for_raw_queries(): void

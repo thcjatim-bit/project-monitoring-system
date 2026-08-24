@@ -7,6 +7,7 @@ use App\Models\MaterialTransaksi;
 use App\Models\SuratJalan;
 use App\Models\Warehouse;
 use App\Rules\ActiveMaterial;
+use App\Rules\WholeMaterialQty;
 use App\Services\SuratJalanService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -85,7 +86,7 @@ class SuratJalanController extends Controller
             'plat_nomor' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.material_id' => ['required', 'integer', $this->activeMaterialRule()],
-            'items.*.qty' => ['required', 'numeric', 'gt:0'],
+            'items.*.qty' => ['required', 'numeric', 'gt:0', new WholeMaterialQty],
             'items.*.serial_number' => ['nullable', 'string', 'max:255'],
             'items.*.drum_id' => ['nullable', 'string', 'max:255'],
             'items.*.catatan' => ['nullable', 'string', 'max:1000'],
@@ -113,7 +114,7 @@ class SuratJalanController extends Controller
         $data = $request->validate([
             'items' => ['sometimes', 'array', 'min:1'],
             'items.*.surat_jalan_item_id' => ['required', 'integer'],
-            'items.*.qty' => ['required', 'numeric', 'gt:0'],
+            'items.*.qty' => ['required', 'numeric', 'gt:0', WholeMaterialQty::forSuratJalanItem()],
         ]);
 
         $service->receive($request->user(), $suratJalan, $data['items'] ?? []);
@@ -150,7 +151,7 @@ class SuratJalanController extends Controller
             'plat_nomor' => ['nullable', 'string', 'max:255'],
             'items' => ['sometimes', 'array', 'min:1'],
             'items.*.surat_jalan_item_id' => ['required', 'integer'],
-            'items.*.qty' => ['required', 'numeric', 'gt:0'],
+            'items.*.qty' => ['required', 'numeric', 'gt:0', WholeMaterialQty::forSuratJalanItem()],
         ]);
         $this->ensureAssigned($request, $suratJalan->warehouse_tujuan_id);
 
@@ -162,7 +163,7 @@ class SuratJalanController extends Controller
     public function correct(Request $request, MaterialTransaksi $materialTransaksi, SuratJalanService $service): RedirectResponse
     {
         $data = $request->validate([
-            'qty_delta' => ['required', 'numeric', 'not_in:0'],
+            'qty_delta' => ['required', 'numeric', 'not_in:0', WholeMaterialQty::forJenis($materialTransaksi->material?->jenis)],
             'reason' => ['required', 'string', 'max:1000'],
         ]);
         $this->ensureAssigned($request, $materialTransaksi->warehouse_id);

@@ -65,10 +65,9 @@
                     button?.addEventListener('click', () => {
                         list.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__INDEX__', String(index++)));
                     });
-                    // Qty material adalah bilangan bulat (ADR-0025). Untuk sementara hanya ber-SN yang
-                    // ditegakkan; jenis lain dan jalur qty lain menyusul di tiket terpisah (#133).
+                    // Semua jenis Material ditransaksikan dengan satuan utuh (ADR-0025).
                     // Ini kenyamanan input, bukan penjaganya: validasi server yang menolak pecahan.
-                    const JENIS_QTY_UTUH = ['ber_sn'];
+                    const JENIS_QTY_UTUH = ['biasa', 'ber_sn', 'drum_kabel'];
                     const PECAHAN_STEP = '0.001';
                     list?.addEventListener('change', (event) => {
                         if (! event.target.matches('select')) return;

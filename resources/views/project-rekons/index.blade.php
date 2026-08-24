@@ -51,10 +51,10 @@
                             @foreach ($rekon->items as $item)
                                 <input type="hidden" name="items[{{ $item->id }}][id]" value="{{ $item->id }}">
                                 <label>{{ $item->material?->nama }} kembali
-                                    <input name="items[{{ $item->id }}][dikembalikan]" value="{{ $item->dikembalikan }}" type="number" step="0.001" min="0">
+                                    <input name="items[{{ $item->id }}][dikembalikan]" value="{{ $item->dikembalikan }}" type="number" step="1" min="0">
                                 </label>
                                 <label>hilang/rusak
-                                    <input name="items[{{ $item->id }}][hilang_rusak]" value="{{ $item->hilang_rusak }}" type="number" step="0.001" min="0">
+                                    <input name="items[{{ $item->id }}][hilang_rusak]" value="{{ $item->hilang_rusak }}" type="number" step="1" min="0">
                                 </label>
                                 <label>Kategori
                                     <select name="items[{{ $item->id }}][kategori_hilang_rusak]">

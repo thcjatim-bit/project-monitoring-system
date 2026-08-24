@@ -50,7 +50,7 @@
                         <label>Material
                             <select name="material_id" required><option value="">Pilih Material</option>@foreach ($materials as $material)<option value="{{ $material->id }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit?->nama }})</option>@endforeach</select>
                         </label>
-                        <label>Qty <input name="qty" type="number" min="0.001" step="0.001" required></label>
+                        <label>Qty <input name="qty" type="number" min="1" step="1" required></label>
                         <label>Serial Number (material ber-SN)
                             <select name="material_sn_id"><option value="">Tidak memakai SN</option>@foreach ($serialNumbers as $serial)<option value="{{ $serial->id }}">{{ $serial->serial_number }} — {{ $serial->material?->nama }}</option>@endforeach</select>
                         </label>

@@ -10,6 +10,7 @@ use App\Models\SuratJalan;
 use App\Models\Warehouse;
 use App\Queries\SuratJalanFormQuery;
 use App\Rules\ActiveMaterial;
+use App\Rules\WholeMaterialQty;
 use App\Services\MaterialInventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -83,7 +84,7 @@ class MaterialInventoryController extends Controller
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('aktif', true)],
             'material_id' => ['required', 'integer', $this->activeMaterialRule()],
-            'qty' => ['required', 'numeric', 'gt:0'],
+            'qty' => ['required', 'numeric', 'gt:0', new WholeMaterialQty],
             'serial_number' => ['nullable', 'string', 'max:255'],
             'drum_id' => ['nullable', 'string', 'max:255'],
             'reason' => ['required', 'string', 'max:255'],
@@ -102,7 +103,7 @@ class MaterialInventoryController extends Controller
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('aktif', true)],
             'material_id' => ['required', 'integer', $this->activeMaterialRule()],
-            'qty' => ['required', 'numeric', 'gt:0'],
+            'qty' => ['required', 'numeric', 'gt:0', new WholeMaterialQty],
             'serial_number' => ['nullable', 'string', 'max:255'],
             'drum_id' => ['nullable', 'string', 'max:255'],
             'reason' => ['required', 'string', 'max:255'],
@@ -121,7 +122,7 @@ class MaterialInventoryController extends Controller
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('aktif', true)],
             'drum_id' => ['required', 'string', 'max:255'],
-            'qty' => ['required', 'numeric', 'gt:0'],
+            'qty' => ['required', 'numeric', 'gt:0', WholeMaterialQty::forDrumCode()],
             'reason' => ['required', 'string', 'max:255'],
         ]);
         $warehouse = Warehouse::findOrFail($data['warehouse_id']);

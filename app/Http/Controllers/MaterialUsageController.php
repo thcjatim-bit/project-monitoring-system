@@ -9,6 +9,7 @@ use App\Models\PemakaianMaterial;
 use App\Models\Project;
 use App\Models\Warehouse;
 use App\Rules\ActiveMaterial;
+use App\Rules\WholeMaterialQty;
 use App\Services\MaterialUsageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,7 +42,7 @@ class MaterialUsageController extends Controller
             'material_id' => ['required', 'integer', new ActiveMaterial],
             'material_sn_id' => ['nullable', 'integer', 'exists:material_sns,id'],
             'drum_id' => ['nullable', 'integer', 'exists:drums,id'],
-            'qty' => ['required', 'numeric', 'gt:0'],
+            'qty' => ['required', 'numeric', 'gt:0', new WholeMaterialQty],
             'catatan' => ['nullable', 'string', 'max:2000'],
             'return_to_project' => ['sometimes', 'boolean'],
         ]);

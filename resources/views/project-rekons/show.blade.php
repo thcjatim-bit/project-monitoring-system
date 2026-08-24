@@ -39,8 +39,8 @@
                                     <td>{{ number_format((float) $item->keluar_gudang, 3, '.', '') }}<input type="hidden" name="items[{{ $item->id }}][keluar_gudang]" value="{{ $item->keluar_gudang }}"></td>
                                     <td>{{ number_format((float) $item->terpasang, 3, '.', '') }}<input type="hidden" name="items[{{ $item->id }}][terpasang]" value="{{ $item->terpasang }}"></td>
                                     <td>{{ number_format((float) $item->sisa_project, 3, '.', '') }}<input type="hidden" name="items[{{ $item->id }}][sisa_project]" value="{{ $item->sisa_project }}"></td>
-                                    <td><input name="items[{{ $item->id }}][dikembalikan]" value="{{ $item->dikembalikan }}" type="number" min="0" step="0.001"></td>
-                                    <td><input name="items[{{ $item->id }}][hilang_rusak]" value="{{ $item->hilang_rusak }}" type="number" min="0" step="0.001"></td>
+                                    <td><input name="items[{{ $item->id }}][dikembalikan]" value="{{ $item->dikembalikan }}" type="number" min="0" step="1"></td>
+                                    <td><input name="items[{{ $item->id }}][hilang_rusak]" value="{{ $item->hilang_rusak }}" type="number" min="0" step="1"></td>
                                     <td><select name="items[{{ $item->id }}][kategori_hilang_rusak]"><option value="">—</option>@foreach (['hilang', 'rusak', 'waste_wajar'] as $category)<option value="{{ $category }}" @selected($item->kategori_hilang_rusak === $category)>{{ $category }}</option>@endforeach</select><select name="items[{{ $item->id }}][penanggung_jawab]"><option value="mitra" @selected($item->penanggung_jawab === 'mitra')>Mitra</option><option value="thc" @selected($item->penanggung_jawab === 'thc')>THC</option></select></td>
                                 </tr>
                             @endforeach

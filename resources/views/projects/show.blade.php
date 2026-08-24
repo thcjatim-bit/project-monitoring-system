@@ -379,7 +379,7 @@
                                 </select>
                             </label>
                             <label>Qty kebutuhan
-                                <input type="number" name="qty" min="0.001" step="0.001" value="{{ old('qty') }}" required>
+                                <input type="number" name="qty" min="1" step="1" value="{{ old('qty') }}" required>
                             </label>
                             <button class="control-room__button" type="submit">Tambah kebutuhan</button>
                         </form>
@@ -411,7 +411,7 @@
                             <label>Material
                                 <select name="material_id" required><option value="">Pilih Material</option>@foreach ($installationStocks->unique('material_id') as $stock)<option value="{{ $stock->material_id }}">{{ $stock->material?->kode }} — {{ $stock->material?->nama }} (tersedia {{ number_format((float) $stock->qty, 3, '.', '') }})</option>@endforeach</select>
                             </label>
-                            <label>Qty terpasang <input name="qty" type="number" min="0.001" step="0.001" required></label>
+                            <label>Qty terpasang <input name="qty" type="number" min="1" step="1" required></label>
                             <label>SN (untuk material ber-SN)
                                 <select name="material_sn_id"><option value="">Tidak memakai SN</option>@foreach ($installationSerials as $serial)<option value="{{ $serial->id }}">{{ $serial->serial_number }} · {{ $serial->material?->nama }}</option>@endforeach</select>
                             </label>

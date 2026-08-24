@@ -11,7 +11,7 @@
         <div class="ui-state" role="status"><strong>Belum ada Warehouse yang ditugaskan.</strong><br>Operator hanya dapat mencatat transaksi pada Warehouse aktif yang ditugaskan kepadanya.@if(auth()->user()->hasIzin('manage_warehouses')) <a href="{{ route('admin.warehouses') }}">Kelola assignment Warehouse</a>.@endif</div>
     @else
         <section class="ui-grid">
-            <article class="ui-panel"><h2>Penerimaan stok</h2><p class="ui-help">Untuk stok biasa isi jumlah. Material ber-SN harus qty 1; drum kabel harus memiliki Drum ID.</p>
+            <article class="ui-panel"><h2>Penerimaan stok</h2><p class="ui-help">Untuk material biasa isi jumlah unit utuh. Material ber-SN harus qty 1; drum kabel dihitung per meter utuh dan harus memiliki Drum ID.</p>
                 @if($materials->isEmpty())<div class="ui-state">Belum ada Material dengan Unit/Satuan aktif. <a href="{{ route('admin.materials') }}">Kelola Material</a>.</div>@else
                 <form class="ui-form" method="POST" action="{{ route('warehouse.stock.receive') }}" data-submit-loading>@csrf
                     <div class="ui-form__grid"><label>Warehouse<select name="warehouse_id" required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Material<select name="material_id" data-material-select required><option value="">Pilih Material</option>@foreach($materials as $material)<option value="{{ $material->id }}" data-kind="{{ $material->jenis }}">{{ $material->kode }} — {{ $material->nama }} ({{ $material->unit->nama }})</option>@endforeach</select></label></div>
