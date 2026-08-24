@@ -35,7 +35,7 @@
                                     @endforeach
                                 </select>
                             </label>
-                            <label>Qty <input name="items[0][qty]" type="number" min="0.001" step="0.001" required></label>
+                            <label>Qty <input name="items[0][qty]" type="number" min="1" step="1" required></label>
                         </div>
                     </div>
                     <button class="ui-button ui-button--muted" type="button" id="add-material-request-item">Tambah Material</button>
@@ -53,7 +53,7 @@
                             @endforeach
                         </select>
                     </label>
-                    <label>Qty <input name="items[__INDEX__][qty]" type="number" min="0.001" step="0.001" required></label>
+                    <label>Qty <input name="items[__INDEX__][qty]" type="number" min="1" step="1" required></label>
                 </div>
             </template>
             <script>
@@ -67,14 +67,13 @@
                     });
                     // Semua jenis Material ditransaksikan dengan satuan utuh (ADR-0025).
                     // Ini kenyamanan input, bukan penjaganya: validasi server yang menolak pecahan.
-                    const JENIS_QTY_UTUH = ['biasa', 'ber_sn', 'drum_kabel'];
-                    const PECAHAN_STEP = '0.001';
                     list?.addEventListener('change', (event) => {
                         if (! event.target.matches('select')) return;
-                        const utuh = JENIS_QTY_UTUH.includes(event.target.options[event.target.selectedIndex]?.dataset.kind ?? '');
                         const qty = event.target.closest('.material-request-item').querySelector('input[type="number"]');
-                        qty.step = utuh ? '1' : PECAHAN_STEP;
-                        qty.min = utuh ? '1' : PECAHAN_STEP;
+                        // Semua jenis Material memakai satuan utuh (ADR-0025), termasuk saat
+                        // pilihan Material dikosongkan. Validasi server tetap menjadi penjaga.
+                        qty.step = '1';
+                        qty.min = '1';
                     });
                 })();
             </script>
