@@ -122,7 +122,7 @@ class ProjectControlRoomTest extends TestCase
             ->assertDontSee('Surat Jalan Deviation');
     }
 
-    public function test_project_timeline_keeps_raw_event_label_for_other_system_events(): void
+    public function test_project_timeline_keeps_raw_event_label_for_existing_system_events(): void
     {
         $mitra = Mitra::factory()->create();
         $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
@@ -135,14 +135,14 @@ class ProjectControlRoomTest extends TestCase
         $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
             $project,
             null,
-            'unrelated_event',
+            'step_changed',
             ['from' => 'design', 'to' => 'survey'],
         ));
 
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Unrelated Event')
+            ->assertSee('Step Changed')
             ->assertDontSee('Material di luar request')
             ->assertDontSee('Qty melebihi sisa');
     }
