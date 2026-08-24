@@ -6,6 +6,7 @@ use App\Models\Mitra;
 use App\Models\Project;
 use App\Models\ProjectTimeline;
 use App\Models\User;
+use App\Support\ProjectTimelineEventRenderer;
 use App\Support\SpiThreshold;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -50,18 +51,6 @@ class PortfolioCockpitQuery
     private const PROJECT_STATUS_LABELS = [
         'aktif' => 'Aktif',
         'selesai' => 'Selesai',
-    ];
-
-    private const ACTIVITY_LABELS = [
-        'progress_submitted' => 'Progres jasa diajukan',
-        'progress_verified' => 'Progres jasa diverifikasi',
-        'progress_rejected' => 'Progres jasa ditolak',
-        'step_changed' => 'Step Project diperbarui',
-        'toc_changed' => 'TOC Project diperbarui',
-        'variation_order_created' => 'Variation Order dibuat',
-        'variation_order_approved' => 'Variation Order disetujui',
-        'photo_uploaded' => 'Foto Pekerjaan ditambahkan',
-        'rab_material_added' => 'RAB Material ditambahkan',
     ];
 
     private const MONTHS = [
@@ -549,7 +538,7 @@ class PortfolioCockpitQuery
                 $isComment = $timeline->type === 'comment';
                 $title = $isComment
                     ? 'Komentar Project'
-                    : (self::ACTIVITY_LABELS[$timeline->event_key] ?? 'Aktivitas Project');
+                    : (ProjectTimelineEventRenderer::labelFor($timeline->event_key) ?? 'Aktivitas Project');
                 $url = $viewer->hasIzin('read_project_timeline')
                     ? route('projects.timeline.index', $project)
                     : ($viewer->hasIzin('read_project') ? route('projects.show', $project) : null);

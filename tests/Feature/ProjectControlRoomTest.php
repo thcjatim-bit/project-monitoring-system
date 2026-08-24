@@ -94,28 +94,17 @@ class ProjectControlRoomTest extends TestCase
 
     public function test_linimasa_gabungan_merender_baris_menyimpang_surat_jalan_sebagai_kalimat_terbaca(): void
     {
-        $mitra = Mitra::factory()->create();
-        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
-        $project = $this->asThc(fn (): Project => Project::create([
-            'id_project' => 'PRJ-2608-0049',
-            'nama' => 'Project Baris Menyimpang',
-            'mitra_id' => $mitra->id,
-        ]));
+        [$project, $thc] = $this->timelineProject('PRJ-2608-0049', 'Project Baris Menyimpang');
 
-        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
-            $project,
-            null,
-            'surat_jalan_deviation',
-            [
-                'material_asing' => ['Kabel FO 12C'],
-                'qty_melebihi' => ['Splitter 1:8'],
-            ],
-        ));
+        $this->recordTimelineEvent($project, 'surat_jalan_deviation', [
+            'material_asing' => ['Kabel FO 12C'],
+            'qty_melebihi' => ['Splitter 1:8'],
+        ]);
 
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
-            ->assertSee('Material di luar request')
+            ->assertSee('Material di luar Request Material')
             ->assertSee('Kabel FO 12C')
             ->assertSee('Qty melebihi sisa')
             ->assertSee('Splitter 1:8')
@@ -124,34 +113,26 @@ class ProjectControlRoomTest extends TestCase
 
     public function test_linimasa_gabungan_memakai_label_glosarium_dan_fallback_mentah(): void
     {
-        $mitra = Mitra::factory()->create();
-        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
-        $project = $this->asThc(fn (): Project => Project::create([
-            'id_project' => 'PRJ-2608-0050',
-            'nama' => 'Project Event Biasa',
-            'mitra_id' => $mitra->id,
-        ]));
+        [$project, $thc] = $this->timelineProject('PRJ-2608-0050', 'Project Event Biasa');
 
-        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
-            $project,
-            null,
-            'step_changed',
-            ['from' => 'design', 'to' => 'survey'],
-        ));
-
-        $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
-            $project,
-            null,
-            'event_tidak_dikenal',
-        ));
+        $this->recordTimelineEvent($project, 'step_changed', ['from' => 'design', 'to' => 'survey']);
+        $this->recordTimelineEvent($project, 'toc_changed', ['from' => '2026-08-01', 'to' => '2026-08-15']);
+        $this->recordTimelineEvent($project, 'surat_jalan_resolved', ['resolution' => 'kembali_ke_asal']);
+        $this->recordTimelineEvent($project, 'surat_jalan_returned', ['returned_from_id' => 42]);
+        $this->recordTimelineEvent($project, 'event_tidak_dikenal');
 
         $this->actingAs($thc)
             ->get(route('projects.show', $project))
             ->assertOk()
             ->assertSee('Step Project diperbarui')
             ->assertDontSee('Step Changed')
+            ->assertSee('TOC Project diperbarui')
+            ->assertSee('Transit diselesaikan')
+            ->assertSee('Retur Surat Jalan diterbitkan')
+            ->assertDontSee('Surat Jalan Resolved')
+            ->assertDontSee('Surat Jalan Returned')
             ->assertSee('Event Tidak Dikenal')
-            ->assertDontSee('Material di luar request')
+            ->assertDontSee('Material di luar Request Material')
             ->assertDontSee('Qty melebihi sisa');
     }
 
@@ -294,6 +275,31 @@ class ProjectControlRoomTest extends TestCase
             ->assertSee('data-curve-overdue="true"', false)
             ->assertSee('control-room__chart-overdue', false)
             ->assertSee('Periode keterlambatan', false);
+    }
+
+    /** @return array{Project, User} */
+    private function timelineProject(string $idProject, string $name): array
+    {
+        $mitra = Mitra::factory()->create();
+        $thc = $this->userWithPermissions(null, 'read_project', 'read_project_timeline');
+        $project = $this->asThc(fn (): Project => Project::create([
+            'id_project' => $idProject,
+            'nama' => $name,
+            'mitra_id' => $mitra->id,
+        ]));
+
+        return [$project, $thc];
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function recordTimelineEvent(Project $project, string $eventKey, array $metadata = []): ProjectTimeline
+    {
+        return $this->asThc(fn (): ProjectTimeline => ProjectTimeline::recordSystem(
+            $project,
+            null,
+            $eventKey,
+            $metadata,
+        ));
     }
 
     private function userWithPermissions(?int $mitraId, string ...$permissions): User

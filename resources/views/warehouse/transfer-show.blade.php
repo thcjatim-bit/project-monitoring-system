@@ -54,7 +54,7 @@
         @foreach($suratJalan->items as $item)
             <tr><td>{{ $item->material->kode }} — {{ $item->material->nama }}<div class="ui-muted">{{ $item->material->unit->nama }}</div>
                 @if($item->jenis_penyimpangan === 'material_asing')
-                    <x-ui.badge tone="warning" label="Material di luar request" />
+                    <x-ui.badge tone="warning" label="Material di luar Request Material" />
                 @elseif($item->jenis_penyimpangan === 'qty_melebihi')
                     <x-ui.badge tone="warning" label="Qty melebihi sisa" />
                 @endif

@@ -87,7 +87,7 @@ class SuratJalanDetailTest extends TestCase
             ->assertSee('Catatan material asing')
             ->assertSee('Catatan qty berlebih');
 
-        $this->assertSame(1, substr_count($response->getContent(), 'Material di luar request'));
+        $this->assertSame(1, substr_count($response->getContent(), 'Material di luar Request Material'));
         $this->assertSame(1, substr_count($response->getContent(), 'Qty melebihi sisa'));
         $this->assertTrue($provenanceWasEagerLoaded);
         $this->assertSame(1, count(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'material_requests'))));
@@ -114,7 +114,7 @@ class SuratJalanDetailTest extends TestCase
             ->assertSee('Material patuh')
             ->assertDontSee('Project:')
             ->assertDontSee('Request Material')
-            ->assertDontSee('Material di luar request')
+            ->assertDontSee('Material di luar Request Material')
             ->assertDontSee('Qty melebihi sisa');
     }
 

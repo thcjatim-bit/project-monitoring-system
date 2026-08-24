@@ -9,6 +9,8 @@ final class ProjectTimelineEventRenderer
     private const EVENT_LABELS = [
         'surat_jalan_issued' => 'Surat Jalan diterbitkan',
         'surat_jalan_received' => 'Surat Jalan diterima',
+        'surat_jalan_resolved' => 'Transit diselesaikan',
+        'surat_jalan_returned' => 'Retur Surat Jalan diterbitkan',
         'surat_jalan_cancelled' => 'Surat Jalan dibatalkan',
         'step_changed' => 'Step Project diperbarui',
         'toc_changed' => 'TOC Project diperbarui',
@@ -41,13 +43,18 @@ final class ProjectTimelineEventRenderer
         return $this->formatSystemEventLabel($entry->event_key);
     }
 
+    public static function labelFor(?string $eventKey): ?string
+    {
+        return $eventKey === null ? null : self::EVENT_LABELS[$eventKey] ?? null;
+    }
+
     /** @param array<string, mixed>|null $metadata */
     private function renderDeviation(?array $metadata): string
     {
         $parts = [];
 
         foreach ([
-            'material_asing' => 'Material di luar request',
+            'material_asing' => 'Material di luar Request Material',
             'qty_melebihi' => 'Qty melebihi sisa',
         ] as $key => $label) {
             $names = $this->metadataNames($metadata[$key] ?? null);
@@ -90,7 +97,7 @@ final class ProjectTimelineEventRenderer
             return 'Aktivitas sistem';
         }
 
-        return self::EVENT_LABELS[$eventKey] ?? $this->formatLegacyEventLabel($eventKey);
+        return self::labelFor($eventKey) ?? $this->formatLegacyEventLabel($eventKey);
     }
 
     private function formatLegacyEventLabel(string $eventKey): string
