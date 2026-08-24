@@ -33,7 +33,7 @@
                 @if($drums->isEmpty())<div class="ui-state">Belum ada Drum tersedia di Warehouse yang ditugaskan.</div>@else
                 <form class="ui-form" method="POST" action="{{ route('warehouse.stock.drum-split') }}" data-submit-loading>@csrf
                     <div class="ui-form__grid"><label>Warehouse<select name="warehouse_id" required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}">{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Drum<select name="drum_id" required>@foreach($drums as $drum)<option value="{{ $drum->drum_id }}">{{ $drum->drum_id }} — sisa {{ \App\Support\QuantityDisplayFormatter::format($drum->sisa) }} {{ $drum->material->unit->nama }}</option>@endforeach</select></label></div>
-                    <div class="ui-form__grid"><label>Qty potongan<input type="number" name="qty" min="0.001" step="0.001" required></label><label>Alasan<input name="reason" maxlength="255" required></label></div><button class="ui-button" type="submit">Catat split drum</button>
+                    <div class="ui-form__grid"><label>Qty potongan<input type="number" name="qty" data-quantity-kind="drum_kabel" min="1" step="1" required></label><label>Alasan<input name="reason" maxlength="255" required></label></div><button class="ui-button" type="submit">Catat split drum</button>
                 </form>@endif
             </article>
             @if($canIssueTransfer)

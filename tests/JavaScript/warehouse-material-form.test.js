@@ -105,6 +105,11 @@ const warehousePage = (t) => openPage(t, `
         ${identityFields('issue')}
         <button type="submit">Catat pengeluaran</button>
     </form>
+    <form data-submit-loading action="/warehouse/stock/drum-split">
+        <label>Drum<select name="drum_id" required><option value="DRM-1">DRM-1</option></select></label>
+        <input type="number" name="qty" data-quantity-kind="drum_kabel" min="0.001" step="0.001">
+        <button type="submit">Catat split drum</button>
+    </form>
     <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
         <div data-transfer-items>${barisSuratJalan()}</div>
         <button type="button" data-add-item>Tambah item</button>
@@ -131,6 +136,8 @@ const identity = (row, name) => row.querySelector(`[data-identity="${name}"]`);
 
 /** Form Penerimaan/Pengeluaran memakai satu select tanpa baris item. */
 const stockForm = (window, action) => window.document.querySelector(`form[action="/warehouse/stock/${action}"]`);
+
+const drumSplitForm = (window) => window.document.querySelector('form[action="/warehouse/stock/drum-split"]');
 
 const choose = (window, select, value) => {
     select.value = value;
@@ -374,6 +381,24 @@ test('form stok dan baris Surat Jalan memakai step satu untuk material berqty ut
 
     assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('step'), '1');
     assert.equal(row.querySelector('input[name="items[0][qty]"]').getAttribute('min'), '1');
+});
+
+test('form Split Drum memakai step satu meski identitasnya memakai Drum ID', (t) => {
+    const window = warehousePage(t);
+    const quantity = drumSplitForm(window).querySelector('input[name="qty"]');
+
+    assert.equal(quantity.getAttribute('step'), '1');
+    assert.equal(quantity.getAttribute('min'), '1');
+});
+
+test('Blade form Split Drum mengiklankan qty meter utuh', (t) => {
+    const source = blade();
+    const splitFormStart = source.indexOf("action=\"{{ route('warehouse.stock.drum-split') }}\"");
+    const splitForm = source.slice(splitFormStart, source.indexOf('</form>', splitFormStart));
+
+    assert.notEqual(splitFormStart, -1, 'form Split Drum tidak ditemukan');
+    assert.match(splitForm, /data-quantity-kind="drum_kabel"/);
+    assert.match(splitForm, /name="qty"[^>]*min="1"[^>]*step="1"/);
 });
 
 test('identitas form Penerimaan tidak bocor ke form Pengeluaran', (t) => {
