@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
+import { reportDispatchFailure, resolveDispatchFailure } from "./dispatch-failure.mjs";
+import { ghClient, jsonFrom } from "./gh.mjs";
 import { spawnPortable } from "./portable-spawn.mjs";
 
 export const READY_LABEL = "ready-for-agent";
@@ -15,6 +16,8 @@ export function commandResult(command, args, options = {}) {
     const result = spawnPortable(command, args, {
         cwd: options.cwd ?? REPO_ROOT,
         env: options.env,
+        // Names the documented escape hatch: `AUTOPILOT_PASEO_BIN`.
+        envPrefix: "AUTOPILOT",
     });
 
     if (result.error) {
@@ -29,18 +32,6 @@ export function commandResult(command, args, options = {}) {
     }
 
     return { status: result.status ?? 1, stdout, stderr };
-}
-
-function jsonFrom(result, fallback) {
-    if (!result.stdout) {
-        return fallback;
-    }
-
-    try {
-        return JSON.parse(result.stdout);
-    } catch {
-        return fallback;
-    }
 }
 
 function labelNames(issue) {
@@ -331,179 +322,6 @@ function report(repo, cwd, issues, candidate, active, mode) {
     console.log(JSON.stringify(payload, null, 2));
 }
 
-export const DISPATCH_FAILURE_LABEL = "autopilot:dispatch-failed";
-export const DISPATCH_FAILURE_TITLE = "Autopilot dispatch is failing";
-export const FAILURE_REPEAT_MS = 6 * 60 * 60 * 1000;
-const FAILURE_MARKER = "autopilot-dispatch-failure";
-
-/**
- * A stable, human-readable identity for a dispatch failure, so repeated ticks of
- * the same breakage are recognised as one incident instead of 45 of them.
- * Volatile detail (absolute paths, PIDs, timestamps) is collapsed.
- */
-export function failureSignature(error) {
-    return String(error?.message ?? error ?? "unknown failure")
-        .split(/\r?\n/)[0]
-        .replace(/[A-Za-z]:\\[^\s"']+|\/(?:[\w.-]+\/)+[\w.-]+/g, "<path>")
-        .replace(/\b\d{3,}\b/g, "<n>")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 200);
-}
-
-function failureFingerprint(signature) {
-    return createHash("sha1").update(signature).digest("hex").slice(0, 12);
-}
-
-export function failureCommentBody(signature, occurredAt) {
-    return [
-        `<!-- ${FAILURE_MARKER}:${failureFingerprint(signature)} -->`,
-        "The scheduled autopilot dispatcher could not complete a tick.",
-        "",
-        `- First seen this report: ${occurredAt}`,
-        "- Health check: `npm run autopilot:dry-run` (exercises the same `paseo` call as dispatch)",
-        "",
-        "```text",
-        signature,
-        "```",
-        "",
-        "A schedule run reporting `succeeded` only means the agent finished, not that dispatch worked.",
-    ].join("\n");
-}
-
-/**
- * Reports the first occurrence, a change of signature, or a repeat that is at
- * least `FAILURE_REPEAT_MS` old. Everything else is the same incident still
- * burning, and stays quiet.
- */
-export function shouldReportFailure(lastComment, signature, now = Date.now()) {
-    if (!lastComment) {
-        return true;
-    }
-
-    if (!String(lastComment.body ?? "").includes(`${FAILURE_MARKER}:${failureFingerprint(signature)}`)) {
-        return true;
-    }
-
-    const age = now - Date.parse(lastComment.createdAt ?? "");
-
-    return !Number.isFinite(age) || age >= FAILURE_REPEAT_MS;
-}
-
-function ensureFailureLabel(run, repo, cwd) {
-    run(
-        "gh",
-        [
-            "label", "create", DISPATCH_FAILURE_LABEL,
-            "--repo", repo,
-            "--color", "B60205",
-            "--description", "Autopilot dispatcher could not complete a tick",
-            "--force",
-        ],
-        { cwd, allowFailure: true },
-    );
-}
-
-function openFailureIssue(run, repo, cwd) {
-    const result = run(
-        "gh",
-        [
-            "issue", "list",
-            "--repo", repo,
-            "--label", DISPATCH_FAILURE_LABEL,
-            "--state", "open",
-            "--limit", "1",
-            "--json", "number",
-        ],
-        { cwd, allowFailure: true },
-    );
-
-    return result.status === 0 ? jsonFrom(result, [])[0]?.number ?? null : null;
-}
-
-function lastFailureComment(run, repo, issueNumber, cwd) {
-    const result = run(
-        "gh",
-        [
-            "issue", "view", String(issueNumber),
-            "--repo", repo,
-            "--json", "comments",
-            "--jq", `[.comments[] | select(.body | contains("${FAILURE_MARKER}"))] | last | {createdAt, body}`,
-        ],
-        { cwd, allowFailure: true },
-    );
-
-    return result.status === 0 ? jsonFrom(result, null) : null;
-}
-
-/**
- * Makes a dispatch failure visible in the issue tracker, which is the one
- * surface that still works when `paseo` does not. Never throws: the caller is
- * already carrying the real error.
- */
-export function reportDispatchFailure(repo, cwd, error, options = {}) {
-    const run = options.run ?? commandResult;
-    const now = options.now ?? new Date();
-
-    try {
-        const signature = failureSignature(error);
-        const body = failureCommentBody(signature, now.toISOString());
-        const issueNumber = openFailureIssue(run, repo, cwd);
-
-        if (issueNumber === null) {
-            ensureFailureLabel(run, repo, cwd);
-            run(
-                "gh",
-                [
-                    "issue", "create",
-                    "--repo", repo,
-                    "--title", DISPATCH_FAILURE_TITLE,
-                    "--label", DISPATCH_FAILURE_LABEL,
-                    "--body", body,
-                ],
-                { cwd, allowFailure: true },
-            );
-
-            return;
-        }
-
-        if (shouldReportFailure(lastFailureComment(run, repo, issueNumber, cwd), signature, now.getTime())) {
-            run(
-                "gh",
-                ["issue", "comment", String(issueNumber), "--repo", repo, "--body", body],
-                { cwd, allowFailure: true },
-            );
-        }
-    } catch (reportingError) {
-        console.error(`Could not report the dispatch failure: ${reportingError.message}`);
-    }
-}
-
-/** Closes the sticky failure issue once a tick completes, so an open issue means "still broken". */
-export function resolveDispatchFailure(repo, cwd, options = {}) {
-    const run = options.run ?? commandResult;
-
-    try {
-        const issueNumber = openFailureIssue(run, repo, cwd);
-
-        if (issueNumber === null) {
-            return;
-        }
-
-        run(
-            "gh",
-            [
-                "issue", "close", String(issueNumber),
-                "--repo", repo,
-                "--comment", "Autopilot dispatch completed a tick again. Closing this incident.",
-            ],
-            { cwd, allowFailure: true },
-        );
-    } catch (reportingError) {
-        console.error(`Could not close the dispatch failure issue: ${reportingError.message}`);
-    }
-}
-
 export function main(argv = process.argv.slice(2), env = process.env) {
     const options = parseArgs(argv, env);
     const cwd = env.AUTOPILOT_CWD ?? REPO_ROOT;
@@ -516,14 +334,16 @@ export function main(argv = process.argv.slice(2), env = process.env) {
     // The issue tracker is the failure channel: it is reachable through `gh`
     // even when `paseo` is not, and it is a surface a human already watches.
     // A schedule run reporting `succeeded` is not evidence that dispatch worked.
+    const gh = ghClient({ run: commandResult, repo, cwd });
+
     try {
         const code = runTick(options, repo, cwd);
 
-        resolveDispatchFailure(repo, cwd);
+        resolveDispatchFailure(gh);
 
         return code;
     } catch (error) {
-        reportDispatchFailure(repo, cwd, error);
+        reportDispatchFailure(gh, error);
 
         throw error;
     }

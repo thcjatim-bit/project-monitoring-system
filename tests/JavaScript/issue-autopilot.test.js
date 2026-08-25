@@ -6,22 +6,25 @@ import path from "node:path";
 
 import {
     BLOCKED_LABEL,
-    DISPATCH_FAILURE_LABEL,
-    DISPATCH_FAILURE_TITLE,
-    FAILURE_REPEAT_MS,
     IN_PROGRESS_LABEL,
     READY_LABEL,
     commandResult,
-    failureCommentBody,
-    failureSignature,
     isEligibleIssue,
     parseBlockedBy,
-    reportDispatchFailure,
-    resolveDispatchFailure,
     selectCandidate,
-    shouldReportFailure,
     workerPrompt,
 } from "../../scripts/issue-autopilot.mjs";
+import {
+    DISPATCH_FAILURE_LABEL,
+    DISPATCH_FAILURE_TITLE,
+    FAILURE_REPEAT_MS,
+    failureCommentBody,
+    failureSignature,
+    reportDispatchFailure,
+    resolveDispatchFailure,
+    shouldReportFailure,
+} from "../../scripts/dispatch-failure.mjs";
+import { ghClient } from "../../scripts/gh.mjs";
 import { resolveExecutable, windowsShimCommandLine } from "../../scripts/portable-spawn.mjs";
 
 const issue = (overrides = {}) => ({
@@ -73,8 +76,16 @@ test("selects the lowest unblocked issue and fails closed for unknown blocker st
 // CLI installed as a `.cmd` shim is unreachable through a bare spawn, and the
 // scheduled agent's PATH does not match the interactive one.
 
-const shimDir = () => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pms-autopilot-shim-"));
+const tempDir = (t, prefix) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+
+    return directory;
+};
+
+const shimDir = (t) => {
+    const directory = tempDir(t, "pms-autopilot-shim-");
     const isWindows = process.platform === "win32";
     const file = path.join(directory, isWindows ? "pms-fake-paseo.cmd" : "pms-fake-paseo");
 
@@ -89,10 +100,39 @@ const shimDir = () => {
     return { directory, file };
 };
 
-const emptyHome = () => fs.mkdtempSync(path.join(os.tmpdir(), "pms-autopilot-home-"));
+const emptyHome = (t) => tempDir(t, "pms-autopilot-home-");
 
-test("executes a CLI installed as a Windows .cmd shim", () => {
-    const { directory } = shimDir();
+// The failure was Windows-only, so this pins the resolution rule itself rather
+// than the host platform: on a non-Windows runner the branch that broke would
+// otherwise never be entered.
+test("resolves a .cmd shim through PATHEXT, which a bare spawn does not", (t) => {
+    const directory = tempDir(t, "pms-autopilot-pathext-");
+    // PATHEXT is upper-case, and so is the name written here: on Windows the
+    // two match case-insensitively, and a case-sensitive runner can still run
+    // this test with the platform injected.
+    const shim = path.join(directory, "pms-fake-paseo.CMD");
+
+    fs.writeFileSync(shim, "@echo off\r\n");
+
+    const env = { PATH: directory, Path: directory, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+
+    assert.equal(
+        resolveExecutable("pms-fake-paseo", { env, platform: "win32" }),
+        path.resolve(shim),
+    );
+    // Same PATH, no PATHEXT expansion: this is the ENOENT the dispatcher hit.
+    assert.equal(resolveExecutable("pms-fake-paseo", { env, platform: "linux" }), null);
+});
+
+test("an override pointing at a directory is not mistaken for an executable", (t) => {
+    const directory = tempDir(t, "pms-autopilot-override-");
+    const env = { PATH: "", Path: "", AUTOPILOT_PMS_FAKE_PASEO_BIN: directory };
+
+    assert.equal(resolveExecutable("pms-fake-paseo", { env, envPrefix: "AUTOPILOT" }), null);
+});
+
+test("executes a CLI installed as a Windows .cmd shim", (t) => {
+    const { directory } = shimDir(t);
     const env = { ...process.env, PATH: directory, Path: directory };
 
     const result = commandResult("pms-fake-paseo", ["ls", "--json"], { env });
@@ -101,9 +141,9 @@ test("executes a CLI installed as a Windows .cmd shim", () => {
     assert.deepEqual(JSON.parse(result.stdout), [{ status: "running" }]);
 });
 
-test("finds the CLI through AUTOPILOT_<CMD>_BIN when it is absent from PATH", () => {
-    const { file } = shimDir();
-    const home = emptyHome();
+test("finds the CLI through AUTOPILOT_<CMD>_BIN when it is absent from PATH", (t) => {
+    const { file } = shimDir(t);
+    const home = emptyHome(t);
     const env = {
         ...process.env,
         PATH: "",
@@ -113,12 +153,15 @@ test("finds the CLI through AUTOPILOT_<CMD>_BIN when it is absent from PATH", ()
         AUTOPILOT_PMS_FAKE_PASEO_BIN: file,
     };
 
-    assert.equal(resolveExecutable("pms-fake-paseo", { env }), path.resolve(file));
+    assert.equal(
+        resolveExecutable("pms-fake-paseo", { env, envPrefix: "AUTOPILOT" }),
+        path.resolve(file),
+    );
     assert.equal(commandResult("pms-fake-paseo", ["ls"], { env }).status, 0);
 });
 
-test("fails with a diagnosable message, not ENOENT, when paseo is not executable", () => {
-    const home = emptyHome();
+test("fails with a diagnosable message, not ENOENT, when paseo is not executable", (t) => {
+    const home = emptyHome(t);
     const env = { ...process.env, PATH: "", Path: "", USERPROFILE: home, LOCALAPPDATA: home };
 
     assert.throws(
@@ -165,7 +208,7 @@ test("the worker prompt survives the Windows shim even with a hostile issue titl
 // --- Regression: a failing dispatch must be visible without reading paseo logs (issue #144) ---
 
 test("collapses volatile detail so repeated ticks of one breakage share a signature", () => {
-    const windows = failureSignature(new Error(`spawnSync paseo ENOENT\n` + String.raw`    at C:\repo\scripts\issue-autopilot.mjs:13:20`));
+    const windows = failureSignature(new Error("spawnSync paseo ENOENT\n" + String.raw`    at C:\repo\scripts\issue-autopilot.mjs:13:20`));
     const posix = failureSignature(new Error("spawnSync paseo ENOENT\n    at /home/pms/scripts/issue-autopilot.mjs:13:20"));
 
     assert.equal(windows, "spawnSync paseo ENOENT");
@@ -214,23 +257,30 @@ test("the failure report names the health check that catches this class of failu
     assert.doesNotMatch(body, /-->[\s\S]*-->/);
 });
 
+// `responses` maps the first two `gh` arguments to either stdout or a
+// `{ status, stdout }` pair, so a test can make one call fail.
 const recordingGh = (responses = {}) => {
     const calls = [];
     const run = (command, args) => {
         calls.push({ command, args });
         const key = args.slice(0, 2).join(" ");
-        const stdout = responses[key] ?? "";
+        const response = responses[key] ?? "";
+        const { status = 0, stdout = "" } = typeof response === "string" ? { stdout: response } : response;
 
-        return { status: 0, stdout, stderr: "" };
+        return { status, stdout, stderr: "" };
     };
 
-    return { calls, run, argsFor: (key) => calls.find((call) => call.args.slice(0, 2).join(" ") === key)?.args ?? null };
+    return {
+        calls,
+        client: ghClient({ run, repo: "owner/repo", cwd: "." }),
+        argsFor: (key) => calls.find((call) => call.args.slice(0, 2).join(" ") === key)?.args ?? null,
+    };
 };
 
 test("a dispatch failure opens one sticky issue in the tracker", () => {
     const gh = recordingGh({ "issue list": "[]" });
 
-    reportDispatchFailure("owner/repo", ".", new Error("spawnSync paseo ENOENT"), { run: gh.run });
+    reportDispatchFailure(gh.client, new Error("spawnSync paseo ENOENT"));
 
     const created = gh.argsFor("issue create");
 
@@ -244,25 +294,59 @@ test("a dispatch failure opens one sticky issue in the tracker", () => {
 test("a repeated failure comments on the existing issue instead of opening another", () => {
     const gh = recordingGh({ "issue list": '[{"number":200}]', "issue view": "null" });
 
-    reportDispatchFailure("owner/repo", ".", new Error("spawnSync paseo ENOENT"), { run: gh.run });
+    reportDispatchFailure(gh.client, new Error("spawnSync paseo ENOENT"));
 
     assert.equal(gh.argsFor("issue create"), null);
     assert.deepEqual(gh.argsFor("issue comment")?.slice(0, 3), ["issue", "comment", "200"]);
 });
 
+// A tracker query that fails says nothing about whether an incident is already
+// open. Treating it as "none open" is what would turn 45 identical broken ticks
+// into 45 issues — the exact shape of the breakage in #144.
+test("a failed tracker query neither opens a duplicate issue nor closes an open one", () => {
+    const unreachable = { status: 1, stdout: "" };
+    const reporting = recordingGh({ "issue list": unreachable });
+
+    reportDispatchFailure(reporting.client, new Error("spawnSync paseo ENOENT"));
+
+    assert.equal(reporting.argsFor("issue create"), null);
+    assert.equal(reporting.argsFor("issue comment"), null);
+
+    const resolving = recordingGh({ "issue list": unreachable });
+
+    resolveDispatchFailure(resolving.client);
+
+    assert.equal(resolving.argsFor("issue close"), null);
+});
+
+test("the sticky label is created without overwriting an existing one", () => {
+    const gh = recordingGh({ "issue list": "[]" });
+
+    reportDispatchFailure(gh.client, new Error("spawnSync paseo ENOENT"));
+
+    const label = gh.argsFor("label create");
+
+    assert.ok(label, "expected the dispatcher to ensure the label exists");
+    assert.ok(!label.includes("--force"), "--force rewrites a label the repo already owns");
+});
+
 test("a recovered tick closes the sticky issue, so an open one means still broken", () => {
     const gh = recordingGh({ "issue list": '[{"number":200}]' });
 
-    resolveDispatchFailure("owner/repo", ".", { run: gh.run });
+    resolveDispatchFailure(gh.client);
 
     assert.deepEqual(gh.argsFor("issue close")?.slice(0, 3), ["issue", "close", "200"]);
 });
 
 test("reporting never masks the failure it is reporting", () => {
-    const exploding = () => {
-        throw new Error("gh is gone too");
-    };
+    const exploding = ghClient({
+        run: () => {
+            throw new Error("gh is gone too");
+        },
+        repo: "owner/repo",
+        cwd: ".",
+    });
 
-    assert.doesNotThrow(() => reportDispatchFailure("owner/repo", ".", new Error("spawnSync paseo ENOENT"), { run: exploding }));
-    assert.doesNotThrow(() => resolveDispatchFailure("owner/repo", ".", { run: exploding }));
+    assert.doesNotThrow(() => reportDispatchFailure(exploding, new Error("spawnSync paseo ENOENT")));
+    assert.doesNotThrow(() => resolveDispatchFailure(exploding));
 });
