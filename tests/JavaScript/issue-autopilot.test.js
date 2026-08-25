@@ -117,11 +117,11 @@ test("resolves a .cmd shim through PATHEXT, which a bare spawn does not", (t) =>
     const env = { PATH: directory, Path: directory, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
 
     assert.equal(
-        resolveExecutable("pms-fake-paseo", { env, platform: "win32" }),
+        resolveExecutable("pms-fake-paseo", { env, platform: "win32", envPrefix: "AUTOPILOT" }),
         path.resolve(shim),
     );
     // Same PATH, no PATHEXT expansion: this is the ENOENT the dispatcher hit.
-    assert.equal(resolveExecutable("pms-fake-paseo", { env, platform: "linux" }), null);
+    assert.equal(resolveExecutable("pms-fake-paseo", { env, platform: "linux", envPrefix: "AUTOPILOT" }), null);
 });
 
 test("an override pointing at a directory is not mistaken for an executable", (t) => {
@@ -317,6 +317,20 @@ test("a failed tracker query neither opens a duplicate issue nor closes an open 
     resolveDispatchFailure(resolving.client);
 
     assert.equal(resolving.argsFor("issue close"), null);
+});
+
+// Same rule one level down: "cannot read the issue" is not "the issue carries
+// no earlier report", and an absent report always warrants a comment.
+test("a failed read of the sticky issue does not post a duplicate comment", () => {
+    const gh = recordingGh({
+        "issue list": '[{"number":200}]',
+        "issue view": { status: 1, stdout: "" },
+    });
+
+    reportDispatchFailure(gh.client, new Error("spawnSync paseo ENOENT"));
+
+    assert.equal(gh.argsFor("issue comment"), null);
+    assert.equal(gh.argsFor("issue create"), null);
 });
 
 test("the sticky label is created without overwriting an existing one", () => {
