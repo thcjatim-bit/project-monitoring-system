@@ -13,7 +13,7 @@ return new class extends Migration
         }
 
         // Gudang THC punya mitra_id NULL, jadi tenant_isolation menyembunyikannya dari
-        // Mitra dan tiap Surat Jalan THC -> Mitra kehilangan relasi origin-nya. ADR-0005
+        // Mitra dan tiap Surat Jalan THC -> Mitra kehilangan relasi asal-nya. ADR-0005
         // mewajibkan Mitra melihat gudang asal; ADR-0023 membuka bacanya lewat policy
         // permissive terpisah yang hanya berlaku untuk SELECT, sehingga tenant_isolation
         // tetap menjadi satu-satunya jalur INSERT, UPDATE, dan DELETE.

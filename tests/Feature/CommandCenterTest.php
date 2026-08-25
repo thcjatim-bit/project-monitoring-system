@@ -263,18 +263,18 @@ class CommandCenterTest extends TestCase
 
         try {
             $mitra = Mitra::factory()->create(['nama' => 'Mitra Transit']);
-            [$origin, $destination] = $this->warehousesFor($mitra);
+            [$asal, $tujuan] = $this->warehousesFor($mitra);
             $material = Material::factory()->create(['nama' => 'Kabel FO']);
             $thc = $this->userWithPermissions(null, 'read_dashboard', 'operate_warehouse');
-            $older = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-16 23:59:59', 'SJ-OLD');
-            $boundary = $this->createIssuedTransfer($origin, $destination, $material, '2026-08-17 00:00:00', 'SJ-BOUNDARY');
+            $older = $this->createIssuedTransfer($asal, $tujuan, $material, '2026-08-16 23:59:59', 'SJ-OLD');
+            $boundary = $this->createIssuedTransfer($asal, $tujuan, $material, '2026-08-17 00:00:00', 'SJ-BOUNDARY');
 
             $response = $this->actingAs($thc)
                 ->get('/dashboard')
                 ->assertOk()
                 ->assertSee('Transit terlambat')
                 ->assertSee($older->nomor)
-                ->assertSee($origin->nama.' → '.$destination->nama)
+                ->assertSee($asal->nama.' → '.$tujuan->nama)
                 ->assertSee('Umur Transit 4 hari')
                 ->assertSee('Lebih dari 3 hari')
                 ->assertSee('command-center__item-status--danger', false)
@@ -564,10 +564,10 @@ class CommandCenterTest extends TestCase
                 'created_at' => $now->subHour(),
                 'updated_at' => $now->subHour(),
             ]);
-            [$origin, $destination] = $this->warehousesFor($mitra);
+            [$asal, $tujuan] = $this->warehousesFor($mitra);
             $suratJalan = $this->createIssuedTransfer(
-                $origin,
-                $destination,
+                $asal,
+                $tujuan,
                 $material,
                 $now->subHours(3)->format('Y-m-d H:i:s'),
                 'SJ-FEED',
@@ -708,19 +708,19 @@ class CommandCenterTest extends TestCase
     }
 
     private function createIssuedTransfer(
-        Warehouse $origin,
-        Warehouse $destination,
+        Warehouse $asal,
+        Warehouse $tujuan,
         Material $material,
         string $issuedAt,
         string $number,
     ): SuratJalan {
-        return $this->asThc(function () use ($origin, $destination, $material, $issuedAt, $number): SuratJalan {
+        return $this->asThc(function () use ($asal, $tujuan, $material, $issuedAt, $number): SuratJalan {
             $suratJalan = SuratJalan::query()->create([
                 'nomor' => $number,
                 'tanggal' => substr($issuedAt, 0, 10),
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
-                'mitra_id' => $origin->mitra_id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
+                'mitra_id' => $asal->mitra_id,
                 'issued_by' => User::query()->whereNull('mitra_id')->firstOrFail()->id,
                 'issued_at' => $issuedAt,
                 'status' => 'terbit',
@@ -728,7 +728,7 @@ class CommandCenterTest extends TestCase
             ]);
             SuratJalanItem::query()->create([
                 'surat_jalan_id' => $suratJalan->id,
-                'mitra_id' => $origin->mitra_id,
+                'mitra_id' => $asal->mitra_id,
                 'material_id' => $material->id,
                 'qty' => 1,
             ]);

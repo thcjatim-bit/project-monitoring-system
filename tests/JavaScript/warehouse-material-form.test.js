@@ -278,8 +278,8 @@ const formSuratJalan = ({
     payload = transferFormData,
 } = {}) => `
     <form data-submit-loading data-transfer-form target="_blank" rel="noopener noreferrer">
-        <select name="warehouse_asal_id" data-origin-select required>${opsi(gudangAsal)}</select>
-        <select name="warehouse_tujuan_id" data-destination-select required>${opsi(gudangTujuan)}</select>
+        <select name="warehouse_asal_id" data-asal-select required>${opsi(gudangAsal)}</select>
+        <select name="warehouse_tujuan_id" data-tujuan-select required>${opsi(gudangTujuan)}</select>
         <select name="material_request_id" data-request-select data-empty-label="${KOSONG_REQUEST}">${opsi([{ value: '', label: KOSONG_REQUEST }, ...requests])}</select>
         <select name="project_id" data-project-select data-empty-label="${KOSONG_PROJECT}" data-locked-label="${TERKUNCI_PROJECT}"${projectMati ? ' disabled' : ''}>${opsi([{ value: '', label: projectMati ? TERKUNCI_PROJECT : KOSONG_PROJECT }, ...projects])}</select>
         ${kunciProject === null ? '' : `<input type="hidden" name="project_id" value="${kunciProject}" data-project-lock>`}
@@ -586,8 +586,8 @@ describe('daur hidup tombol submit', { concurrency: true }, () => {
 const transferFormData = {
     warehouse_mitra: { 10: null, 20: 7, 30: null, 40: 7 },
     // Gudang awal dan Mitra efektifnya dilayani server; skrip membacanya, tidak menghitungnya ulang.
-    initial_origin_id: 10,
-    initial_destination_id: 20,
+    initial_asal_id: 10,
+    initial_tujuan_id: 20,
     initial_mitra_id: 7,
     qty_tolerance: qtyTolerance(),
     requests: {
@@ -896,7 +896,7 @@ test('ganti gudang tujuan membuang baris prefill tapi menyisakan baris ketikan o
     choose(window, field(window, '[data-request-select]'), '91');
     prefillRows(window)[0].querySelector('input[type="number"]').value = '99';
 
-    choose(window, field(window, '[data-destination-select]'), '30');
+    choose(window, field(window, '[data-tujuan-select]'), '30');
 
     assert.equal(prefillRows(window).length, 0, 'baris prefill yang sudah diedit pun ikut dibuang');
     assert.equal(rows(window).length, 2, 'baris template dan baris ketikan operator harus bertahan');
@@ -906,7 +906,7 @@ test('ganti gudang tujuan membuang baris prefill tapi menyisakan baris ketikan o
 test('gudang tujuan THC dengan asal THC mematikan Project dengan opsi penjelas', (t) => {
     const window = requestDrivenPage(t);
 
-    choose(window, field(window, '[data-destination-select]'), '30');
+    choose(window, field(window, '[data-tujuan-select]'), '30');
 
     const project = field(window, '[data-project-select]');
     assert.equal(project.disabled, true);
@@ -974,8 +974,8 @@ test('ganti Mitra membuang nilai Project pra-kunci milik Mitra lama', (t) => {
     choose(window, field(window, '[data-project-select]'), '55');
     choose(window, field(window, '[data-request-select]'), '91');
 
-    choose(window, field(window, '[data-destination-select]'), '30');
-    choose(window, field(window, '[data-destination-select]'), '20');
+    choose(window, field(window, '[data-tujuan-select]'), '30');
+    choose(window, field(window, '[data-tujuan-select]'), '20');
 
     const project = field(window, '[data-project-select]');
     assert.equal(project.value, '', 'Project Mitra lama tidak boleh hidup kembali setelah Mitra berganti');
@@ -993,7 +993,7 @@ test('ganti gudang tujuan menyusun daftar request tanpa disempitkan Project pinj
     choose(window, field(window, '[data-request-select]'), '91');
     assert.equal(field(window, '[data-project-select]').value, '55', 'prasyarat: request mengunci Project');
 
-    choose(window, field(window, '[data-destination-select]'), '40');
+    choose(window, field(window, '[data-tujuan-select]'), '40');
 
     assert.equal(field(window, '[data-project-select]').value, '', 'Project pinjaman harus lepas saat request di-reset');
     assert.deepEqual(
@@ -1599,7 +1599,7 @@ describe('kontrak klasifikasi penyimpangan', { concurrency: true }, () => {
 
         // Ganti gudang tujuan ke nilai yang sudah terpilih: Mitra efektifnya tidak berubah, jadi
         // daftar Project hanya tersusun ulang bila skrip berangkat dari Mitra yang berbeda.
-        choose(window, field(window, '[data-destination-select]'), '20');
+        choose(window, field(window, '[data-tujuan-select]'), '20');
 
         assert.deepEqual(
             optionValues(field(window, '[data-project-select]')),

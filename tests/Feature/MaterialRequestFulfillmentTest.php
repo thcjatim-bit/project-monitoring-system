@@ -24,9 +24,9 @@ class MaterialRequestFulfillmentTest extends TestCase
         $mitra = Mitra::factory()->create();
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
-        [$origin, $destination] = $this->warehousesFor($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $this->actingAs($user)->post('/material-requests', [
             'items' => [['material_id' => $material->id, 'qty' => 4]],
@@ -34,7 +34,7 @@ class MaterialRequestFulfillmentTest extends TestCase
         $request = MaterialRequest::query()->firstOrFail();
 
         $this->actingAs($user)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => 4,
             'reason' => 'Penerimaan awal',
@@ -42,8 +42,8 @@ class MaterialRequestFulfillmentTest extends TestCase
 
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-15',
                 'pengirim' => 'Petugas Gudang',
@@ -61,9 +61,9 @@ class MaterialRequestFulfillmentTest extends TestCase
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
         $thc = $this->userWith(null, 'approve_material_request');
-        [$origin, $destination] = $this->warehousesFor($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $this->actingAs($user)->post('/material-requests', [
             'items' => [['material_id' => $material->id, 'qty' => 6]],
@@ -75,19 +75,19 @@ class MaterialRequestFulfillmentTest extends TestCase
             ->assertRedirect('/material-requests');
 
         $this->actingAs($user)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => 6,
             'reason' => 'Penerimaan awal',
         ])->assertRedirect();
 
-        $first = $this->issueForRequest($user, $origin, $destination, $request, $material, 2);
+        $first = $this->issueForRequest($user, $asal, $tujuan, $request, $material, 2);
         $this->actingAs($user)
             ->post("/warehouse/transfers/{$first->id}/receive")
             ->assertRedirect();
         $this->assertSame('terpenuhi_sebagian', $request->fresh()->status);
 
-        $second = $this->issueForRequest($user, $origin, $destination, $request->fresh(), $material, 4);
+        $second = $this->issueForRequest($user, $asal, $tujuan, $request->fresh(), $material, 4);
         $this->actingAs($user)
             ->post("/warehouse/transfers/{$second->id}/receive")
             ->assertRedirect();
@@ -110,10 +110,10 @@ class MaterialRequestFulfillmentTest extends TestCase
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
         $thc = $this->userWith(null, 'approve_material_request', 'operate_warehouse');
-        [$origin, $destination] = $this->warehousesFor($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
-        $origin->users()->attach($thc);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
+        $asal->users()->attach($thc);
 
         $this->actingAs($user)->post('/material-requests', [
             'items' => [['material_id' => $material->id, 'qty' => 4]],
@@ -123,18 +123,18 @@ class MaterialRequestFulfillmentTest extends TestCase
             ->patch("/material-requests/{$request->id}/approve")
             ->assertRedirect('/material-requests');
         $this->actingAs($user)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => 4,
             'reason' => 'Penerimaan awal',
         ])->assertRedirect();
 
-        $cancelled = $this->issueForRequest($user, $origin, $destination, $request, $material, 4);
+        $cancelled = $this->issueForRequest($user, $asal, $tujuan, $request, $material, 4);
         $this->actingAs($thc)
             ->post("/warehouse/transfers/{$cancelled->id}/cancel")
             ->assertRedirect();
 
-        $replacement = $this->issueForRequest($user, $origin, $destination, $request, $material, 4);
+        $replacement = $this->issueForRequest($user, $asal, $tujuan, $request, $material, 4);
         $this->actingAs($user)
             ->post("/warehouse/transfers/{$replacement->id}/receive")
             ->assertRedirect();
@@ -148,9 +148,9 @@ class MaterialRequestFulfillmentTest extends TestCase
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
         $thc = $this->userWith(null, 'approve_material_request');
-        [$origin, $destination] = $this->warehousesFor($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $this->actingAs($user)->post('/material-requests', [
             'items' => [['material_id' => $material->id, 'qty' => 4]],
@@ -163,7 +163,7 @@ class MaterialRequestFulfillmentTest extends TestCase
             ->assertRedirect('/material-requests');
 
         $this->actingAs($user)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => 4,
             'reason' => 'Penerimaan awal',
@@ -171,8 +171,8 @@ class MaterialRequestFulfillmentTest extends TestCase
 
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-15',
                 'pengirim' => 'Petugas Gudang',
@@ -191,9 +191,9 @@ class MaterialRequestFulfillmentTest extends TestCase
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith($mitra, 'create_material_request', 'read_material_request', 'operate_warehouse');
         $thc = $this->userWith(null, 'approve_material_request');
-        [$origin, $destination] = $this->warehousesFor($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $this->actingAs($user)->post('/material-requests', [
             'items' => [['material_id' => $material->id, 'qty' => 6]],
@@ -202,13 +202,13 @@ class MaterialRequestFulfillmentTest extends TestCase
         $this->actingAs($thc)->patch("/material-requests/{$request->id}/approve")->assertRedirect();
 
         $this->actingAs($user)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => 6,
             'reason' => 'Penerimaan awal',
         ])->assertRedirect();
 
-        $suratJalan = $this->issueForRequest($user, $origin, $destination, $request, $material, 6);
+        $suratJalan = $this->issueForRequest($user, $asal, $tujuan, $request, $material, 6);
 
         $this->actingAs($thc)
             ->patch("/material-requests/{$request->id}/close", ['catatan' => 'Sisa tidak jadi dikirim'])
@@ -221,12 +221,12 @@ class MaterialRequestFulfillmentTest extends TestCase
         $this->assertSame('ditutup', $request->fresh()->status);
     }
 
-    private function issueForRequest(User $user, Warehouse $origin, Warehouse $destination, MaterialRequest $request, Material $material, int $qty): SuratJalan
+    private function issueForRequest(User $user, Warehouse $asal, Warehouse $tujuan, MaterialRequest $request, Material $material, int $qty): SuratJalan
     {
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-15',
                 'pengirim' => 'Petugas Gudang',

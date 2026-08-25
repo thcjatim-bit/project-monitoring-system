@@ -134,19 +134,19 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
     const formDataScript = document.querySelector('[data-transfer-form-data]');
     const formData = formDataScript ? JSON.parse(formDataScript.textContent) : null;
     if (formData && transferForm) {
-        const originSelect = transferForm.querySelector('[data-origin-select]');
-        const destinationSelect = transferForm.querySelector('[data-destination-select]');
+        const asalSelect = transferForm.querySelector('[data-asal-select]');
+        const tujuanSelect = transferForm.querySelector('[data-tujuan-select]');
         const requestSelect = transferForm.querySelector('[data-request-select]');
         const projectSelect = transferForm.querySelector('[data-project-select]');
         const option = (value, label) => { const created = document.createElement('option'); created.value = String(value); created.textContent = label; return created; };
         // Mitra Surat Jalan ditentukan gudang asal, dan jatuh ke gudang tujuan bila asal milik THC.
-        const effectiveMitra = () => formData.warehouse_mitra[originSelect.value] ?? formData.warehouse_mitra[destinationSelect.value] ?? null;
+        const effectiveMitra = () => formData.warehouse_mitra[asalSelect.value] ?? formData.warehouse_mitra[tujuanSelect.value] ?? null;
         // Aturannya tetap hidup di sini karena ganti gudang harus menilainya ulang; yang tidak
         // dihitung ulang adalah nilai AWALNYA. Server sudah merakitnya dan merender dropdown Project
         // di atasnya, jadi mengambilnya dari payload membuat keduanya mustahil berbeda saat muat.
         let currentMitra = formData.initial_mitra_id;
         // Gudang tujuan adalah filter wajib; Project mempersempit daftar tapi request tanpa Project tetap muncul.
-        const availableRequests = () => (formData.requests[destinationSelect.value] ?? []).filter((request) =>
+        const availableRequests = () => (formData.requests[tujuanSelect.value] ?? []).filter((request) =>
             projectSelect.value === '' || request.project_id === null || String(request.project_id) === projectSelect.value);
         // Project yang dibawa request adalah pinjaman: nilainya milik request, bukan pilihan operator.
         // Nilai pra-kunci disimpan saat mengunci, bukan ditebak saat melepas — hanya itu yang bisa
@@ -311,7 +311,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
                 quantity.readOnly = false;
                 quantity.removeAttribute('aria-readonly');
                 if (selectedValue !== '' && selectedValue !== previousValue) {
-                    const selected = identitySource(originSelect.value, rowMaterial(row), 'drum')
+                    const selected = identitySource(asalSelect.value, rowMaterial(row), 'drum')
                         .find((identity) => identity.value === selectedValue);
                     if (selected) quantity.value = String(selected.sisa);
                 }
@@ -360,7 +360,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
                     const visible = (identity === 'serial_number' && kind === 'ber_sn')
                         || (identity === 'drum_id' && kind === 'drum_kabel');
                     const currentValue = identityValue(root);
-                    const entries = visible ? identitySource(originSelect.value, materialId, identityType(identity)) : [];
+                    const entries = visible ? identitySource(asalSelect.value, materialId, identityType(identity)) : [];
                     const options = entries.map((entry) => ({
                         value: entry.value,
                         label: entry.type === 'drum' ? `${entry.value} — sisa ${angka(entry.sisa)}` : entry.value,
@@ -470,12 +470,12 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         // projectSelect, jadi selama Project masih pinjaman request lama daftar yang tersusun
         // lebih sempit daripada yang berhak dilihat operator.
         const resetRequest = () => { unlockProject(); renderRequests(); requestSelect.value = ''; dropPrefillRows(); markDeviations(); };
-        destinationSelect.addEventListener('change', () => {
+        tujuanSelect.addEventListener('change', () => {
             // Ganti gudang tujuan me-reset Project hanya bila Mitra efektif berubah.
             if (effectiveMitra() !== currentMitra) { currentMitra = effectiveMitra(); renderProjects(); }
             resetRequest();
         });
-        originSelect.addEventListener('change', () => {
+        asalSelect.addEventListener('change', () => {
             if (effectiveMitra() === currentMitra) { refreshTransferIdentityState(); return; }
             currentMitra = effectiveMitra(); renderProjects(); resetRequest();
         });

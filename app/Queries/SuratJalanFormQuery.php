@@ -23,14 +23,14 @@ use Illuminate\Support\Facades\DB;
 class SuratJalanFormQuery
 {
     /**
-     * @param  Collection<int, Warehouse>  $originWarehouses  gudang yang ditugaskan kepada user
-     * @param  Collection<int, Warehouse>  $destinationWarehouses  gudang tujuan yang boleh dipilih
-     * @param  int|null  $selectedOriginId  gudang asal hasil `old()`; null berarti muat pertama
-     * @param  int|null  $selectedDestinationId  gudang tujuan hasil `old()`; null berarti muat pertama
+     * @param  Collection<int, Warehouse>  $asalWarehouses  gudang yang ditugaskan kepada user
+     * @param  Collection<int, Warehouse>  $tujuanWarehouses  gudang tujuan yang boleh dipilih
+     * @param  int|null  $selectedAsalId  gudang asal hasil `old()`; null berarti muat pertama
+     * @param  int|null  $selectedTujuanId  gudang tujuan hasil `old()`; null berarti muat pertama
      * @return array{
      *     warehouse_mitra: array<string, int|null>,
-     *     initial_origin_id: int|null,
-     *     initial_destination_id: int|null,
+     *     initial_asal_id: int|null,
+     *     initial_tujuan_id: int|null,
      *     initial_mitra_id: int|null,
      *     qty_tolerance: float,
      *     terminal_request_id: int|null,
@@ -40,34 +40,34 @@ class SuratJalanFormQuery
      * }
      */
     public function forOperator(
-        Collection $originWarehouses,
-        Collection $destinationWarehouses,
-        ?int $selectedOriginId,
-        ?int $selectedDestinationId,
+        Collection $asalWarehouses,
+        Collection $tujuanWarehouses,
+        ?int $selectedAsalId,
+        ?int $selectedTujuanId,
         ?int $selectedRequestId = null,
     ): array {
-        $warehouseMitra = $originWarehouses->concat($destinationWarehouses)
+        $warehouseMitra = $asalWarehouses->concat($tujuanWarehouses)
             ->keyBy('id')
             ->mapWithKeys(fn (Warehouse $warehouse, int|string $id): array => [
                 (string) $id => $warehouse->mitra_id === null ? null : (int) $warehouse->mitra_id,
             ])
             ->all();
-        $initialOriginId = $this->initialWarehouseId($originWarehouses, $selectedOriginId);
-        $initialDestinationId = $this->initialWarehouseId($destinationWarehouses, $selectedDestinationId);
+        $initialAsalId = $this->initialWarehouseId($asalWarehouses, $selectedAsalId);
+        $initialTujuanId = $this->initialWarehouseId($tujuanWarehouses, $selectedTujuanId);
 
         return [
             'warehouse_mitra' => $warehouseMitra,
-            'initial_origin_id' => $initialOriginId,
-            'initial_destination_id' => $initialDestinationId,
-            'initial_mitra_id' => $this->effectiveMitra($warehouseMitra, $initialOriginId, $initialDestinationId),
+            'initial_asal_id' => $initialAsalId,
+            'initial_tujuan_id' => $initialTujuanId,
+            'initial_mitra_id' => $this->effectiveMitra($warehouseMitra, $initialAsalId, $initialTujuanId),
             'qty_tolerance' => QtyTolerance::VALUE,
             'terminal_request_id' => $this->terminalRequestId(
                 $selectedRequestId,
-                $this->effectiveMitra($warehouseMitra, $initialOriginId, $initialDestinationId),
+                $this->effectiveMitra($warehouseMitra, $initialAsalId, $initialTujuanId),
             ),
-            'requests' => $this->requestsPerDestination($destinationWarehouses),
-            'projects' => $this->activeProjects($originWarehouses, $destinationWarehouses),
-            'identities' => $this->identitiesPerOrigin($originWarehouses),
+            'requests' => $this->requestsPerTujuan($tujuanWarehouses),
+            'projects' => $this->activeProjects($asalWarehouses, $tujuanWarehouses),
+            'identities' => $this->identitiesPerAsal($asalWarehouses),
         ];
     }
 
@@ -107,9 +107,9 @@ class SuratJalanFormQuery
      *
      * @param  array<string, int|null>  $warehouseMitra
      */
-    private function effectiveMitra(array $warehouseMitra, ?int $originId, ?int $destinationId): ?int
+    private function effectiveMitra(array $warehouseMitra, ?int $asalId, ?int $tujuanId): ?int
     {
-        return $warehouseMitra[(string) $originId] ?? $warehouseMitra[(string) $destinationId] ?? null;
+        return $warehouseMitra[(string) $asalId] ?? $warehouseMitra[(string) $tujuanId] ?? null;
     }
 
     /**
@@ -117,12 +117,12 @@ class SuratJalanFormQuery
      * `material_requests` tidak punya kolom gudang tujuan. Gudang THC tidak punya Mitra pemilik,
      * jadi daftarnya kosong.
      *
-     * @param  Collection<int, Warehouse>  $destinationWarehouses
+     * @param  Collection<int, Warehouse>  $tujuanWarehouses
      * @return array<string, list<array<string, mixed>>>
      */
-    private function requestsPerDestination(Collection $destinationWarehouses): array
+    private function requestsPerTujuan(Collection $tujuanWarehouses): array
     {
-        $mitraIds = $destinationWarehouses->pluck('mitra_id')->filter()->unique()->values();
+        $mitraIds = $tujuanWarehouses->pluck('mitra_id')->filter()->unique()->values();
         $requests = $mitraIds->isEmpty()
             ? collect()
             : MaterialRequest::query()
@@ -162,7 +162,7 @@ class SuratJalanFormQuery
             ];
         })->groupBy('mitra_id');
 
-        return $destinationWarehouses
+        return $tujuanWarehouses
             ->mapWithKeys(fn (Warehouse $warehouse): array => [
                 (string) $warehouse->id => $warehouse->mitra_id === null
                     ? []
@@ -206,16 +206,16 @@ class SuratJalanFormQuery
     }
 
     /**
-     * Project terikat pada Mitra Surat Jalan (`origin.mitra_id ?? destination.mitra_id`), bukan
+     * Project terikat pada Mitra Surat Jalan (`asal.mitra_id ?? tujuan.mitra_id`), bukan
      * pada gudang tujuan; itu yang membuat arah mitra ke THC tetap bisa menyebut Project.
      *
-     * @param  Collection<int, Warehouse>  $originWarehouses
-     * @param  Collection<int, Warehouse>  $destinationWarehouses
+     * @param  Collection<int, Warehouse>  $asalWarehouses
+     * @param  Collection<int, Warehouse>  $tujuanWarehouses
      * @return list<array<string, mixed>>
      */
-    private function activeProjects(Collection $originWarehouses, Collection $destinationWarehouses): array
+    private function activeProjects(Collection $asalWarehouses, Collection $tujuanWarehouses): array
     {
-        $mitraIds = $originWarehouses->concat($destinationWarehouses)
+        $mitraIds = $asalWarehouses->concat($tujuanWarehouses)
             ->pluck('mitra_id')
             ->filter()
             ->unique()
@@ -263,12 +263,12 @@ class SuratJalanFormQuery
      * Identitas yang ditawarkan harus identitas yang benar-benar bisa dikirim: syaratnya sama
      * dengan yang diperiksa `SuratJalanService::createItem()` di gudang asal.
      *
-     * @param  Collection<int, Warehouse>  $originWarehouses
+     * @param  Collection<int, Warehouse>  $asalWarehouses
      * @return array<string, array<string, list<array<string, mixed>>>>
      */
-    private function identitiesPerOrigin(Collection $originWarehouses): array
+    private function identitiesPerAsal(Collection $asalWarehouses): array
     {
-        $warehouseIds = $originWarehouses->modelKeys();
+        $warehouseIds = $asalWarehouses->modelKeys();
         if ($warehouseIds === []) {
             return [];
         }

@@ -38,7 +38,7 @@
             </article>
             @if($canIssueTransfer)
             <article class="ui-panel"><h2>Terbitkan Surat Jalan</h2><p class="ui-help">Material yang diterbitkan keluar dari saldo asal dan masuk Transit sampai diterima atau diselesaikan THC. Drum kabel boleh dikirim sebagian: qty di bawah sisa melahirkan Drum turunan yang berangkat sementara induknya tinggal di gudang asal. Satu Drum hanya boleh muncul sekali per Surat Jalan.</p>
-                @if($materials->isEmpty())<div class="ui-state">Belum ada Material dengan Unit/Satuan aktif.</div>@elseif($destinationWarehouses->isEmpty())<div class="ui-state" role="status">Belum ada Warehouse tujuan aktif yang sesuai dengan tenant Anda.</div>@else
+                @if($materials->isEmpty())<div class="ui-state">Belum ada Material dengan Unit/Satuan aktif.</div>@elseif($tujuanWarehouses->isEmpty())<div class="ui-state" role="status">Belum ada Warehouse tujuan aktif yang sesuai dengan tenant Anda.</div>@else
                 @php
                     // Render awal dikerjakan server dari payload yang sama dengan yang dipakai JS, supaya
                     // isi dropdown pada muat pertama tidak bergantung pada skrip yang belum sempat jalan.
@@ -47,14 +47,14 @@
                     // Gudang awal dan Mitra efektif pada muat pertama dirakit SuratJalanFormQuery lalu
                     // dilayani lewat payload. Blade dan skrip halaman sama-sama membacanya dari sana,
                     // jadi render awal server dan keadaan awal skrip tidak bisa berangkat dari nilai berbeda.
-                    $initialOriginId = $transferFormData['initial_origin_id'];
-                    $initialDestinationId = $transferFormData['initial_destination_id'];
+                    $initialAsalId = $transferFormData['initial_asal_id'];
+                    $initialTujuanId = $transferFormData['initial_tujuan_id'];
                     $initialMitraId = $transferFormData['initial_mitra_id'];
                     // Baris item hanya ada di klien setelah baris pertama, jadi tanpa render ulang ini
                     // catatan yang sudah diketik operator tidak punya tempat untuk kembali.
                     $oldItems = collect(old('items', [[]]))->map(fn ($item) => is_array($item) ? $item : []);
                     $oldRequestId = old('material_request_id');
-                    $initialRequests = $transferFormData['requests'][(string) $initialDestinationId] ?? [];
+                    $initialRequests = $transferFormData['requests'][(string) $initialTujuanId] ?? [];
                     // Hanya Request terminal milik Mitra yang sedang dilayani yang boleh di-reset.
                     // Request ditolak, belum diputuskan, tidak ditemukan, atau milik Mitra lain tetap
                     // membawa sumber baris old() agar tidak diam-diam berubah menjadi kiriman langsung.
@@ -79,7 +79,7 @@
                     $projectTerkunciLabel = 'Gudang THC ke gudang THC — tanpa Project';
                 @endphp
                 <form class="ui-form" method="POST" action="{{ route('warehouse.transfers.issue') }}" target="_blank" rel="noopener noreferrer" data-submit-loading data-transfer-form>@csrf
-                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-origin-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialOriginId === (int) $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-destination-select required>@foreach($destinationWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialDestinationId === (int) $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
+                    <div class="ui-form__grid"><label>Warehouse asal<select name="warehouse_asal_id" data-asal-select required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialAsalId === (int) $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label><label>Warehouse tujuan<select name="warehouse_tujuan_id" data-tujuan-select required>@foreach($tujuanWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($initialTujuanId === (int) $warehouse->id)>{{ $warehouse->kode }} — {{ $warehouse->nama }}</option>@endforeach</select></label></div>
                     <div class="ui-form__grid"><label>Request Material<select name="material_request_id" data-request-select data-empty-label="— Tanpa Request Material —"><option value="">— Tanpa Request Material —</option>@foreach($initialRequests as $initialRequest)<option value="{{ $initialRequest['id'] }}" @selected((string) old('material_request_id') === (string) $initialRequest['id'])>{{ $initialRequest['label'] }}</option>@endforeach @if($preservedRequestId !== null)<option value="{{ $preservedRequestId }}" selected>{{ $preservedRequestLabel }}</option>@endif</select></label><label>Project<select name="project_id" data-project-select data-empty-label="{{ $projectKosongLabel }}" data-locked-label="{{ $projectTerkunciLabel }}" @disabled($initialMitraId === null || $initialLockedProjectId !== null)>@if($initialMitraId === null)<option value="">{{ $projectTerkunciLabel }}</option>@else<option value="">{{ $projectKosongLabel }}</option>@foreach($initialProjects as $initialProject)<option value="{{ $initialProject['id'] }}" @selected((string) old('project_id') === (string) $initialProject['id'])>{{ $initialProject['label'] }}</option>@endforeach @endif</select>@if($initialLockedProjectId !== null)<input type="hidden" name="project_id" value="{{ $initialLockedProjectId }}" data-project-lock>@endif</label></div>
                     @if($resetOldRequest)<p class="ui-state ui-state--warning" role="status" data-request-reset-notice>Request Material yang sebelumnya dipilih sudah tidak dapat dipenuhi. Pilihan direset; baris tetap tersedia sebagai kiriman langsung.</p>@elseif($preservedRequestId !== null)<p class="ui-state ui-state--warning" role="status" data-request-preserved-notice>Request Material yang sebelumnya dipilih dipertahankan agar server dapat memvalidasi ulang. Pilih Request Material lain atau Tanpa Request Material untuk menerbitkan kiriman langsung.</p>@endif
                     <div class="ui-form__grid"><label>Tanggal<input type="date" name="tanggal" required value="{{ old('tanggal', now()->toDateString()) }}"></label><label>Pengirim<input name="pengirim" maxlength="255" required value="{{ old('pengirim') }}"></label></div><div class="ui-form__grid"><label>Sopir<input name="sopir" maxlength="255" value="{{ old('sopir') }}"></label><label>Plat nomor<input name="plat_nomor" maxlength="255" value="{{ old('plat_nomor') }}"></label></div>
@@ -89,12 +89,12 @@
                         // Server tidak menolak nilai asing (#129), tapi yang dirender tetap dua nilai glosarium saja.
                         $oldSumber = ! $resetOldRequest && ($oldItem['sumber'] ?? null) === 'prefill' ? 'prefill' : 'operator';
                         $oldTerkunci = $oldSumber === 'prefill' && $oldMaterial !== null;
-                        $identityOptionsFor = function (string $type) use ($transferFormData, $initialOriginId, $oldMaterial): array {
+                        $identityOptionsFor = function (string $type) use ($transferFormData, $initialAsalId, $oldMaterial): array {
                             if ($oldMaterial === null) {
                                 return [];
                             }
 
-                            return collect($transferFormData['identities'][(string) $initialOriginId][(string) $oldMaterial->id] ?? [])
+                            return collect($transferFormData['identities'][(string) $initialAsalId][(string) $oldMaterial->id] ?? [])
                                 ->where('type', $type)
                                 ->map(fn (array $identity): array => [
                                     'value' => $identity['value'],
@@ -108,8 +108,8 @@
                         };
                         $serialOptions = $identityOptionsFor('sn');
                         $drumOptions = $identityOptionsFor('drum');
-                        $serialValues = collect($transferFormData['identities'][(string) $initialOriginId][(string) ($oldMaterial?->id ?? 0)] ?? [])->where('type', 'sn')->pluck('value')->map(fn ($value): string => (string) $value)->all();
-                        $drumValues = collect($transferFormData['identities'][(string) $initialOriginId][(string) ($oldMaterial?->id ?? 0)] ?? [])->where('type', 'drum')->pluck('value')->map(fn ($value): string => (string) $value)->all();
+                        $serialValues = collect($transferFormData['identities'][(string) $initialAsalId][(string) ($oldMaterial?->id ?? 0)] ?? [])->where('type', 'sn')->pluck('value')->map(fn ($value): string => (string) $value)->all();
+                        $drumValues = collect($transferFormData['identities'][(string) $initialAsalId][(string) ($oldMaterial?->id ?? 0)] ?? [])->where('type', 'drum')->pluck('value')->map(fn ($value): string => (string) $value)->all();
                         $serialValue = (string) ($oldItem['serial_number'] ?? '');
                         $drumValue = (string) ($oldItem['drum_id'] ?? '');
                         $serialUnavailable = $oldMaterial?->jenis === 'ber_sn' && $serialValue !== '' && ! in_array($serialValue, $serialValues, true);
@@ -122,7 +122,7 @@
             </article>
             @endif
         </section>
-        <section class="ui-panel ui-panel--wide" style="margin-top:18px"><h2>Pengiriman masuk</h2><p class="ui-help">Surat Jalan terbuka yang menuju Warehouse yang ditugaskan kepada Anda. Buka detail untuk mencatat penerimaan aktual tanpa membuat transaksi ganda.</p>@if($suratJalanMasuk->isEmpty())<div class="ui-state" role="status">Tidak ada pengiriman masuk yang menunggu penerimaan.</div>@else<div class="ui-list">@foreach($suratJalanMasuk as $transfer)<article class="ui-list__item"><div class="ui-inline" style="justify-content:space-between"><div><strong>{{ $transfer->nomor }}</strong><div class="ui-muted">Dari {{ $transfer->origin->kode }} — {{ $transfer->origin->nama }} · Ke {{ $transfer->destination->kode }} — {{ $transfer->destination->nama }}</div><div class="ui-muted">{{ $transfer->tanggal?->format('d M Y') }} · {{ $transfer->items->count() }} item · <x-ui.badge tone="warning" label="Menunggu penerimaan" /></div></div><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.show', $transfer) }}">Terima Pengiriman</a></div></article>@endforeach</div>@endif</section>
+        <section class="ui-panel ui-panel--wide" style="margin-top:18px"><h2>Pengiriman masuk</h2><p class="ui-help">Surat Jalan terbuka yang menuju Warehouse yang ditugaskan kepada Anda. Buka detail untuk mencatat penerimaan aktual tanpa membuat transaksi ganda.</p>@if($suratJalanMasuk->isEmpty())<div class="ui-state" role="status">Tidak ada pengiriman masuk yang menunggu penerimaan.</div>@else<div class="ui-list">@foreach($suratJalanMasuk as $transfer)<article class="ui-list__item"><div class="ui-inline" style="justify-content:space-between"><div><strong>{{ $transfer->nomor }}</strong><div class="ui-muted">Dari {{ $transfer->asal->kode }} — {{ $transfer->asal->nama }} · Ke {{ $transfer->tujuan->kode }} — {{ $transfer->tujuan->nama }}</div><div class="ui-muted">{{ $transfer->tanggal?->format('d M Y') }} · {{ $transfer->items->count() }} item · <x-ui.badge tone="warning" label="Menunggu penerimaan" /></div></div><a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.show', $transfer) }}">Terima Pengiriman</a></div></article>@endforeach</div>@endif</section>
         <section class="ui-panel ui-panel--wide" style="margin-top:18px"><h2>Saldo Warehouse</h2>@if($stocks->isEmpty())<div class="ui-state">Belum ada saldo Material positif pada Warehouse yang ditugaskan.</div>@else<div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Warehouse</th><th>Material</th><th>Saldo</th><th>Unit</th></tr></thead><tbody>@foreach($stocks as $stock)<tr><td>{{ $stock->warehouse->kode }} — {{ $stock->warehouse->nama }}</td><td>{{ $stock->material->kode }} — {{ $stock->material->nama }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($stock->qty) }}</td><td>{{ $stock->material->unit->nama }}</td></tr>@endforeach</tbody></table></div>@endif</section>
         <section class="ui-panel ui-panel--wide" style="margin-top:18px"><h2>Drum tersedia</h2>@if($drums->isEmpty())<div class="ui-state">Belum ada Drum tersedia.</div>@else<div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Drum ID</th><th>Material</th><th>Warehouse</th><th>Sisa</th></tr></thead><tbody>@foreach($drums as $drum)<tr><td>{{ $drum->drum_id }}</td><td>{{ $drum->material->nama }}</td><td>{{ $drum->lokasi_id }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($drum->sisa) }} {{ $drum->material->unit->nama }}</td></tr>@endforeach</tbody></table></div>@endif</section>
         <section class="ui-panel ui-panel--wide" style="margin-top:18px"><h2>Aktivitas buku transaksi</h2>@if($transactions->isEmpty())<div class="ui-state">Belum ada transaksi Material.</div>@else<div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Waktu</th><th>Warehouse</th><th>Material</th><th>Delta</th><th>Jenis</th><th>Alasan</th></tr></thead><tbody>@foreach($transactions as $transaction)<tr><td>{{ $transaction->created_at?->format('d M Y H:i') }}</td><td>{{ $transaction->warehouse->kode }}</td><td>{{ $transaction->material->nama }}</td><td>{{ \App\Support\QuantityDisplayFormatter::format($transaction->qty_delta) }} {{ $transaction->material->unit->nama }}</td><td>{{ $transaction->jenis_transaksi }}</td><td>{{ $transaction->reason }}</td></tr>@endforeach</tbody></table></div>@endif</section>

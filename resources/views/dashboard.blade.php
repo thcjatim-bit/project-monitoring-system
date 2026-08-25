@@ -387,8 +387,8 @@
                             <li class="command-center__item command-center__item--start" data-surat-jalan-id="{{ $suratJalan->id }}">
                                 <div>
                                     <a href="{{ route('warehouse.transfers.print', $suratJalan) }}">{{ $suratJalan->nomor }}</a>
-                                    <p>{{ $suratJalan->origin->nama }} → {{ $suratJalan->destination->nama }}</p>
-                                    <p>Warehouse: {{ $suratJalan->origin->nama }} → {{ $suratJalan->destination->nama }}</p>
+                                    <p>{{ $suratJalan->asal->nama }} → {{ $suratJalan->tujuan->nama }}</p>
+                                    <p>Warehouse: {{ $suratJalan->asal->nama }} → {{ $suratJalan->tujuan->nama }}</p>
                                     <p>Material:
                                         @foreach ($suratJalan->items as $item)
                                             {{ $item->material->nama }} ({{ $item->qty }} {{ $item->material->unit->nama }})@if (!$loop->last), @endif

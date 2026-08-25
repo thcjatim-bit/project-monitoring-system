@@ -105,7 +105,7 @@ class PortfolioDecisionQueueQuery
             ->where('status', 'terbit')
             ->whereNotNull('issued_at')
             ->where('issued_at', '<', $cutoff)
-            ->with(['origin', 'destination', 'items.material.unit'])
+            ->with(['asal', 'tujuan', 'items.material.unit'])
             ->orderBy('issued_at')
             ->get()
             ->each(function (SuratJalan $suratJalan) use ($items, $metricsByProjectId, $asOf): void {
@@ -117,8 +117,8 @@ class PortfolioDecisionQueueQuery
 
                 $issuedAt = CarbonImmutable::instance($suratJalan->issued_at);
                 $age = $issuedAt->startOfDay()->diffInDays($asOf->startOfDay());
-                $origin = $suratJalan->origin?->nama ?? 'Warehouse asal tidak tersedia';
-                $destination = $suratJalan->destination?->nama ?? 'Warehouse tujuan tidak tersedia';
+                $asal = $suratJalan->asal?->nama ?? 'Warehouse asal tidak tersedia';
+                $tujuan = $suratJalan->tujuan?->nama ?? 'Warehouse tujuan tidak tersedia';
 
                 $items->push($this->item(
                     category: 'transit',
@@ -126,7 +126,7 @@ class PortfolioDecisionQueueQuery
                     risk: 'tinggi',
                     riskLabel: 'Tinggi',
                     title: 'Transit '.$age.' hari · '.$suratJalan->nomor,
-                    description: 'Surat Jalan '.$suratJalan->nomor.' masih terbit dari '.$origin.' ke '.$destination.' setelah lebih dari 3 hari; tindak lanjuti di sumber Transit.',
+                    description: 'Surat Jalan '.$suratJalan->nomor.' masih terbit dari '.$asal.' ke '.$tujuan.' setelah lebih dari 3 hari; tindak lanjuti di sumber Transit.',
                     project: $project,
                     updatedAt: $issuedAt,
                     sourceLabel: 'Surat Jalan / Transit',

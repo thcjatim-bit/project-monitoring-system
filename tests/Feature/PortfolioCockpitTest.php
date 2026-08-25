@@ -1070,13 +1070,13 @@ class PortfolioCockpitTest extends TestCase
         $issuer = $this->userWithPermissions(null, 'operate_warehouse');
 
         $this->asThc(function () use ($project, $material, $issuedAt, $qty, $received, $issuer): void {
-            $origin = Warehouse::factory()->create(['mitra_id' => $project->mitra_id]);
-            $destination = Warehouse::factory()->create(['mitra_id' => $project->mitra_id]);
+            $asal = Warehouse::factory()->create(['mitra_id' => $project->mitra_id]);
+            $tujuan = Warehouse::factory()->create(['mitra_id' => $project->mitra_id]);
             $suratJalan = SuratJalan::query()->create([
                 'nomor' => 'SJ-'.CarbonImmutable::parse($issuedAt)->format('ym').'-'.fake()->unique()->numerify('####'),
                 'tanggal' => substr($issuedAt, 0, 10),
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'mitra_id' => $project->mitra_id,
                 'project_id' => $project->id,
                 'issued_by' => $issuer->id,
