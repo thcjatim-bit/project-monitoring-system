@@ -95,7 +95,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
     // boleh dinonaktifkan saat prefill mengambil alih, dan klon tidak boleh ikut mewarisi keadaannya.
     const rowTemplate = items?.querySelector('[data-transfer-row]')?.cloneNode(true) ?? null;
     // Semua baris baru adalah klon baris pertama, jadi indeks dan binding-nya tidak pernah dirakit tangan.
-    const buildRow = (asal) => {
+    const buildRow = (sumber) => {
         const source = rowTemplate; const index = nextTransferIndex++; const row = source.cloneNode(true);
         row.querySelectorAll('[name]').forEach((input) => { input.name = input.name.replace(/items\[\d+\]/g, `items[${index}]`); input.value = ''; });
         row.querySelectorAll('[id], [aria-controls]').forEach((element) => {
@@ -119,15 +119,15 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
             root.querySelector('[data-ui-select-value]')?.setAttribute('disabled', 'disabled');
             root.querySelectorAll('[data-ui-select-option]').forEach((option) => option.removeAttribute('data-ui-select-option-bound'));
         });
-        // Asal-usul baris dibawa hidden input, bukan sekadar atribut DOM, supaya bertahan melewati repopulasi old().
-        const asalInput = row.querySelector('[data-row-origin]'); if (asalInput) asalInput.value = asal;
-        row.dataset.rowAsal = asal;
+        // Sumber baris dibawa hidden input, bukan sekadar atribut DOM, supaya bertahan melewati repopulasi old().
+        const sumberInput = row.querySelector('[data-row-sumber-input]'); if (sumberInput) sumberInput.value = sumber;
+        row.dataset.rowSumber = sumber;
         row.querySelector('[data-remove-item]').hidden = false; items.append(row); bindSelects(row);
         initializeSearchableSelects(document);
         row.querySelectorAll('[data-ui-select]').forEach((root) => setSearchableSelectValue(root, ''));
         return { row, index };
     };
-    document.querySelector('[data-add-item]')?.addEventListener('click', () => { buildRow('manual'); refreshTransferIdentityState(); });
+    document.querySelector('[data-add-item]')?.addEventListener('click', () => { buildRow('operator'); refreshTransferIdentityState(); });
     items?.addEventListener('click', (event) => { if (event.target.matches('[data-remove-item]')) event.target.closest('[data-transfer-row]').remove(); });
     // Form request-driven: penyaringan dan prefill berjalan murni di klien di atas payload yang diserialisasi Blade.
     const transferForm = document.querySelector('[data-transfer-form]');
@@ -195,10 +195,10 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         // Form selalu menyisakan satu baris untuk diketik operator; tanpa itu tidak ada yang bisa
         // diisi dan Surat Jalan tidak bisa terbit. Baris pertama hasil old() bisa berupa baris
         // prefill, jadi baris itu pun bisa ikut terbuang.
-        const ensureTypingRow = () => { if (firstRow() === null) buildRow('manual'); };
+        const ensureTypingRow = () => { if (firstRow() === null) buildRow('operator'); };
         // Membuang baris prefill selalu berarti baris pertama dibutuhkan kembali, jadi keduanya satu langkah.
         const dropPrefillRows = () => {
-            items.querySelectorAll('[data-row-asal="request"]').forEach((row) => row.remove());
+            items.querySelectorAll('[data-row-sumber="prefill"]').forEach((row) => row.remove());
             transferForm.querySelector('[data-fraction-notice]')?.remove();
             ensureTypingRow();
             idleFirstRow(false);
@@ -211,8 +211,8 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
         // pertama sudah pulih saat penandaan menghitung ulang.
         items.addEventListener('click', (event) => {
             if (! event.target.matches('[data-remove-item]')) return;
-            const prefillHabis = event.target.closest('[data-transfer-row]')?.dataset.rowAsal === 'request'
-                && items.querySelector('[data-row-asal="request"]') === null;
+            const prefillHabis = event.target.closest('[data-transfer-row]')?.dataset.rowSumber === 'prefill'
+                && items.querySelector('[data-row-sumber="prefill"]') === null;
             if (prefillHabis) { dropPrefillRows(); refreshTransferIdentityState(); return; }
             ensureTypingRow();
             refreshTransferIdentityState();
@@ -235,7 +235,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
             projectSelect.after(lock);
         };
         const prefillRow = (item, qty) => {
-            const { row, index } = buildRow('request');
+            const { row, index } = buildRow('prefill');
             const materialSelect = row.querySelector('select');
             materialSelect.value = String(item.material_id); materialSelect.disabled = true;
             // Material baris prefill dikunci; select disabled tidak terkirim, hidden input yang membawanya.
@@ -463,7 +463,7 @@ export function initializeWarehouseMaterialForm(document = globalThis.document) 
                 for (let pcs = 0; pcs < barisan; pcs += 1) prefillRow(item, berSn ? 1 : item.sisa);
             });
             reportFractions(request, pecahan);
-            if (items.querySelector('[data-row-asal="request"]') !== null && firstRowIsEmpty()) idleFirstRow(true);
+            if (items.querySelector('[data-row-sumber="prefill"]') !== null && firstRowIsEmpty()) idleFirstRow(true);
             markDeviations();
         };
         // Melepas kunci lebih dulu, baru menyusun ulang daftar: penyaring request membaca

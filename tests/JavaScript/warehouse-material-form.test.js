@@ -48,24 +48,24 @@ const catatanField = (prefix) => `
  * Satu perakit baris untuk seluruh fixture, dijaga tetap sejajar dengan Blade oleh test
  * "fixture baris item membawa setiap field yang dirender Blade" di bawah. Markup baris yang
  * disalin per fixture adalah cara sebelumnya, dan salinan yang tertinggallah yang dulu kehilangan
- * hidden input asal-usul baris begitu Blade mulai merendernya.
+ * hidden input sumber baris begitu Blade mulai merendernya.
  */
 const barisSuratJalan = ({
     index = 0,
-    asal = 'manual',
+    sumber = 'operator',
     pilihan = materialOptions,
     dikunci = null,
     qty = '',
     bisaDihapus = false,
 } = {}) => `
-    <div class="ui-list__item" data-transfer-row data-row-asal="${asal}">
+    <div class="ui-list__item" data-transfer-row data-row-sumber="${sumber}">
         <label>Material<select name="items[${index}][material_id]" data-material-select required${dikunci === null ? '' : ' disabled'}>
             <option value="">Pilih Material</option>${pilihan}
         </select>${dikunci === null ? '' : `<input type="hidden" name="items[${index}][material_id]" value="${dikunci}">`}</label>
         <label>Qty<input type="number" name="items[${index}][qty]" required value="${qty}"></label>
         ${identityFields(`items[${index}]`)}
         ${catatanField(`items[${index}]`)}
-        <input type="hidden" name="items[${index}][asal]" value="${asal}" data-row-origin>
+        <input type="hidden" name="items[${index}][sumber]" value="${sumber}" data-row-sumber-input>
         <button type="button" data-remove-item${bisaDihapus ? '' : ' hidden'}>Hapus item</button>
     </div>
 `;
@@ -218,7 +218,7 @@ test('baris item Surat Jalan dimulai tanpa material terpilih dan tanpa kotak ide
 
 /**
  * Penjaga penyimpangan fixture. Fixture merakit markup barisnya sendiri, jadi ia bisa tertinggal
- * saat Blade menambah field — persis yang terjadi pada hidden input asal-usul baris. Yang
+ * saat Blade menambah field — persis yang terjadi pada hidden input sumber baris. Yang
  * dibandingkan bukan markupnya kata per kata (Blade punya direktif dan indeks dari old()),
  * melainkan daftar field dan atribut data yang jadi pegangan modulnya.
  */
@@ -236,7 +236,7 @@ const namaField = (markup) => new Set(
 const atributData = (markup) => new Set(
     [...markup.matchAll(/\sdata-([a-z-]+)/g)]
         .map((match) => match[1])
-        .filter((attribute) => ['material-select', 'row-origin', 'catatan-input', 'transfer-row', 'row-asal', 'remove-item'].includes(attribute)),
+        .filter((attribute) => ['material-select', 'row-sumber-input', 'catatan-input', 'transfer-row', 'row-sumber', 'remove-item'].includes(attribute)),
 );
 
 test('fixture baris item membawa setiap field dan atribut yang dirender Blade', () => {
@@ -694,7 +694,7 @@ const requestDrivenPage = (t, payload = transferFormData) => openPage(t, formSur
 
 const field = (window, selector) => window.document.querySelector(selector);
 
-const prefillRows = (window) => rows(window).filter((row) => row.dataset.rowAsal === 'request');
+const prefillRows = (window) => rows(window).filter((row) => row.dataset.rowSumber === 'prefill');
 
 const optionValues = (select) => [...select.querySelectorAll('option')].map((option) => option.value);
 
@@ -723,7 +723,7 @@ test('baris prefill mengunci material lewat hidden input, bukan lewat select', (
     const hidden = row.querySelector('input[type="hidden"][name$="[material_id]"]');
     assert.ok(hidden, 'select yang disabled tidak terkirim, jadi material wajib dibawa hidden input');
     assert.equal(hidden.value, '1');
-    assert.equal(row.querySelector('[data-row-origin]').value, 'request');
+    assert.equal(row.querySelector('[data-row-sumber-input]').value, 'prefill');
 });
 
 test('baris prefill ber-SN tetap meminta Serial Number diisi operator', (t) => {
@@ -887,7 +887,7 @@ test('baris tambahan setelah prefill tidak mewarisi keadaan baris pertama yang d
     const tambahan = rows(window).at(-1);
     assert.equal(tambahan.hidden, false);
     assert.equal(tambahan.querySelector('select').disabled, false);
-    assert.equal(tambahan.dataset.rowAsal, 'manual');
+    assert.equal(tambahan.dataset.rowSumber, 'operator');
 });
 
 test('ganti gudang tujuan membuang baris prefill tapi menyisakan baris ketikan operator', (t) => {
@@ -1391,7 +1391,7 @@ const halamanSetelahDitolak = (t) => openPage(t, formSuratJalan({
     gudangTujuan: [{ value: 20, label: 'WH-MITRA', selected: true }, { value: 30, label: 'WH-THC-2' }],
     requests: [{ value: 92, label: transferFormData.requests[20][1].label, selected: true }],
     baris: barisSuratJalan({
-        asal: 'request',
+        sumber: 'prefill',
         pilihan: '<option value="1" data-kind="biasa" selected>MAT-1 — Kabel Patch</option>',
         dikunci: 1,
         qty: 2,
@@ -1460,7 +1460,7 @@ test('membuang baris prefill yang dipulihkan old() menyisakan baris ketikan oper
 
     const tersisa = rows(window);
     assert.equal(tersisa.length, 1, 'baris ketikan operator sudah cukup; tidak perlu baris tambahan');
-    assert.equal(tersisa[0].dataset.rowAsal, 'manual');
+    assert.equal(tersisa[0].dataset.rowSumber, 'operator');
     assert.equal(tersisa[0].querySelector('input[type="number"]').value, '5', 'ketikan operator tidak boleh tersentuh');
 });
 
@@ -1477,7 +1477,7 @@ test('membuang setiap baris yang dipulihkan old() tetap menyisakan satu baris si
     assert.equal(material.value, '');
     assert.equal(tersisa[0].querySelector('input[type="number"]').value, '');
     assert.equal(tersisa[0].querySelector('input[type="hidden"][name$="[material_id]"]'), null);
-    assert.equal(tersisa[0].dataset.rowAsal, 'manual');
+    assert.equal(tersisa[0].dataset.rowSumber, 'operator');
 });
 
 /**
@@ -1556,7 +1556,7 @@ describe('kontrak klasifikasi penyimpangan', { concurrency: true }, () => {
             // hanyalah baris yang disebut fixture.
             choose(window, field(window, '[data-request-select]'), '91');
             rows(window)
-                .filter((row) => row.dataset.rowAsal === 'request')
+                .filter((row) => row.dataset.rowSumber === 'prefill')
                 .forEach((row) => row.querySelector('[data-remove-item]').click());
 
             const baris = ketikBarisKontrak(window, kasus);
