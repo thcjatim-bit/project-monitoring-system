@@ -199,6 +199,9 @@ export function cliSafeText(value) {
     return String(value ?? "")
         .replace(/[\r\n]+/g, " ")
         .replace(/["“”]/g, "'")
+        // A caret cannot suppress %VAR% expansion during the shim's %* re-parse,
+        // so a percent sign never reaches the command line at all.
+        .replace(/%/g, " percent ")
         .replace(/\s+/g, " ")
         .trim();
 }
@@ -341,7 +344,7 @@ const FAILURE_MARKER = "autopilot-dispatch-failure";
 export function failureSignature(error) {
     return String(error?.message ?? error ?? "unknown failure")
         .split(/\r?\n/)[0]
-        .replace(/[A-Za-z]:\[^\s"']+|\/(?:[\w.-]+\/)+[\w.-]+/g, "<path>")
+        .replace(/[A-Za-z]:\\[^\s"']+|\/(?:[\w.-]+\/)+[\w.-]+/g, "<path>")
         .replace(/\b\d{3,}\b/g, "<n>")
         .replace(/\s+/g, " ")
         .trim()
@@ -382,7 +385,7 @@ export function shouldReportFailure(lastComment, signature, now = Date.now()) {
         return true;
     }
 
-    const age = now - Date.parse(lastComment.createdAt ?? 0);
+    const age = now - Date.parse(lastComment.createdAt ?? "");
 
     return !Number.isFinite(age) || age >= FAILURE_REPEAT_MS;
 }
@@ -425,7 +428,7 @@ function lastFailureComment(run, repo, issueNumber, cwd) {
             "issue", "view", String(issueNumber),
             "--repo", repo,
             "--json", "comments",
-            "--jq", ".comments | last | {createdAt, body}",
+            "--jq", `[.comments[] | select(.body | contains("${FAILURE_MARKER}"))] | last | {createdAt, body}`,
         ],
         { cwd, allowFailure: true },
     );
