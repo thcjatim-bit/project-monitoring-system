@@ -41,9 +41,9 @@
     </div>
 
     <div class="route">
-        <div><strong>Dari Warehouse</strong><br>{{ $suratJalan->origin->kode }} — {{ $suratJalan->origin->nama }}</div>
+        <div><strong>Dari Warehouse</strong><br>{{ $suratJalan->asal->kode }} — {{ $suratJalan->asal->nama }}</div>
         <div class="arrow">→</div>
-        <div><strong>Ke Warehouse</strong><br>{{ $suratJalan->destination->kode }} — {{ $suratJalan->destination->nama }}</div>
+        <div><strong>Ke Warehouse</strong><br>{{ $suratJalan->tujuan->kode }} — {{ $suratJalan->tujuan->nama }}</div>
     </div>
 
     <div><strong>Mitra:</strong> {{ $suratJalan->mitra?->nama ?? 'THC' }}</div>

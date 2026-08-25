@@ -61,7 +61,7 @@ class MitraDashboardQuery
             'transits' => $actor->hasIzin('read_transit')
                 ? SuratJalan::query()
                     ->where('status', 'terbit')
-                    ->with(['origin', 'destination', 'project'])
+                    ->with(['asal', 'tujuan', 'project'])
                     ->latest('issued_at')
                     ->limit(8)
                     ->get()

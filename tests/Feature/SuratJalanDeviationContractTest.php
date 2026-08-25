@@ -130,16 +130,16 @@ class SuratJalanDeviationContractTest extends TestCase
             return;
         }
 
-        $origin = $this->warehouse(null, 'WH-ASAL');
-        $destination = $this->warehouse($mitra, 'WH-TUJUAN');
+        $asal = $this->warehouse(null, 'WH-ASAL');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN');
         $issuer = $this->userWith(null, 'operate_warehouse');
 
-        $this->asThc(function () use ($mitra, $request, $terkirim, $materials, $origin, $destination, $issuer): void {
+        $this->asThc(function () use ($mitra, $request, $terkirim, $materials, $asal, $tujuan, $issuer): void {
             $suratJalan = SuratJalan::query()->create([
                 'nomor' => 'SJ-KONTRAK-'.$request->id,
                 'tanggal' => '2026-08-20',
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'mitra_id' => $mitra->id,
                 'material_request_id' => $request->id,
                 'issued_by' => $issuer->id,

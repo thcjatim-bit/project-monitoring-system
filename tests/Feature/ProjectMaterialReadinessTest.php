@@ -38,8 +38,8 @@ class ProjectMaterialReadinessTest extends TestCase
             ->assertRedirect(route('projects.show', $project));
 
         [$requestId, $suratJalanId] = $this->asThc(function () use ($mitra, $material, $project, $thc): array {
-            $origin = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
-            $destination = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+            $asal = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+            $tujuan = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
             $request = MaterialRequest::query()->create([
                 'mitra_id' => $mitra->id,
                 'project_id' => $project->id,
@@ -55,8 +55,8 @@ class ProjectMaterialReadinessTest extends TestCase
             $suratJalan = SuratJalan::query()->create([
                 'nomor' => 'SJ-TEST-READINESS',
                 'tanggal' => '2026-08-16',
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'mitra_id' => $mitra->id,
                 'project_id' => $project->id,
                 'material_request_id' => $request->id,
@@ -103,13 +103,13 @@ class ProjectMaterialReadinessTest extends TestCase
             ->assertRedirect(route('projects.show', $project));
 
         $this->asThc(function () use ($mitra, $material, $project, $thc): void {
-            $origin = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
-            $destination = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+            $asal = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
+            $tujuan = Warehouse::factory()->create(['mitra_id' => $mitra->id]);
             $original = SuratJalan::query()->create([
                 'nomor' => 'SJ-TEST-READINESS-RETURN-ORIGINAL',
                 'tanggal' => '2026-08-16',
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'mitra_id' => $mitra->id,
                 'project_id' => $project->id,
                 'issued_by' => $thc->id,
@@ -129,8 +129,8 @@ class ProjectMaterialReadinessTest extends TestCase
             $return = SuratJalan::query()->create([
                 'nomor' => 'SJ-TEST-READINESS-RETURN',
                 'tanggal' => '2026-08-16',
-                'warehouse_asal_id' => $destination->id,
-                'warehouse_tujuan_id' => $origin->id,
+                'warehouse_asal_id' => $tujuan->id,
+                'warehouse_tujuan_id' => $asal->id,
                 'mitra_id' => $mitra->id,
                 'project_id' => $project->id,
                 'retur_dari_id' => $original->id,

@@ -25,7 +25,7 @@ class MaterialInventoryController extends Controller
     {
         $warehouses = $this->assignedWarehouses($request);
         $warehouseIds = $warehouses->modelKeys();
-        $destinationWarehouses = $this->destinationWarehouses($request);
+        $tujuanWarehouses = $this->tujuanWarehouses($request);
         // Form request-driven ini dibangun untuk petugas gudang THC, jadi User Mitra tidak
         // mendapat formnya maupun data yang menyuapinya. Ini penyembunyian elemen antarmuka,
         // bukan aturan otorisasi: `SuratJalanController::issue()` tetap penjaga sesungguhnya
@@ -34,14 +34,14 @@ class MaterialInventoryController extends Controller
 
         return view('warehouse.index', [
             'warehouses' => $warehouses,
-            'destinationWarehouses' => $destinationWarehouses,
+            'tujuanWarehouses' => $tujuanWarehouses,
             'canIssueTransfer' => $canIssueTransfer,
             // Pilihan awal kedua dropdown gudang berangkat dari old(): POST yang ditolak kembali
             // ke halaman ini, dan konteks gudangnya harus cocok dengan baris yang dipulihkan.
             'transferFormData' => $canIssueTransfer
                 ? $transferForm->forOperator(
                     $warehouses,
-                    $destinationWarehouses,
+                    $tujuanWarehouses,
                     $this->oldInteger('warehouse_asal_id'),
                     $this->oldInteger('warehouse_tujuan_id'),
                     $this->oldInteger('material_request_id'),
@@ -70,7 +70,7 @@ class MaterialInventoryController extends Controller
                 ->limit(20)
                 ->get(),
             'suratJalanMasuk' => SuratJalan::query()
-                ->with(['origin', 'destination', 'items.material.unit'])
+                ->with(['asal', 'tujuan', 'items.material.unit'])
                 ->where('status', 'terbit')
                 ->whereIn('warehouse_tujuan_id', $warehouseIds)
                 ->latest('tanggal')
@@ -163,7 +163,7 @@ class MaterialInventoryController extends Controller
             ->get();
     }
 
-    private function destinationWarehouses(Request $request): Collection
+    private function tujuanWarehouses(Request $request): Collection
     {
         return Warehouse::query()
             ->with('mitra')

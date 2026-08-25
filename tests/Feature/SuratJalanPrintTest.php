@@ -33,15 +33,15 @@ class SuratJalanPrintTest extends TestCase
             'mitra_id' => $mitra->id,
             'status_project' => 'aktif',
         ]));
-        [$origin, $destination] = $this->warehousesFor($mitra);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
         $user = $this->userWithWarehousePermission($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $requested = Material::factory()->create(['jenis' => 'biasa']);
         $foreign = Material::factory()->create(['jenis' => 'biasa']);
-        $this->receiveStock($user, $origin, $requested, 10);
-        $this->receiveStock($user, $origin, $foreign, 10);
+        $this->receiveStock($user, $asal, $requested, 10);
+        $this->receiveStock($user, $asal, $foreign, 10);
 
         $request = $this->asThc(fn (): MaterialRequest => MaterialRequest::query()->create([
             'mitra_id' => $mitra->id,
@@ -60,8 +60,8 @@ class SuratJalanPrintTest extends TestCase
 
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'project_id' => $project->id,
                 'tanggal' => '2026-08-15',
@@ -112,12 +112,12 @@ class SuratJalanPrintTest extends TestCase
     public function test_print_omits_project_when_request_has_no_project(): void
     {
         $mitra = Mitra::factory()->create();
-        [$origin, $destination] = $this->warehousesFor($mitra);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
         $user = $this->userWithWarehousePermission($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
         $material = Material::factory()->create(['jenis' => 'biasa']);
-        $this->receiveStock($user, $origin, $material, 10);
+        $this->receiveStock($user, $asal, $material, 10);
 
         $request = $this->asThc(fn (): MaterialRequest => MaterialRequest::query()->create([
             'mitra_id' => $mitra->id,
@@ -136,8 +136,8 @@ class SuratJalanPrintTest extends TestCase
 
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-15',
                 'pengirim' => 'Petugas Gudang',
@@ -154,16 +154,16 @@ class SuratJalanPrintTest extends TestCase
             ->assertDontSee('Project:');
     }
 
-    public function test_print_of_a_return_without_origin_context_omits_empty_request_and_project_rows(): void
+    public function test_print_of_a_return_without_asal_context_omits_empty_request_and_project_rows(): void
     {
-        [$origin, $destination, , $user, $suratJalanId] = $this->issueDirectTransfer();
+        [$asal, $tujuan, , $user, $suratJalanId] = $this->issueDirectTransfer();
         $this->actingAs($user)
             ->post(route('warehouse.transfers.receive', $suratJalanId))
             ->assertRedirect();
 
         $thc = $this->thcUserWithWarehousePermission();
-        $origin->users()->attach($thc);
-        $destination->users()->attach($thc);
+        $asal->users()->attach($thc);
+        $tujuan->users()->attach($thc);
 
         $this->actingAs($thc)
             ->post(route('warehouse.transfers.return', $suratJalanId), [
@@ -190,15 +190,15 @@ class SuratJalanPrintTest extends TestCase
             'mitra_id' => $mitra->id,
             'status_project' => 'aktif',
         ]));
-        [$origin, $destination] = $this->warehousesFor($mitra);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
         $user = $this->userWithWarehousePermission($mitra);
         $thc = $this->thcUserWithWarehousePermission();
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
-        $origin->users()->attach($thc);
-        $destination->users()->attach($thc);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
+        $asal->users()->attach($thc);
+        $tujuan->users()->attach($thc);
         $material = Material::factory()->create(['jenis' => 'biasa']);
-        $this->receiveStock($user, $origin, $material, 10);
+        $this->receiveStock($user, $asal, $material, 10);
 
         $request = $this->asThc(fn (): MaterialRequest => MaterialRequest::query()->create([
             'mitra_id' => $mitra->id,
@@ -217,8 +217,8 @@ class SuratJalanPrintTest extends TestCase
 
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'project_id' => $project->id,
                 'tanggal' => '2026-08-15',
@@ -258,17 +258,17 @@ class SuratJalanPrintTest extends TestCase
     private function issueDirectTransfer(): array
     {
         $mitra = Mitra::factory()->create();
-        [$origin, $destination] = $this->warehousesFor($mitra);
+        [$asal, $tujuan] = $this->warehousesFor($mitra);
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWithWarehousePermission($mitra);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
-        $this->receiveStock($user, $origin, $material, 10);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
+        $this->receiveStock($user, $asal, $material, 10);
 
         $this->actingAs($user)
             ->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'tanggal' => '2026-08-15',
                 'pengirim' => 'Petugas Gudang',
                 'items' => [['material_id' => $material->id, 'qty' => '4']],
@@ -277,14 +277,14 @@ class SuratJalanPrintTest extends TestCase
 
         $suratJalanId = (int) DB::table('surat_jalans')->latest('id')->value('id');
 
-        return [$origin, $destination, $material, $user, $suratJalanId];
+        return [$asal, $tujuan, $material, $user, $suratJalanId];
     }
 
-    private function receiveStock(User $user, Warehouse $origin, Material $material, int $qty): void
+    private function receiveStock(User $user, Warehouse $asal, Material $material, int $qty): void
     {
         $this->actingAs($user)
             ->post('/warehouse/stock/receive', [
-                'warehouse_id' => $origin->id,
+                'warehouse_id' => $asal->id,
                 'material_id' => $material->id,
                 'qty' => $qty,
                 'reason' => 'Penerimaan awal',

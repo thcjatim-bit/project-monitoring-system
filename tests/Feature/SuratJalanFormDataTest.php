@@ -28,11 +28,11 @@ class SuratJalanFormDataTest extends TestCase
         $mitraA = Mitra::factory()->create();
         $mitraB = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-THC-ASAL');
+        $asal = $this->warehouse(null, 'WH-THC-ASAL');
         $tujuanA = $this->warehouse($mitraA, 'WH-A');
         $tujuanB = $this->warehouse($mitraB, 'WH-B');
         $tujuanThc = $this->warehouse(null, 'WH-THC-TUJUAN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
 
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $disetujui = $this->materialRequest($mitraA, 'disetujui', [[$material, 10]]);
@@ -56,9 +56,9 @@ class SuratJalanFormDataTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL');
+        $asal = $this->warehouse(null, 'WH-ASAL');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $tujuan->users()->attach($operator);
 
         $material = Material::factory()->create(['jenis' => 'biasa']);
@@ -66,13 +66,13 @@ class SuratJalanFormDataTest extends TestCase
         $request = $this->materialRequest($mitra, 'disetujui', [[$material, 10], [$lain, 5]]);
 
         $this->actingAs($operator)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => '10',
             'reason' => 'Penerimaan awal',
         ])->assertRedirect();
         $this->actingAs($operator)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request->id,
             'tanggal' => '2026-08-22',
@@ -93,9 +93,9 @@ class SuratJalanFormDataTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL');
+        $asal = $this->warehouse(null, 'WH-ASAL');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $tujuan->users()->attach($operator);
 
         $material = Material::factory()->create(['jenis' => 'biasa']);
@@ -105,11 +105,11 @@ class SuratJalanFormDataTest extends TestCase
         // `mitra_id` nullable pada Surat Jalan untuk arah THC ke THC. FK komposit tetap
         // mengizinkan row ini dengan Request Material Mitra, tetapi bukan pemenuhan request
         // yang sah dan harus diabaikan sama seperti klasifikator sisi server.
-        $this->asThc(function () use ($origin, $tujuan, $request, $issuer, $material): void {
+        $this->asThc(function () use ($asal, $tujuan, $request, $issuer, $material): void {
             $suratJalan = SuratJalan::query()->create([
                 'nomor' => 'SJ-FORM-INVALID-TENANT-'.$request->id,
                 'tanggal' => '2026-08-22',
-                'warehouse_asal_id' => $origin->id,
+                'warehouse_asal_id' => $asal->id,
                 'warehouse_tujuan_id' => $tujuan->id,
                 'mitra_id' => null,
                 'material_request_id' => $request->id,
@@ -138,9 +138,9 @@ class SuratJalanFormDataTest extends TestCase
         $mitra = Mitra::factory()->create();
         $tanpaGudang = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL');
+        $asal = $this->warehouse(null, 'WH-ASAL');
         $this->warehouse($mitra, 'WH-TUJUAN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
 
         $aktif = $this->project($mitra, 'PRJ-2608-0001', 'aktif');
         $this->project($mitra, 'PRJ-2608-0002', 'selesai');
@@ -157,21 +157,21 @@ class SuratJalanFormDataTest extends TestCase
     {
         $mitraLain = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL');
+        $asal = $this->warehouse(null, 'WH-ASAL');
         $gudangMitraLain = $this->warehouse($mitraLain, 'WH-LAIN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
 
         $berSn = Material::factory()->create(['jenis' => 'ber_sn']);
         $drumKabel = Material::factory()->create(['jenis' => 'drum_kabel']);
         $this->actingAs($operator)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $berSn->id,
             'qty' => '1',
             'serial_number' => 'SN-ASAL-1',
             'reason' => 'Penerimaan awal',
         ])->assertRedirect();
         $this->actingAs($operator)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $drumKabel->id,
             'qty' => '250',
             'drum_id' => 'DRM-ASAL-1',
@@ -189,29 +189,29 @@ class SuratJalanFormDataTest extends TestCase
         $response = $this->actingAs($operator)->get('/warehouse');
         $payload = $this->transferFormData($response);
 
-        $this->assertSame([$origin->id], array_keys($payload['identities']));
+        $this->assertSame([$asal->id], array_keys($payload['identities']));
         $this->assertSame([
             ['type' => 'sn', 'value' => 'SN-ASAL-1', 'sisa' => null],
-        ], $payload['identities'][$origin->id][$berSn->id]);
-        $this->assertSame('drum', $payload['identities'][$origin->id][$drumKabel->id][0]['type']);
-        $this->assertSame('DRM-ASAL-1', $payload['identities'][$origin->id][$drumKabel->id][0]['value']);
-        $this->assertSame(250.0, (float) $payload['identities'][$origin->id][$drumKabel->id][0]['sisa']);
+        ], $payload['identities'][$asal->id][$berSn->id]);
+        $this->assertSame('drum', $payload['identities'][$asal->id][$drumKabel->id][0]['type']);
+        $this->assertSame('DRM-ASAL-1', $payload['identities'][$asal->id][$drumKabel->id][0]['value']);
+        $this->assertSame(250.0, (float) $payload['identities'][$asal->id][$drumKabel->id][0]['sisa']);
         $response->assertDontSee('SN-MITRA-LAIN');
     }
 
     public function test_form_surat_jalan_merender_pemilih_identitas_yang_terbatas_material_dan_gudang_asal(): void
     {
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang Asal');
-        $otherOrigin = $this->warehouse(null, 'WH-ASAL-LAIN', 'B Gudang Asal');
-        $destination = $this->warehouse(null, 'WH-TUJUAN', 'C Gudang Tujuan');
-        $origin->users()->attach($operator);
-        $otherOrigin->users()->attach($operator);
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang Asal');
+        $otherAsal = $this->warehouse(null, 'WH-ASAL-LAIN', 'B Gudang Asal');
+        $tujuan = $this->warehouse(null, 'WH-TUJUAN', 'C Gudang Tujuan');
+        $asal->users()->attach($operator);
+        $otherAsal->users()->attach($operator);
 
         $serialised = Material::factory()->create(['jenis' => 'ber_sn']);
         $drumCable = Material::factory()->create(['jenis' => 'drum_kabel']);
 
-        foreach ([[$origin, 'SN-ASAL-1'], [$otherOrigin, 'SN-ASAL-LAIN']] as [$warehouse, $serialNumber]) {
+        foreach ([[$asal, 'SN-ASAL-1'], [$otherAsal, 'SN-ASAL-LAIN']] as [$warehouse, $serialNumber]) {
             $this->actingAs($operator)->post('/warehouse/stock/receive', [
                 'warehouse_id' => $warehouse->id,
                 'material_id' => $serialised->id,
@@ -221,7 +221,7 @@ class SuratJalanFormDataTest extends TestCase
             ])->assertRedirect();
         }
         $this->actingAs($operator)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $drumCable->id,
             'qty' => '250',
             'drum_id' => 'DRM-ASAL-1',
@@ -230,8 +230,8 @@ class SuratJalanFormDataTest extends TestCase
 
         $response = $this->actingAs($operator)
             ->withSession(['_old_input' => [
-                'warehouse_asal_id' => (string) $origin->id,
-                'warehouse_tujuan_id' => (string) $destination->id,
+                'warehouse_asal_id' => (string) $asal->id,
+                'warehouse_tujuan_id' => (string) $tujuan->id,
                 'items' => [
                     ['material_id' => $serialised->id, 'qty' => '1', 'serial_number' => 'SN-ASAL-1'],
                     ['material_id' => $drumCable->id, 'qty' => '25', 'drum_id' => 'DRM-ASAL-1'],
@@ -253,13 +253,13 @@ class SuratJalanFormDataTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL');
+        $asal = $this->warehouse(null, 'WH-ASAL');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
 
         $payload = $this->transferFormData($this->actingAs($operator)->get('/warehouse'));
 
-        $this->assertNull($payload['warehouse_mitra'][(string) $origin->id]);
+        $this->assertNull($payload['warehouse_mitra'][(string) $asal->id]);
         $this->assertSame($mitra->id, $payload['warehouse_mitra'][(string) $tujuan->id]);
     }
 
@@ -287,8 +287,8 @@ class SuratJalanFormDataTest extends TestCase
         $response = $this->actingAs($operator)->get('/warehouse');
         $payload = $this->transferFormData($response);
 
-        $this->assertSame($asal->id, $payload['initial_origin_id']);
-        $this->assertSame($tujuan->id, $payload['initial_destination_id']);
+        $this->assertSame($asal->id, $payload['initial_asal_id']);
+        $this->assertSame($tujuan->id, $payload['initial_tujuan_id']);
         $this->assertSame($mitra->id, $payload['initial_mitra_id'], 'asal milik Mitra menentukan Mitra Surat Jalan');
         $this->assertRenderedSelection($response, $asal, $tujuan);
         $response->assertSee('PRJ-2608-0001 — Project PRJ-2608-0001');
@@ -307,8 +307,8 @@ class SuratJalanFormDataTest extends TestCase
         $response = $this->actingAs($operator)->get('/warehouse');
         $payload = $this->transferFormData($response);
 
-        $this->assertSame($asal->id, $payload['initial_origin_id']);
-        $this->assertSame($tujuan->id, $payload['initial_destination_id']);
+        $this->assertSame($asal->id, $payload['initial_asal_id']);
+        $this->assertSame($tujuan->id, $payload['initial_tujuan_id']);
         $this->assertSame($mitra->id, $payload['initial_mitra_id'], 'asal milik THC jatuh ke Mitra gudang tujuan');
         $this->assertRenderedSelection($response, $asal, $tujuan);
         $response->assertSee('PRJ-2608-0002 — Project PRJ-2608-0002');
@@ -332,8 +332,8 @@ class SuratJalanFormDataTest extends TestCase
                 ->get('/warehouse'),
         );
 
-        $this->assertSame($milikMitra->id, $payload['initial_origin_id']);
-        $this->assertSame($thc->id, $payload['initial_destination_id']);
+        $this->assertSame($milikMitra->id, $payload['initial_asal_id']);
+        $this->assertSame($thc->id, $payload['initial_tujuan_id']);
         $this->assertSame($mitra->id, $payload['initial_mitra_id']);
     }
 
@@ -341,9 +341,9 @@ class SuratJalanFormDataTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL');
+        $asal = $this->warehouse(null, 'WH-ASAL');
         $this->warehouse($mitra, 'WH-TUJUAN');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
 
         $payload = $this->transferFormData($this->actingAs($operator)->get('/warehouse'));
 

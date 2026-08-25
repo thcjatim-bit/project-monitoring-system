@@ -38,8 +38,8 @@ class SuratJalanService
                 throw ValidationException::withMessages(['status' => 'Surat Jalan sudah tidak berstatus terbit.']);
             }
 
-            $origin = Warehouse::query()->findOrFail($suratJalan->warehouse_asal_id);
-            $destination = Warehouse::query()->findOrFail($suratJalan->warehouse_tujuan_id);
+            $asal = Warehouse::query()->findOrFail($suratJalan->warehouse_asal_id);
+            $tujuan = Warehouse::query()->findOrFail($suratJalan->warehouse_tujuan_id);
             $requested = $this->requestedReceiptQuantities($suratJalan, $receivedItems);
 
             foreach ($suratJalan->items as $item) {
@@ -49,7 +49,7 @@ class SuratJalanService
                 }
 
                 $this->ensureTransitAvailability($item, $suratJalan, $qty);
-                $this->moveFromTransit($actor, $suratJalan, $item, $origin, $destination, $qty);
+                $this->moveFromTransit($actor, $suratJalan, $item, $asal, $tujuan, $qty);
                 $item->update(['qty_diterima' => $this->formatQuantity((float) $item->qty_diterima + (float) $qty)]);
             }
 
@@ -66,7 +66,7 @@ class SuratJalanService
                 'status' => $suratJalan->status,
             ]);
 
-            return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
+            return $suratJalan->fresh(['asal', 'tujuan', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
     }
 
@@ -82,7 +82,7 @@ class SuratJalanService
                 throw ValidationException::withMessages(['status' => 'Transit hanya dapat diselesaikan saat Surat Jalan berstatus terbit.']);
             }
 
-            $origin = Warehouse::query()->findOrFail($suratJalan->warehouse_asal_id);
+            $asal = Warehouse::query()->findOrFail($suratJalan->warehouse_asal_id);
             foreach ($suratJalan->items as $item) {
                 $remaining = $this->remainingQuantity($item);
                 if ($remaining <= 0) {
@@ -91,13 +91,13 @@ class SuratJalanService
 
                 $this->ensureTransitAvailability($item, $suratJalan, $this->formatQuantity($remaining));
                 if ($resolution === 'kembali_ke_asal') {
-                    $this->moveFromTransit($actor, $suratJalan, $item, $origin, $origin, $this->formatQuantity($remaining));
+                    $this->moveFromTransit($actor, $suratJalan, $item, $asal, $asal, $this->formatQuantity($remaining));
                 } else {
                     $this->record(
                         $actor,
                         $suratJalan,
                         $item,
-                        $origin,
+                        $asal,
                         'transit',
                         $suratJalan->id,
                         '-'.$this->formatQuantity($remaining),
@@ -120,7 +120,7 @@ class SuratJalanService
                 'resolution' => $resolution,
             ]);
 
-            return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
+            return $suratJalan->fresh(['asal', 'tujuan', 'items.material', 'items.serialNumber', 'items.drum', 'receiver']);
         });
     }
 
@@ -135,16 +135,16 @@ class SuratJalanService
                 throw ValidationException::withMessages(['status' => 'Surat Jalan yang sudah diterima tidak dapat dibatalkan.']);
             }
 
-            $origin = Warehouse::query()->findOrFail($suratJalan->warehouse_asal_id);
+            $asal = Warehouse::query()->findOrFail($suratJalan->warehouse_asal_id);
             foreach ($suratJalan->items as $item) {
                 $this->ensureTransitAvailability($item, $suratJalan, (string) $item->qty);
-                $this->moveFromTransit($actor, $suratJalan, $item, $origin, $origin, (string) $item->qty);
+                $this->moveFromTransit($actor, $suratJalan, $item, $asal, $asal, (string) $item->qty);
             }
 
             $suratJalan->update(['status' => 'dibatalkan']);
             $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_cancelled');
 
-            return $suratJalan->fresh(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
+            return $suratJalan->fresh(['asal', 'tujuan', 'items.material', 'items.serialNumber', 'items.drum']);
         });
     }
 
@@ -157,8 +157,8 @@ class SuratJalanService
                 throw ValidationException::withMessages(['status' => 'Retur hanya dapat dibuat dari Surat Jalan yang sudah diterima.']);
             }
 
-            $origin = Warehouse::query()->findOrFail($original->warehouse_tujuan_id);
-            $destination = Warehouse::query()->findOrFail($original->warehouse_asal_id);
+            $asal = Warehouse::query()->findOrFail($original->warehouse_tujuan_id);
+            $tujuan = Warehouse::query()->findOrFail($original->warehouse_asal_id);
             $returnQuantities = $this->requestedReturnQuantities($original, $data['items'] ?? []);
             $items = [];
             foreach ($original->items as $item) {
@@ -179,8 +179,8 @@ class SuratJalanService
             }
 
             $return = $this->issueTransfer($actor, [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'tanggal' => $data['tanggal'],
                 'pengirim' => $data['pengirim'],
                 'project_id' => $original->project_id,
@@ -200,7 +200,7 @@ class SuratJalanService
                 'returned_from_id' => $original->id,
             ]);
 
-            return $return->fresh(['origin', 'destination', 'returnedFrom', 'items.material', 'items.serialNumber', 'items.drum']);
+            return $return->fresh(['asal', 'tujuan', 'returnedFrom', 'items.material', 'items.serialNumber', 'items.drum']);
         });
     }
 
@@ -256,15 +256,15 @@ class SuratJalanService
     /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,project_id?:int|null,material_request_id?:int|null,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null}>} $data */
     private function issueTransfer(User $actor, array $data, ?int $returnedFromId = null): SuratJalan
     {
-        $origin = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_asal_id']);
-        $destination = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_tujuan_id']);
-        if ($origin->id === $destination->id) {
+        $asal = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_asal_id']);
+        $tujuan = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_tujuan_id']);
+        if ($asal->id === $tujuan->id) {
             throw ValidationException::withMessages(['warehouse_tujuan_id' => 'Warehouse tujuan harus berbeda dari asal.']);
         }
         $this->ensureEachDrumAppearsOnce($data['items']);
 
         $tanggal = CarbonImmutable::parse($data['tanggal']);
-        $mitraId = $origin->mitra_id ?? $destination->mitra_id;
+        $mitraId = $asal->mitra_id ?? $tujuan->mitra_id;
         $materialRequest = $this->lockMaterialRequest($data['material_request_id'] ?? null, $mitraId);
         $deviations = $materialRequest === null
             ? []
@@ -280,8 +280,8 @@ class SuratJalanService
         $suratJalan = SuratJalan::query()->create([
             'nomor' => $this->nextNumber($tanggal),
             'tanggal' => $tanggal->toDateString(),
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'mitra_id' => $mitraId,
             'material_request_id' => $materialRequest?->id,
             'project_id' => $projectId,
@@ -305,8 +305,8 @@ class SuratJalanService
             if ($deviation !== null) {
                 $deviationMaterialNames[$deviation][] = $material->nama;
             }
-            $item = $this->createItem($actor, $suratJalan, $material, $origin, $itemData, $mitraId, $deviation);
-            $this->moveToTransit($actor, $suratJalan, $item, $origin, $mitraId);
+            $item = $this->createItem($actor, $suratJalan, $material, $asal, $itemData, $mitraId, $deviation);
+            $this->moveToTransit($actor, $suratJalan, $item, $asal, $mitraId);
         }
 
         $this->recordProjectEvent($suratJalan, $actor, 'surat_jalan_issued', [
@@ -319,7 +319,7 @@ class SuratJalanService
             ]);
         }
 
-        return $suratJalan->load(['origin', 'destination', 'items.material', 'items.serialNumber', 'items.drum']);
+        return $suratJalan->load(['asal', 'tujuan', 'items.material', 'items.serialNumber', 'items.drum']);
     }
 
     private function lockMaterialRequest(?int $requestId, ?int $mitraId): ?MaterialRequest
@@ -491,7 +491,7 @@ class SuratJalanService
     }
 
     /** @param array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null} $data */
-    private function createItem(User $actor, SuratJalan $suratJalan, Material $material, Warehouse $origin, array $data, ?int $mitraId, ?string $deviation = null): SuratJalanItem
+    private function createItem(User $actor, SuratJalan $suratJalan, Material $material, Warehouse $asal, array $data, ?int $mitraId, ?string $deviation = null): SuratJalanItem
     {
         $qty = (string) $data['qty'];
         $item = [
@@ -507,13 +507,13 @@ class SuratJalanService
             if (($data['serial_number'] ?? null) !== null || ($data['drum_id'] ?? null) !== null) {
                 throw ValidationException::withMessages(['items' => 'Material biasa tidak menggunakan identitas SN atau drum.']);
             }
-            $this->ensureOrdinaryAvailability($origin, $material, $qty);
+            $this->ensureOrdinaryAvailability($asal, $material, $qty);
         } elseif ($material->jenis === 'ber_sn') {
             if (empty($data['serial_number']) || (float) $qty !== 1.0 || ($data['drum_id'] ?? null) !== null) {
                 throw ValidationException::withMessages(['items' => 'Material ber-SN wajib membawa satu Serial Number.']);
             }
             $serial = MaterialSn::query()->where('material_id', $material->id)->where('serial_number', $data['serial_number'])->lockForUpdate()->first();
-            if ($serial === null || $serial->status !== 'tersedia' || $serial->lokasi_tipe !== 'warehouse' || (int) $serial->lokasi_id !== $origin->id) {
+            if ($serial === null || $serial->status !== 'tersedia' || $serial->lokasi_tipe !== 'warehouse' || (int) $serial->lokasi_id !== $asal->id) {
                 throw ValidationException::withMessages(['items' => 'Serial Number tidak tersedia di Warehouse asal.']);
             }
             $item['material_sn_id'] = $serial->id;
@@ -522,10 +522,10 @@ class SuratJalanService
                 throw ValidationException::withMessages(['items' => 'Material drum kabel wajib membawa Drum ID.']);
             }
             $drum = Drum::query()->where('material_id', $material->id)->where('drum_id', $data['drum_id'])->lockForUpdate()->first();
-            if ($drum === null || $drum->lokasi_tipe !== 'warehouse' || (int) $drum->lokasi_id !== $origin->id) {
+            if ($drum === null || $drum->lokasi_tipe !== 'warehouse' || (int) $drum->lokasi_id !== $asal->id) {
                 throw ValidationException::withMessages(['items' => 'Drum tidak tersedia di Warehouse asal.']);
             }
-            $carrier = $this->drumForItem($actor, $suratJalan, $origin, $drum, $qty);
+            $carrier = $this->drumForItem($actor, $suratJalan, $asal, $drum, $qty);
             $item['drum_id'] = $carrier->id;
             $item['qty'] = $this->formatQuantity((float) $carrier->sisa);
         } else {
@@ -540,7 +540,7 @@ class SuratJalanService
      * yang berangkat sementara induknya tinggal di gudang asal; qty tepat sama dengan sisa
      * mengirim Drum itu sendiri. Baris selalu membawa seluruh sisa Drum yang berangkat.
      */
-    private function drumForItem(User $actor, SuratJalan $suratJalan, Warehouse $origin, Drum $drum, string $qty): Drum
+    private function drumForItem(User $actor, SuratJalan $suratJalan, Warehouse $asal, Drum $drum, string $qty): Drum
     {
         $sisa = (float) $drum->sisa;
         if ($sisa + 0.0005 < (float) $qty) {
@@ -550,7 +550,7 @@ class SuratJalanService
             return $drum;
         }
 
-        return $this->inventory->splitDrum($actor, $origin, $drum->drum_id, $qty, 'Surat Jalan '.$suratJalan->nomor);
+        return $this->inventory->splitDrum($actor, $asal, $drum->drum_id, $qty, 'Surat Jalan '.$suratJalan->nomor);
     }
 
     /** @param array<int,array{drum_id?:string|null}> $items */
@@ -572,19 +572,19 @@ class SuratJalanService
         return $note === '' ? null : $note;
     }
 
-    private function moveToTransit(User $actor, SuratJalan $suratJalan, SuratJalanItem $item, Warehouse $origin, ?int $mitraId): void
+    private function moveToTransit(User $actor, SuratJalan $suratJalan, SuratJalanItem $item, Warehouse $asal, ?int $mitraId): void
     {
-        $this->record($actor, $suratJalan, $item, $origin, 'warehouse', $origin->id, '-'.$item->qty, $mitraId, 'transfer');
-        $this->record($actor, $suratJalan, $item, $origin, 'transit', $suratJalan->id, $item->qty, $mitraId, 'transfer');
+        $this->record($actor, $suratJalan, $item, $asal, 'warehouse', $asal->id, '-'.$item->qty, $mitraId, 'transfer');
+        $this->record($actor, $suratJalan, $item, $asal, 'transit', $suratJalan->id, $item->qty, $mitraId, 'transfer');
         $this->moveIdentity($item, 'transit', $suratJalan->id, $mitraId);
     }
 
-    private function moveFromTransit(User $actor, SuratJalan $suratJalan, SuratJalanItem $item, Warehouse $origin, Warehouse $destination, string $qty): void
+    private function moveFromTransit(User $actor, SuratJalan $suratJalan, SuratJalanItem $item, Warehouse $asal, Warehouse $tujuan, string $qty): void
     {
-        $this->record($actor, $suratJalan, $item, $origin, 'transit', $suratJalan->id, '-'.$qty, $suratJalan->mitra_id, 'transfer');
-        $this->record($actor, $suratJalan, $item, $destination, 'warehouse', $destination->id, $qty, $destination->mitra_id, 'receipt');
+        $this->record($actor, $suratJalan, $item, $asal, 'transit', $suratJalan->id, '-'.$qty, $suratJalan->mitra_id, 'transfer');
+        $this->record($actor, $suratJalan, $item, $tujuan, 'warehouse', $tujuan->id, $qty, $tujuan->mitra_id, 'receipt');
         if ($item->material_sn_id !== null || $item->drum_id !== null) {
-            $this->moveIdentity($item, 'warehouse', $destination->id, $destination->mitra_id);
+            $this->moveIdentity($item, 'warehouse', $tujuan->id, $tujuan->mitra_id);
         }
     }
 
@@ -631,10 +631,10 @@ class SuratJalanService
         }
     }
 
-    private function ensureOrdinaryAvailability(Warehouse $origin, Material $material, string $qty): void
+    private function ensureOrdinaryAvailability(Warehouse $asal, Material $material, string $qty): void
     {
-        $stock = MaterialStok::query()->where('warehouse_id', $origin->id)->where('material_id', $material->id)
-            ->where('lokasi_tipe', 'warehouse')->where('lokasi_id', $origin->id)->first();
+        $stock = MaterialStok::query()->where('warehouse_id', $asal->id)->where('material_id', $material->id)
+            ->where('lokasi_tipe', 'warehouse')->where('lokasi_id', $asal->id)->first();
         if ($stock === null || (float) $stock->qty + 0.0005 < (float) $qty) {
             throw ValidationException::withMessages(['items' => 'Saldo material tidak mencukupi di Warehouse asal.']);
         }

@@ -30,10 +30,10 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         // Gudang tujuan terpilih saat muat pertama adalah yang pertama menurut nama di antara
         // seluruh gudang aktif -- gudang asal sendiri ikut jadi kandidat tujuan, jadi namanya
         // sengaja diurutkan paling belakang supaya tujuan terpilih adalah gudang mitra.
-        $origin = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'A Gudang Mitra');
         $this->warehouse($mitraLain, 'WH-LAIN', 'B Gudang Mitra Lain');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
 
         $lengkap = Material::factory()->create(['jenis' => 'biasa']);
         $belum = Material::factory()->create(['jenis' => 'biasa']);
@@ -41,7 +41,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $requestMitraLain = $this->materialRequest($mitraLain, 'disetujui', [[$belum, 3]]);
         $this->project($mitra, 'PRJ-2608-0001');
         $this->project($mitraLain, 'PRJ-2608-0002');
-        $this->terbitkan($operator, $origin, $tujuan, [[$lengkap, '10']], $request);
+        $this->terbitkan($operator, $asal, $tujuan, [[$lengkap, '10']], $request);
 
         $response = $this->actingAs($operator)->get('/warehouse')->assertOk();
 
@@ -60,9 +60,9 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     public function test_mitra_efektif_null_merender_select_project_disabled_dengan_opsi_penjelas(): void
     {
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         // Tanpa Material ber-Unit aktif, panel Terbitkan Surat Jalan tidak merender form sama sekali.
         Material::factory()->create(['jenis' => 'biasa']);
 
@@ -78,9 +78,9 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     public function test_baris_item_membawa_sumber_sebagai_hidden_input(): void
     {
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         Material::factory()->create(['jenis' => 'biasa']);
 
         $this->actingAs($operator)
@@ -93,14 +93,14 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
-        $this->terimaStok($operator, $origin, $material, '10');
+        $this->terimaStok($operator, $asal, $material, '10');
 
         $this->actingAs($operator)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => '',
             'project_id' => '',
@@ -118,14 +118,14 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $project = $this->project($mitra, 'PRJ-2608-0001');
         $request = $this->materialRequest($mitra, 'disetujui', [[$material, 10]], $project);
 
-        $this->terbitkan($operator, $origin, $tujuan, [[$material, '10']], $request, $project->id);
+        $this->terbitkan($operator, $asal, $tujuan, [[$material, '10']], $request, $project->id);
 
         $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
         $this->assertSame($request->id, $suratJalan->material_request_id);
@@ -142,15 +142,15 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'A Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $request = $this->materialRequest($mitra, 'disetujui', [[$material, 10]]);
-        $this->terimaStok($operator, $origin, $material, '10');
+        $this->terimaStok($operator, $asal, $material, '10');
 
         $this->actingAs($operator)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request->id,
             'tanggal' => '2026-08-22',
@@ -172,18 +172,18 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $diminta = Material::factory()->create(['jenis' => 'biasa']);
         $asing = Material::factory()->create(['jenis' => 'biasa']);
         $project = $this->project($mitra, 'PRJ-2608-0001');
         $request = $this->materialRequest($mitra, 'disetujui', [[$diminta, 10]], $project);
-        $this->terimaStok($operator, $origin, $diminta, '4');
-        $this->terimaStok($operator, $origin, $asing, '2');
+        $this->terimaStok($operator, $asal, $diminta, '4');
+        $this->terimaStok($operator, $asal, $asing, '2');
 
         $this->actingAs($operator)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request->id,
             'project_id' => $project->id,
@@ -216,14 +216,14 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
-        $this->terimaStok($operator, $origin, $material, '10');
+        $this->terimaStok($operator, $asal, $material, '10');
 
         $this->actingAs($operator)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
@@ -248,18 +248,18 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
+        $asal = $this->warehouse(null, 'WH-ASAL', 'Z Gudang THC');
         $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'A Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal->users()->attach($operator);
         $diminta = Material::factory()->create(['jenis' => 'biasa']);
         $asing = Material::factory()->create(['jenis' => 'biasa']);
         $project = $this->project($mitra, 'PRJ-2608-0001');
         $request = $this->materialRequest($mitra, 'disetujui', [[$diminta, 4]], $project);
-        $this->terimaStok($operator, $origin, $diminta, '4');
-        $this->terimaStok($operator, $origin, $asing, '5');
+        $this->terimaStok($operator, $asal, $diminta, '4');
+        $this->terimaStok($operator, $asal, $asing, '5');
 
         $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request->id,
             'project_id' => $project->id,
@@ -311,14 +311,14 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     public function test_penolakan_mempertahankan_indeks_lama_dan_menandai_identitas_yang_sudah_tidak_tersedia(): void
     {
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
-        $destination = $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
-        $origin->users()->attach($operator);
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $tujuan = $this->warehouse(null, 'WH-TUJUAN', 'B Gudang THC');
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'ber_sn']);
 
         $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-22',
             'items' => [
                 4 => [
@@ -345,17 +345,17 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
-        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
 
         foreach (['selesai', 'ditutup'] as $status) {
             $request = $this->materialRequest($mitra, $status, [[$material, 4]]);
 
             $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-22',
                 'items' => [
@@ -383,17 +383,17 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
-        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
 
         foreach (['diajukan', 'ditolak'] as $status) {
             $request = $this->materialRequest($mitra, $status, [[$material, 4]]);
 
             $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-22',
                 'items' => [
@@ -429,8 +429,8 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             );
 
             $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'material_request_id' => $request->id,
                 'tanggal' => '2026-08-22',
                 'pengirim' => 'Petugas Gudang',
@@ -447,15 +447,15 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
-        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $request = $this->materialRequest($mitra, 'diajukan', [[$material, 4]]);
 
         $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request->id,
             'tanggal' => '2026-08-22',
             'items' => [
@@ -483,15 +483,15 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $mitra = Mitra::factory()->create();
         $mitraLain = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
-        $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
-        $destination = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
-        $origin->users()->attach($operator);
+        $asal = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
+        $tujuan = $this->warehouse($mitra, 'WH-TUJUAN', 'B Gudang Mitra');
+        $asal->users()->attach($operator);
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $request = $this->materialRequest($mitraLain, 'ditutup', [[$material, 4]]);
 
         $this->actingAs($operator)->from('/warehouse')->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request->id,
             'tanggal' => '2026-08-22',
             'items' => [
@@ -529,18 +529,18 @@ class SuratJalanRequestDrivenFormTest extends TestCase
     /** @param  list<array{0: Material, 1: string}>  $lines */
     private function terbitkan(
         User $operator,
-        Warehouse $origin,
+        Warehouse $asal,
         Warehouse $tujuan,
         array $lines,
         ?MaterialRequest $request = null,
         ?int $projectId = null,
     ): void {
         foreach ($lines as [$material, $qty]) {
-            $this->terimaStok($operator, $origin, $material, $qty);
+            $this->terimaStok($operator, $asal, $material, $qty);
         }
 
         $this->actingAs($operator)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
+            'warehouse_asal_id' => $asal->id,
             'warehouse_tujuan_id' => $tujuan->id,
             'material_request_id' => $request?->id,
             'project_id' => $projectId,

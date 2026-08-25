@@ -68,7 +68,7 @@ class CommandCenterQuery
         return SuratJalan::query()
             ->where('status', 'terbit')
             ->where('issued_at', '<', $cutoff)
-            ->with(['origin', 'destination', 'items.material.unit'])
+            ->with(['asal', 'tujuan', 'items.material.unit'])
             ->latest('issued_at')
             ->get();
     }
@@ -273,7 +273,7 @@ class CommandCenterQuery
 
         if ($actor->hasIzin('operate_warehouse')) {
             SuratJalan::query()
-                ->with(['origin', 'destination', 'mitra'])
+                ->with(['asal', 'tujuan', 'mitra'])
                 ->latest('updated_at')
                 ->limit($limit)
                 ->get()
@@ -348,14 +348,14 @@ class CommandCenterQuery
             'diterima' => $suratJalan->received_at ?? $suratJalan->updated_at,
             default => $suratJalan->updated_at,
         } ?? $suratJalan->issued_at ?? CarbonImmutable::now();
-        $origin = $suratJalan->origin?->nama ?? 'Warehouse asal tidak tersedia';
-        $destination = $suratJalan->destination?->nama ?? 'Warehouse tujuan tidak tersedia';
+        $asal = $suratJalan->asal?->nama ?? 'Warehouse asal tidak tersedia';
+        $tujuan = $suratJalan->tujuan?->nama ?? 'Warehouse tujuan tidak tersedia';
 
         return $this->activity(
             source: 'Surat Jalan',
             entity: 'Surat Jalan',
             title: $suratJalan->nomor,
-            description: $origin.' → '.$destination,
+            description: $asal.' → '.$tujuan,
             status: $this->suratJalanStatus($suratJalan->status),
             occurredAt: $occurredAt,
             url: route('warehouse.transfers.print', $suratJalan),

@@ -10,7 +10,7 @@
         <div>
             <p class="ui-page__eyebrow">Detail Surat Jalan</p>
             <h1>{{ $suratJalan->nomor }}</h1>
-            <p class="ui-page__subtitle">{{ $suratJalan->origin->kode }} — {{ $suratJalan->origin->nama }} → {{ $suratJalan->destination->kode }} — {{ $suratJalan->destination->nama }}</p>
+            <p class="ui-page__subtitle">{{ $suratJalan->asal->kode }} — {{ $suratJalan->asal->nama }} → {{ $suratJalan->tujuan->kode }} — {{ $suratJalan->tujuan->nama }}</p>
         </div>
         <div class="ui-page__actions">
             <a class="ui-button ui-button--muted" href="{{ route('warehouse.transfers.index') }}">Kembali</a>
@@ -77,7 +77,7 @@
         </section>
     @endif
 
-    @if($isThc && auth()->user()->hasIzin('operate_warehouse') && $canManageOrigin && $suratJalan->status === 'terbit')
+    @if($isThc && auth()->user()->hasIzin('operate_warehouse') && $canManageAsal && $suratJalan->status === 'terbit')
         <section class="ui-panel" style="margin-top:18px">
             <h2>Kelola Transit</h2><p class="ui-help">Batalkan hanya tersedia jika belum ada penerimaan. Selisih sebagian dapat diselesaikan sebagai hilang atau kembali ke asal.</p>
             @if($suratJalan->items->every(fn ($item) => (float) $item->qty_diterima === 0.0))
@@ -90,7 +90,7 @@
         </section>
     @endif
 
-    @if($isThc && auth()->user()->hasIzin('operate_warehouse') && $canManageDestination && $suratJalan->status === 'diterima')
+    @if($isThc && auth()->user()->hasIzin('operate_warehouse') && $canManageTujuan && $suratJalan->status === 'diterima')
         <section class="ui-panel" style="margin-top:18px">
             <h2>Retur Material</h2><p class="ui-help">Retur selalu diterbitkan sebagai Surat Jalan baru arah sebaliknya.</p>
             @if($returnableItems->isEmpty())
@@ -110,7 +110,7 @@
         </section>
     @endif
 
-    @if($isThc && auth()->user()->hasIzin('operate_warehouse') && $canManageDestination)
+    @if($isThc && auth()->user()->hasIzin('operate_warehouse') && $canManageTujuan)
         <section class="ui-panel ui-panel--wide" style="margin-top:18px">
             <h2>Koreksi Buku Transaksi</h2><p class="ui-help">Koreksi tidak mengubah baris asli. Sistem menambahkan pembalikan dan nilai koreksi dengan alasan.</p>
             @forelse($transactions->where('jenis_transaksi', 'receipt')->whereNull('koreksi_dari_id') as $transaction)

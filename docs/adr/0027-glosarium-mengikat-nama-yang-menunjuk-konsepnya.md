@@ -40,6 +40,10 @@ Aturan ini tidak mewajibkan penyisiran seluruh repo dalam satu tiket. Ia mengika
 
 Contoh yang sudah terlihat dan sengaja **tidak** dimasukkan ke #165: relasi `returnedFrom()` di `SuratJalan.php` menunjuk konsep glosarium **Retur**. Ia jadi tiket turunan: [#167](https://github.com/thcjatim-bit/project-monitoring-system/issues/167).
 
+Ke tiket yang sama masuk `$original` di `SuratJalanService::createReturn()`: ia memegang **Surat Jalan asal** yang diretur — konsep yang sama, dieja Inggris. Ia sengaja tidak ikut #165 karena ejaan penggantinya menuntut keputusan yang tidak dimiliki #165: di fungsi itu `$asal` sudah dipakai untuk gudang asal retur, yang justru gudang **tujuan** milik Surat Jalan asalnya. Rename refleks di sana menukar dua arti dalam satu badan fungsi.
+
+Satu hal yang harus dibawa #167: **penjaganya buta terhadap kasus ini.** Regex penjaga `origin(?!al)` mengecualikan `original` supaya `getRawOriginal()` dan Original Baseline tidak terjaring, jadi `$original` lolos selamanya — bukan karena ia patuh, melainkan karena ia berada di balik lookahead. Pengecualian itu benar untuk dua konsep non-glosarium tadi dan salah untuk yang satu ini; grep tidak bisa memisahkannya. #167 karena itu tidak boleh memakai penjaga ini sebagai bukti selesai, dan tidak ada gunanya mempersempit lookahead-nya.
+
 Yang tidak boleh terjadi sebaliknya: **membuat butir glosarium baru demi membenarkan sebuah rename**. `issuer()`/`receiver()` tidak punya butir glosarium, jadi aturan ini diam soal keduanya. Glosarium tumbuh karena domainnya butuh istilah, bukan karena kode butuh alasan.
 
 ## Alternatif yang ditolak

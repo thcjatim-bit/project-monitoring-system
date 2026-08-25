@@ -29,7 +29,7 @@ class SuratJalanController extends Controller
             : $this->assignedWarehouses($request)->modelKeys();
 
         $transfers = SuratJalan::query()
-            ->with(['origin', 'destination', 'items.material.unit'])
+            ->with(['asal', 'tujuan', 'items.material.unit'])
             ->when(
                 $readOnlyTransit,
                 fn ($query) => $query->where('mitra_id', $request->user()->mitra_id),
@@ -51,14 +51,14 @@ class SuratJalanController extends Controller
     public function show(Request $request, SuratJalan $suratJalan): View
     {
         $suratJalan->load([
-            'origin', 'destination', 'mitra', 'issuer', 'receiver',
+            'asal', 'tujuan', 'mitra', 'issuer', 'receiver',
             'returnedFrom', 'materialRequest', 'project',
             'items.material.unit', 'items.serialNumber', 'items.drum',
         ]);
-        $canOperateOrigin = $request->user()->canOperateWarehouse($suratJalan->origin, 'operate_warehouse');
-        $canOperateDestination = $request->user()->canOperateWarehouse($suratJalan->destination, 'operate_warehouse');
+        $canOperateAsal = $request->user()->canOperateWarehouse($suratJalan->asal, 'operate_warehouse');
+        $canOperateTujuan = $request->user()->canOperateWarehouse($suratJalan->tujuan, 'operate_warehouse');
 
-        abort_unless($canOperateOrigin || $canOperateDestination || $request->user()->hasIzin('read_transit'), 403);
+        abort_unless($canOperateAsal || $canOperateTujuan || $request->user()->hasIzin('read_transit'), 403);
 
         return view('warehouse.transfer-show', [
             'suratJalan' => $suratJalan,
@@ -67,9 +67,9 @@ class SuratJalanController extends Controller
                 ->where('surat_jalan_id', $suratJalan->id)
                 ->latest()
                 ->get(),
-            'canReceive' => $canOperateDestination && $suratJalan->status === 'terbit',
-            'canManageOrigin' => $canOperateOrigin,
-            'canManageDestination' => $canOperateDestination,
+            'canReceive' => $canOperateTujuan && $suratJalan->status === 'terbit',
+            'canManageAsal' => $canOperateAsal,
+            'canManageTujuan' => $canOperateTujuan,
         ]);
     }
 
@@ -98,10 +98,10 @@ class SuratJalanController extends Controller
             // karena string yang tidak menyentuh keputusan apa pun tidak cocok.
         ]);
 
-        $origin = Warehouse::query()->findOrFail($data['warehouse_asal_id']);
-        $destination = Warehouse::query()->findOrFail($data['warehouse_tujuan_id']);
-        abort_unless($request->user()->canOperateWarehouse($origin, 'operate_warehouse'), 403);
-        abort_unless($request->user()->mitra_id === null || $destination->mitra_id === $request->user()->mitra_id, 403);
+        $asal = Warehouse::query()->findOrFail($data['warehouse_asal_id']);
+        $tujuan = Warehouse::query()->findOrFail($data['warehouse_tujuan_id']);
+        abort_unless($request->user()->canOperateWarehouse($asal, 'operate_warehouse'), 403);
+        abort_unless($request->user()->mitra_id === null || $tujuan->mitra_id === $request->user()->mitra_id, 403);
 
         $suratJalan = $service->issueDirect($request->user(), $data);
 
@@ -110,8 +110,8 @@ class SuratJalanController extends Controller
 
     public function receive(Request $request, SuratJalan $suratJalan, SuratJalanService $service): RedirectResponse
     {
-        $destination = Warehouse::query()->findOrFail($suratJalan->warehouse_tujuan_id);
-        abort_unless($request->user()->canOperateWarehouse($destination, 'operate_warehouse'), 403);
+        $tujuan = Warehouse::query()->findOrFail($suratJalan->warehouse_tujuan_id);
+        abort_unless($request->user()->canOperateWarehouse($tujuan, 'operate_warehouse'), 403);
 
         $data = $request->validate([
             'items' => ['sometimes', 'array', 'min:1'],
@@ -178,7 +178,7 @@ class SuratJalanController extends Controller
     public function print(SuratJalan $suratJalan): Response
     {
         return response()->view('warehouse.surat-jalan-print', [
-            'suratJalan' => $suratJalan->load(['origin', 'destination', 'mitra', 'materialRequest', 'project', 'issuer', 'receiver', 'items.material.unit', 'items.serialNumber', 'items.drum']),
+            'suratJalan' => $suratJalan->load(['asal', 'tujuan', 'mitra', 'materialRequest', 'project', 'issuer', 'receiver', 'items.material.unit', 'items.serialNumber', 'items.drum']),
         ]);
     }
 
@@ -191,7 +191,7 @@ class SuratJalanController extends Controller
         $warehouseIds = $readOnlyTransit ? [] : $this->assignedWarehouses(request())->modelKeys();
 
         $stocks = MaterialStok::query()
-            ->with(['material.unit', 'warehouse', 'suratJalan.origin', 'suratJalan.destination', 'suratJalan.items'])
+            ->with(['material.unit', 'warehouse', 'suratJalan.asal', 'suratJalan.tujuan', 'suratJalan.items'])
             ->where('lokasi_tipe', 'transit')
             ->where('qty', '>', 0)
             ->when(

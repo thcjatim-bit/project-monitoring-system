@@ -44,12 +44,12 @@ class SuratJalan extends Model
         ];
     }
 
-    public function origin(): BelongsTo
+    public function asal(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_asal_id');
     }
 
-    public function destination(): BelongsTo
+    public function tujuan(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_tujuan_id');
     }

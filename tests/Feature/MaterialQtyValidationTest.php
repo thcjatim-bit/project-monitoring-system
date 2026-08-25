@@ -103,23 +103,23 @@ class MaterialQtyValidationTest extends TestCase
 
     public function test_surat_jalan_issue_rejects_fractional_qty_before_creating_a_transfer(): void
     {
-        $origin = $this->warehouse(null, 'WH-ASAL-QTY');
-        $destination = $this->warehouse(null, 'WH-TUJUAN-QTY');
+        $asal = $this->warehouse(null, 'WH-ASAL-QTY');
+        $tujuan = $this->warehouse(null, 'WH-TUJUAN-QTY');
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith(null, 'operate_warehouse');
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $this->actingAs($user)->post(route('warehouse.stock.receive'), [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => '10',
             'reason' => 'Stok awal',
         ])->assertRedirect();
 
         $response = $this->actingAs($user)->post(route('warehouse.transfers.issue'), [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-24',
             'pengirim' => 'Petugas Gudang',
             'items' => [['material_id' => $material->id, 'qty' => '2.5']],
@@ -297,22 +297,22 @@ class MaterialQtyValidationTest extends TestCase
     /** @return array{0:int,1:int,2:User} */
     private function issuedTransfer(): array
     {
-        $origin = $this->warehouse(null, 'WH-TRANSFER-QTY-ASAL');
-        $destination = $this->warehouse(null, 'WH-TRANSFER-QTY-TUJUAN');
+        $asal = $this->warehouse(null, 'WH-TRANSFER-QTY-ASAL');
+        $tujuan = $this->warehouse(null, 'WH-TRANSFER-QTY-TUJUAN');
         $material = Material::factory()->create(['jenis' => 'biasa']);
         $user = $this->userWith(null, 'operate_warehouse');
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $this->actingAs($user)->post(route('warehouse.stock.receive'), [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => '10',
             'reason' => 'Stok awal',
         ])->assertRedirect();
         $this->actingAs($user)->post(route('warehouse.transfers.issue'), [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-24',
             'pengirim' => 'Petugas Gudang',
             'items' => [['material_id' => $material->id, 'qty' => '4']],

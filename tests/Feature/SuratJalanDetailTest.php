@@ -28,10 +28,10 @@ class SuratJalanDetailTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $user = $this->userWith($mitra, 'operate_warehouse');
-        $origin = $this->warehouse($mitra, 'WH-DETAIL-ASAL');
-        $destination = $this->warehouse($mitra, 'WH-DETAIL-TUJUAN');
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal = $this->warehouse($mitra, 'WH-DETAIL-ASAL');
+        $tujuan = $this->warehouse($mitra, 'WH-DETAIL-TUJUAN');
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
 
         $project = $this->asThc(fn (): Project => Project::query()->create([
             'id_project' => 'PRJ-2608-0120',
@@ -43,7 +43,7 @@ class SuratJalanDetailTest extends TestCase
         $foreign = Material::factory()->create(['kode' => 'MAT-ASING', 'nama' => 'Material asing']);
         $excess = Material::factory()->create(['kode' => 'MAT-LEBIH', 'nama' => 'Material berlebih']);
         $request = $this->materialRequest($mitra, 'disetujui', [[$requested, 4]], $project);
-        $suratJalan = $this->createTransfer($mitra, $user, $origin, $destination, $request, $project, [
+        $suratJalan = $this->createTransfer($mitra, $user, $asal, $tujuan, $request, $project, [
             [
                 'material' => $requested,
                 'qty' => 4,
@@ -98,12 +98,12 @@ class SuratJalanDetailTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $user = $this->userWith($mitra, 'operate_warehouse');
-        $origin = $this->warehouse($mitra, 'WH-EMPTY-ASAL');
-        $destination = $this->warehouse($mitra, 'WH-EMPTY-TUJUAN');
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal = $this->warehouse($mitra, 'WH-EMPTY-ASAL');
+        $tujuan = $this->warehouse($mitra, 'WH-EMPTY-TUJUAN');
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
         $material = Material::factory()->create(['kode' => 'MAT-COMPLIANT', 'nama' => 'Material patuh']);
-        $suratJalan = $this->createTransfer($mitra, $user, $origin, $destination, null, null, [[
+        $suratJalan = $this->createTransfer($mitra, $user, $asal, $tujuan, null, null, [[
             'material' => $material,
             'qty' => 2,
         ]]);
@@ -122,20 +122,20 @@ class SuratJalanDetailTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $user = $this->userWith($mitra, 'operate_warehouse');
-        $origin = $this->warehouse($mitra, 'WH-FROZEN-ASAL');
-        $destination = $this->warehouse($mitra, 'WH-FROZEN-TUJUAN');
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal = $this->warehouse($mitra, 'WH-FROZEN-ASAL');
+        $tujuan = $this->warehouse($mitra, 'WH-FROZEN-TUJUAN');
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
         $project = $this->project($mitra, 'PRJ-2608-0121');
         $material = Material::factory()->create(['kode' => 'MAT-FROZEN', 'nama' => 'Material frozen']);
         $request = $this->materialRequest($mitra, 'terpenuhi_sebagian', [[$material, 4]], $project);
 
-        $first = $this->createTransfer($mitra, $user, $origin, $destination, $request, $project, [[
+        $first = $this->createTransfer($mitra, $user, $asal, $tujuan, $request, $project, [[
             'material' => $material,
             'qty' => 4,
             'catatan' => 'Pengiriman pertama',
         ]]);
-        $this->createTransfer($mitra, $user, $origin, $destination, $request, $project, [[
+        $this->createTransfer($mitra, $user, $asal, $tujuan, $request, $project, [[
             'material' => $material,
             'qty' => 2,
             'catatan' => 'Pengiriman tambahan',
@@ -155,19 +155,19 @@ class SuratJalanDetailTest extends TestCase
         $mitraA = Mitra::factory()->create();
         $mitraB = Mitra::factory()->create();
         $userA = $this->userWith($mitraA, 'operate_warehouse');
-        $originA = $this->warehouse($mitraA, 'WH-TENANT-A-ASAL');
-        $destinationA = $this->warehouse($mitraA, 'WH-TENANT-A-TUJUAN');
-        $originA->users()->attach($userA);
-        $destinationA->users()->attach($userA);
-        $originB = $this->warehouse($mitraB, 'WH-TENANT-B-ASAL');
-        $destinationB = $this->warehouse($mitraB, 'WH-TENANT-B-TUJUAN');
+        $asalA = $this->warehouse($mitraA, 'WH-TENANT-A-ASAL');
+        $tujuanA = $this->warehouse($mitraA, 'WH-TENANT-A-TUJUAN');
+        $asalA->users()->attach($userA);
+        $tujuanA->users()->attach($userA);
+        $asalB = $this->warehouse($mitraB, 'WH-TENANT-B-ASAL');
+        $tujuanB = $this->warehouse($mitraB, 'WH-TENANT-B-TUJUAN');
         $material = Material::factory()->create(['kode' => 'MAT-TENANT', 'nama' => 'Material tenant']);
 
-        $own = $this->createTransfer($mitraA, $userA, $originA, $destinationA, null, null, [[
+        $own = $this->createTransfer($mitraA, $userA, $asalA, $tujuanA, null, null, [[
             'material' => $material,
             'qty' => 1,
         ]]);
-        $other = $this->createTransfer($mitraB, $userA, $originB, $destinationB, null, null, [[
+        $other = $this->createTransfer($mitraB, $userA, $asalB, $tujuanB, null, null, [[
             'material' => $material,
             'qty' => 1,
         ]]);
@@ -187,18 +187,18 @@ class SuratJalanDetailTest extends TestCase
     private function createTransfer(
         Mitra $mitra,
         User $issuer,
-        Warehouse $origin,
-        Warehouse $destination,
+        Warehouse $asal,
+        Warehouse $tujuan,
         ?MaterialRequest $request,
         ?Project $project,
         array $items,
     ): SuratJalan {
-        return $this->asThc(function () use ($mitra, $issuer, $origin, $destination, $request, $project, $items): SuratJalan {
+        return $this->asThc(function () use ($mitra, $issuer, $asal, $tujuan, $request, $project, $items): SuratJalan {
             $suratJalan = SuratJalan::query()->create([
                 'nomor' => 'SJ-DETAIL-'.Str::uuid(),
                 'tanggal' => '2026-08-24',
-                'warehouse_asal_id' => $origin->id,
-                'warehouse_tujuan_id' => $destination->id,
+                'warehouse_asal_id' => $asal->id,
+                'warehouse_tujuan_id' => $tujuan->id,
                 'mitra_id' => $mitra->id,
                 'material_request_id' => $request?->id,
                 'project_id' => $project?->id,

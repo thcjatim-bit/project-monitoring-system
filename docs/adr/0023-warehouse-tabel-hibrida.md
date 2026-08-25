@@ -2,6 +2,7 @@
 
 **Status**: Diterima — 2026-08-21
 **Menyempurnakan**: [ADR-0001](0001-isolasi-mitra-row-level-security.md), [ADR-0005](0005-alur-perpindahan-material-transit.md)
+**Nama diperbarui oleh**: [ADR-0027](0027-glosarium-mengikat-nama-yang-menunjuk-konsepnya.md) — sejak [#165](https://github.com/thcjatim-bit/project-monitoring-system/issues/165) relasi `origin`/`destination` bernama `asal()`/`tujuan()`, dan `MaterialInventoryController::destinationWarehouses()` bernama `tujuanWarehouses()`. Teks di bawah sengaja dibiarkan memakai nama yang berlaku saat keputusan ini diambil; keputusannya sendiri tidak berubah.
 
 ## Konteks
 

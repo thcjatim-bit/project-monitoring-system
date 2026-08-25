@@ -86,7 +86,7 @@ class MaterialOperationalUiTest extends TestCase
         // Petugas THC: form Terbitkan Surat Jalan hanya ada untuk User THC.
         $user = $this->userWithPermissions(null, 'operate_warehouse', 'read_master_data');
         $warehouse = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
-        $destination = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-TUJUAN']));
+        $tujuan = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-TUJUAN']));
         $warehouse->users()->attach($user);
         $material = Material::factory()->create(['kode' => 'MAT-HUB', 'nama' => 'Material Hub']);
 
@@ -99,7 +99,7 @@ class MaterialOperationalUiTest extends TestCase
             ->assertSee('Split drum')
             ->assertSee('Terbitkan Surat Jalan')
             ->assertSee($warehouse->nama)
-            ->assertSee($destination->kode)
+            ->assertSee($tujuan->kode)
             ->assertSee('MAT-HUB')
             ->assertSee('data-submit-loading', false);
     }
@@ -108,24 +108,24 @@ class MaterialOperationalUiTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $user = $this->userWithPermissions($mitra->id, 'operate_warehouse');
-        [$origin, $destination] = $this->asThc(fn (): array => [
+        [$asal, $tujuan] = $this->asThc(fn (): array => [
             Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-ASAL']),
             Warehouse::factory()->create(['mitra_id' => $mitra->id, 'kode' => 'WH-TUJUAN']),
         ]);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
         $material = Material::factory()->create(['kode' => 'MAT-QTY', 'nama' => 'Material Qty']);
 
         $this->actingAs($user)->post(route('warehouse.stock.receive'), [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => '2312279',
             'reason' => 'Stok awal',
         ])->assertRedirect();
 
         $this->actingAs($user)->post(route('warehouse.transfers.issue'), [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-20',
             'pengirim' => 'Petugas Gudang',
             'items' => [['material_id' => $material->id, 'qty' => '4']],
@@ -142,8 +142,8 @@ class MaterialOperationalUiTest extends TestCase
             ->assertDontSee('2312279.000')
             ->assertSee('Pengiriman masuk')
             ->assertSee($suratJalan->nomor)
-            ->assertSee($origin->nama)
-            ->assertSee($destination->nama)
+            ->assertSee($asal->nama)
+            ->assertSee($tujuan->nama)
             ->assertSee('Terima Pengiriman')
             ->assertSee(route('warehouse.transfers.show', $suratJalan), false);
     }
@@ -153,23 +153,23 @@ class MaterialOperationalUiTest extends TestCase
         $mitra = Mitra::factory()->create();
         // Petugas THC: form Terbitkan Surat Jalan hanya ada untuk User THC.
         $user = $this->userWithPermissions(null, 'operate_warehouse');
-        [$origin, $destination] = $this->asThc(fn (): array => [
+        [$asal, $tujuan] = $this->asThc(fn (): array => [
             Warehouse::factory()->create(['mitra_id' => $mitra->id]),
             Warehouse::factory()->create(['mitra_id' => $mitra->id]),
         ]);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
         $material = Material::factory()->create();
 
         $this->actingAs($user)->post(route('warehouse.stock.receive'), [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => '5',
             'reason' => 'Stok awal',
         ])->assertRedirect();
         $this->actingAs($user)->post(route('warehouse.transfers.issue'), [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-20',
             'pengirim' => 'Petugas Gudang',
             'items' => [['material_id' => $material->id, 'qty' => '2']],
@@ -200,23 +200,23 @@ class MaterialOperationalUiTest extends TestCase
     {
         $mitra = Mitra::factory()->create();
         $user = $this->userWithPermissions(null, 'operate_warehouse');
-        [$origin, $destination] = $this->asThc(fn (): array => [
+        [$asal, $tujuan] = $this->asThc(fn (): array => [
             Warehouse::factory()->create(['mitra_id' => $mitra->id]),
             Warehouse::factory()->create(['mitra_id' => $mitra->id]),
         ]);
-        $origin->users()->attach($user);
-        $destination->users()->attach($user);
+        $asal->users()->attach($user);
+        $tujuan->users()->attach($user);
         $material = Material::factory()->create(['kode' => 'MAT-TRANSFER', 'nama' => 'Material Transfer']);
 
         $this->actingAs($user)->post('/warehouse/stock/receive', [
-            'warehouse_id' => $origin->id,
+            'warehouse_id' => $asal->id,
             'material_id' => $material->id,
             'qty' => '5',
             'reason' => 'Stok awal',
         ])->assertRedirect();
         $this->actingAs($user)->post('/warehouse/transfers', [
-            'warehouse_asal_id' => $origin->id,
-            'warehouse_tujuan_id' => $destination->id,
+            'warehouse_asal_id' => $asal->id,
+            'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-19',
             'pengirim' => 'Petugas',
             'items' => [['material_id' => $material->id, 'qty' => '2']],
@@ -231,7 +231,7 @@ class MaterialOperationalUiTest extends TestCase
             ->assertSee('Koreksi Buku Transaksi')
             ->assertSee('Material Transfer');
 
-        $destination->users()->detach($user);
+        $tujuan->users()->detach($user);
 
         $this->actingAs($user)
             ->get(route('warehouse.transfers.show', $transferId))
@@ -268,5 +268,28 @@ class MaterialOperationalUiTest extends TestCase
         } finally {
             app(TenantDatabaseContext::class)->set(null, false);
         }
+    }
+
+    /**
+     * Kait yang dipakai `warehouse-material-form.js` untuk menemukan kedua select gudang. Sebelum
+     * #165 tidak ada satu pun test PHP yang menyebut atribut ini: penjaga glosarium hanya bisa
+     * membuktikan ejaan Inggrisnya hilang, bukan bahwa atributnya masih ada, jadi rename yang
+     * keliru menghapusnya akan lolos. Literal yang sama dipakai fixture DOM di
+     * tests/JavaScript/warehouse-material-form.test.js -- keduanya harus bergerak bersama.
+     */
+    public function test_form_terbitkan_surat_jalan_menandai_select_gudang_dengan_asal_dan_tujuan(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions(null, 'operate_warehouse', 'read_master_data');
+        $asal = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $asal->users()->attach($user);
+        // Form Terbitkan Surat Jalan hanya dirender bila ada Material dengan Unit/Satuan aktif.
+        Material::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('warehouse.index'))
+            ->assertOk()
+            ->assertSee('data-asal-select', false)
+            ->assertSee('data-tujuan-select', false);
     }
 }
