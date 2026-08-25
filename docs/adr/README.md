@@ -31,6 +31,7 @@ ADR di sini adalah keputusan yang sudah beku. Kalau pekerjaanmu bertentangan den
 | [0024](0024-daftar-request-material-prefill-bukan-plafon.md) | Daftar Request Material adalah prefill, bukan plafon Surat Jalan | Menyentuh form Terbitkan Surat Jalan, prefill dari request, atau penandaan baris menyimpang. |
 | [0025](0025-qty-material-bilangan-bulat.md) | Qty material adalah bilangan bulat, ditegakkan di aplikasi | Memvalidasi, membulatkan, atau memecah qty material di mana pun (server maupun klien). |
 | [0026](0026-klasifikasi-penyimpangan-kembar-di-klien.md) | Klasifikasi penyimpangan boleh kembar di klien, dijaga test kontrak | Mengubah `markDeviations()` di klien atau `classifyRequestDeviations()` di server — keduanya wajib bergerak bersama. |
+| [0027](0027-glosarium-mengikat-nama-yang-menunjuk-konsepnya.md) | Glosarium mengikat nama yang menunjuk konsepnya, di lapisan mana pun | Menamai apa pun yang menunjuk konsep glosarium — kolom, kelas, relasi, kunci payload, `data-*` — atau tergoda memakai padanan Inggrisnya. |
 
 ## Catatan penomoran
 
