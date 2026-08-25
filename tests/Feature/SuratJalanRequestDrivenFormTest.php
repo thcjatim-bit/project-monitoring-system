@@ -75,7 +75,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $response->assertDontSee('<option value="">— Tanpa Project —</option>', false);
     }
 
-    public function test_baris_item_membawa_asal_usul_sebagai_hidden_input(): void
+    public function test_baris_item_membawa_sumber_sebagai_hidden_input(): void
     {
         $operator = $this->userWith(null, 'operate_warehouse');
         $origin = $this->warehouse(null, 'WH-ASAL', 'A Gudang THC');
@@ -86,7 +86,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         $this->actingAs($operator)
             ->get('/warehouse')
             ->assertOk()
-            ->assertSee('<input type="hidden" name="items[0][asal]" value="manual" data-row-origin>', false);
+            ->assertSee('<input type="hidden" name="items[0][sumber]" value="operator" data-row-sumber-input>', false);
     }
 
     public function test_menerbitkan_surat_jalan_tanpa_memilih_request_tetap_bisa(): void
@@ -106,7 +106,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'project_id' => '',
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
-            'items' => [['material_id' => $material->id, 'qty' => '4', 'asal' => 'manual']],
+            'items' => [['material_id' => $material->id, 'qty' => '4', 'sumber' => 'operator']],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
@@ -155,7 +155,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'material_request_id' => $request->id,
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
-            'items' => [1 => ['material_id' => $material->id, 'qty' => '10', 'asal' => 'request']],
+            'items' => [1 => ['material_id' => $material->id, 'qty' => '10', 'sumber' => 'prefill']],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $suratJalan = SuratJalan::query()->latest('id')->firstOrFail();
@@ -190,8 +190,8 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
             'items' => [
-                ['material_id' => $diminta->id, 'qty' => '4', 'asal' => 'request', 'catatan' => 'Sisanya menyusul minggu depan'],
-                ['material_id' => $asing->id, 'qty' => '2', 'asal' => 'operator', 'catatan' => 'Diminta lisan oleh pengawas lapangan'],
+                ['material_id' => $diminta->id, 'qty' => '4', 'sumber' => 'prefill', 'catatan' => 'Sisanya menyusul minggu depan'],
+                ['material_id' => $asing->id, 'qty' => '2', 'sumber' => 'operator', 'catatan' => 'Diminta lisan oleh pengawas lapangan'],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -212,7 +212,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
      * isinya sah, jadi nilai apa pun -- termasuk yang tidak dikenal atau kosong -- lewat, dan
      * sisa payload tetap tersimpan utuh.
      */
-    public function test_asal_usul_baris_apa_pun_diterima_dan_payload_tersimpan_utuh(): void
+    public function test_sumber_baris_apa_pun_diterima_dan_payload_tersimpan_utuh(): void
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
@@ -228,8 +228,8 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
             'items' => [
-                ['material_id' => $material->id, 'qty' => '4', 'asal' => 'entah'],
-                ['material_id' => $material->id, 'qty' => '3', 'asal' => ''],
+                ['material_id' => $material->id, 'qty' => '4', 'sumber' => 'entah'],
+                ['material_id' => $material->id, 'qty' => '3', 'sumber' => ''],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -266,8 +266,8 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
             'items' => [
-                ['material_id' => $diminta->id, 'qty' => '4', 'asal' => 'request', 'catatan' => 'Sesuai permintaan'],
-                ['material_id' => $asing->id, 'qty' => '5', 'asal' => 'manual', 'catatan' => ''],
+                ['material_id' => $diminta->id, 'qty' => '4', 'sumber' => 'prefill', 'catatan' => 'Sesuai permintaan'],
+                ['material_id' => $asing->id, 'qty' => '5', 'sumber' => 'operator', 'catatan' => ''],
             ],
         ])
             ->assertRedirect('/warehouse')
@@ -326,7 +326,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                     'qty' => '1',
                     'serial_number' => 'SN-KEBURU-DIPAKAI',
                     'catatan' => 'Identitas lama',
-                    'asal' => 'manual',
+                    'sumber' => 'operator',
                 ],
             ],
         ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
@@ -363,7 +363,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                         'material_id' => $material->id,
                         'qty' => '3',
                         'catatan' => 'Tetap kirim langsung',
-                        'asal' => 'request',
+                        'sumber' => 'prefill',
                     ],
                 ],
             ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
@@ -371,7 +371,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
 
             $this->assertDoesNotMatchRegularExpression('/<option value="'.$request->id.'"/', $html);
-            $this->assertStringContainsString('data-row-asal="manual"', $html);
+            $this->assertStringContainsString('data-row-sumber="operator"', $html);
             $this->assertDoesNotMatchRegularExpression('/<select name="items\[7\]\[material_id\]"[^>]*disabled/', $html);
             $this->assertStringNotContainsString('<input type="hidden" name="items[7][material_id]"', $html);
             $this->assertStringContainsString('name="items[7][qty]"', $html);
@@ -379,7 +379,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
         }
     }
 
-    public function test_request_yang_belum_terminal_tidak_diubah_menjadi_kiriman_langsung_dan_asal_dipertahankan(): void
+    public function test_request_yang_belum_terminal_tidak_diubah_menjadi_kiriman_langsung_dan_sumber_dipertahankan(): void
     {
         $mitra = Mitra::factory()->create();
         $operator = $this->userWith(null, 'operate_warehouse');
@@ -401,25 +401,28 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                         'material_id' => $material->id,
                         'qty' => '3',
                         'catatan' => 'Tetap pertahankan konteks',
-                        'asal' => 'asal-yang-tidak-dinormalisasi',
+                        'sumber' => 'sumber-yang-tidak-dikenal',
                     ],
                     8 => [
                         'material_id' => $material->id,
                         'qty' => '2',
-                        'asal' => 'request',
+                        'sumber' => 'prefill',
                     ],
                 ],
             ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
 
             $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
 
-            $this->assertStringContainsString('data-row-asal="asal-yang-tidak-dinormalisasi"', $html);
+            // Nilai asing tidak menolak submit (#129), tapi yang dirender dinormalisasi ke `operator`:
+            // hanya dua nilai glosarium yang boleh muncul di DOM.
+            $this->assertStringContainsString('data-row-sumber="operator"', $html);
+            $this->assertStringNotContainsString('sumber-yang-tidak-dikenal', $html);
             $this->assertStringContainsString(
-                '<input type="hidden" name="items[7][asal]" value="asal-yang-tidak-dinormalisasi" data-row-origin>',
+                '<input type="hidden" name="items[7][sumber]" value="operator" data-row-sumber-input>',
                 $html,
             );
             $this->assertStringContainsString('value="Tetap pertahankan konteks"', $html);
-            $this->assertStringContainsString('data-row-asal="request"', $html);
+            $this->assertStringContainsString('data-row-sumber="prefill"', $html);
             $this->assertStringContainsString(
                 '<select name="items[8][material_id]" data-material-select required disabled',
                 $html,
@@ -432,7 +435,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                 'tanggal' => '2026-08-22',
                 'pengirim' => 'Petugas Gudang',
                 'items' => [
-                    ['material_id' => $material->id, 'qty' => '3', 'asal' => 'request'],
+                    ['material_id' => $material->id, 'qty' => '3', 'sumber' => 'prefill'],
                 ],
             ])->assertRedirect('/warehouse')->assertSessionHasErrors('status');
 
@@ -459,7 +462,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                 7 => [
                     'material_id' => $material->id,
                     'qty' => '3',
-                    'asal' => 'request',
+                    'sumber' => 'prefill',
                 ],
             ],
         ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
@@ -495,14 +498,14 @@ class SuratJalanRequestDrivenFormTest extends TestCase
                 7 => [
                     'material_id' => $material->id,
                     'qty' => '3',
-                    'asal' => 'request',
+                    'sumber' => 'prefill',
                 ],
             ],
         ])->assertRedirect('/warehouse')->assertSessionHasErrors('pengirim');
 
         $html = $this->actingAs($operator)->get('/warehouse')->assertOk()->getContent();
 
-        $this->assertStringContainsString('data-row-asal="request"', $html);
+        $this->assertStringContainsString('data-row-sumber="prefill"', $html);
         $this->assertStringContainsString(
             '<input type="hidden" name="items[7][material_id]" value="'.$material->id.'">',
             $html,
@@ -544,7 +547,7 @@ class SuratJalanRequestDrivenFormTest extends TestCase
             'tanggal' => '2026-08-22',
             'pengirim' => 'Petugas Gudang',
             'items' => array_map(
-                fn (array $line): array => ['material_id' => $line[0]->id, 'qty' => $line[1], 'asal' => 'request'],
+                fn (array $line): array => ['material_id' => $line[0]->id, 'qty' => $line[1], 'sumber' => 'prefill'],
                 $lines,
             ),
         ])->assertRedirect()->assertSessionHasNoErrors();
