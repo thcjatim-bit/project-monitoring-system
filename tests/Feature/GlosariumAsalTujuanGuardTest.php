@@ -61,9 +61,14 @@ class GlosariumAsalTujuanGuardTest extends TestCase
     ];
 
     /**
-     * `origin` tanpa diikuti `al`, supaya `original`, `original_baseline`, `originalId`, dan
-     * `getRawOriginal()` tidak ikut terjaring -- semuanya menunjuk konsep di luar glosarium
+     * `origin` tanpa diikuti `al`, supaya `original_baseline`, `originalId`, dan
+     * `getRawOriginal()` tidak ikut terjaring -- ketiganya menunjuk konsep di luar glosarium
      * `asal`, dan sebagian memang hidup di berkas yang terdaftar di atas.
+     *
+     * Lookahead ini punya satu korban yang diterima sadar: `$original` di
+     * `SuratJalanService::createReturn()` justru **menunjuk** konsep glosarium (Surat Jalan asal
+     * yang diretur), tapi lolos karena grep tidak bisa memisahkannya dari ketiga nama di atas.
+     * Ia ditagih di #167, bukan di sini; lihat ADR-0027.
      */
     private const EJAAN_INGGRIS = '/origin(?!al)|destination/i';
 
