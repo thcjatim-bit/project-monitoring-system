@@ -53,6 +53,12 @@ surface a human already watches.
   such issue means the last tick got through.
 - Reporting is best-effort and never masks the original error: the dispatcher
   still exits non-zero with the failure on stderr.
+- A tracker query that itself fails is not read as "no incident is open". The
+  dispatcher says so on stderr and reports nothing, rather than opening a fresh
+  issue on every tick a transient `gh` failure coincides with a broken one.
+
+The channel lives in `scripts/dispatch-failure.mjs`; `scripts/issue-autopilot.mjs`
+owns queue selection and dispatch only.
 
 ## Health check
 

@@ -20,9 +20,19 @@ import path from "node:path";
  */
 
 const WINDOWS_SHIM = /\.(cmd|bat)$/i;
+const DEFAULT_ENV_PREFIX = "PORTABLE";
 
-function envOverrideName(command) {
-    return `AUTOPILOT_${command.replace(/[^a-z0-9]+/gi, "_").toUpperCase()}_BIN`;
+/**
+ * The escape hatch for an environment this module cannot search its way out of:
+ * `<prefix>_<COMMAND>_BIN`. The prefix belongs to the caller, not here — the
+ * autopilot dispatcher passes `AUTOPILOT`, giving `AUTOPILOT_PASEO_BIN`.
+ */
+function envOverrideName(command, prefix = DEFAULT_ENV_PREFIX) {
+    return `${prefix}_${command.replace(/[^a-z0-9]+/gi, "_").toUpperCase()}_BIN`;
+}
+
+function isExecutableFile(candidate) {
+    return fs.existsSync(candidate) && fs.statSync(candidate).isFile();
 }
 
 function candidateNames(command, env, platform) {
@@ -66,14 +76,14 @@ function searchDirectories(env, platform) {
 export function resolveExecutable(command, options = {}) {
     const env = options.env ?? process.env;
     const platform = options.platform ?? process.platform;
-    const override = env[envOverrideName(command)];
+    const override = env[envOverrideName(command, options.envPrefix)];
 
     if (override) {
-        return fs.existsSync(override) ? path.resolve(override) : null;
+        return isExecutableFile(override) ? path.resolve(override) : null;
     }
 
     if (command.includes("/") || command.includes("\\")) {
-        return fs.existsSync(command) ? path.resolve(command) : null;
+        return isExecutableFile(command) ? path.resolve(command) : null;
     }
 
     const names = candidateNames(command, env, platform);
@@ -82,7 +92,7 @@ export function resolveExecutable(command, options = {}) {
         for (const name of names) {
             const candidate = path.join(directory, name);
 
-            if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+            if (isExecutableFile(candidate)) {
                 return path.resolve(candidate);
             }
         }
@@ -131,12 +141,12 @@ export function windowsShimCommandLine(file, args) {
 export function spawnPortable(command, args = [], options = {}) {
     const env = options.env ?? process.env;
     const platform = options.platform ?? process.platform;
-    const file = resolveExecutable(command, { env, platform });
+    const file = resolveExecutable(command, { env, platform, envPrefix: options.envPrefix });
 
     if (!file) {
         throw new Error(
             `${command} is not executable from this environment. `
-            + `Set ${envOverrideName(command)} to its absolute path, or add it to PATH.`,
+            + `Set ${envOverrideName(command, options.envPrefix)} to its absolute path, or add it to PATH.`,
         );
     }
 
