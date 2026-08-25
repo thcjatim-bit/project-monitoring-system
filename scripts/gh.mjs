@@ -23,11 +23,13 @@ export function jsonFrom(result, fallback) {
  */
 export function ghClient({ run, repo, cwd }) {
     return {
-        repo,
-        cwd,
-        /** Runs `gh <args> --repo <repo>`. Never throws on a non-zero exit; inspect `status`. */
-        call(args) {
-            return run("gh", [...args, "--repo", repo], { cwd, allowFailure: true });
+        /**
+         * Runs `gh <args> --repo <repo>`. With `allowFailure` (the default) a
+         * non-zero exit is returned in `status` instead of thrown, for callers
+         * that have to keep going; pass `false` where the call must succeed.
+         */
+        call(args, { allowFailure = true } = {}) {
+            return run("gh", [...args, "--repo", repo], { cwd, allowFailure });
         },
     };
 }

@@ -20,18 +20,24 @@ import path from "node:path";
  */
 
 const WINDOWS_SHIM = /\.(cmd|bat)$/i;
-const DEFAULT_ENV_PREFIX = "PORTABLE";
 
 /**
  * The escape hatch for an environment this module cannot search its way out of:
  * `<prefix>_<COMMAND>_BIN`. The prefix belongs to the caller, not here — the
  * autopilot dispatcher passes `AUTOPILOT`, giving `AUTOPILOT_PASEO_BIN`.
+ *
+ * It is required rather than defaulted: a default would let a caller that
+ * forgot it read some other variable's name and fail the search quietly.
  */
-function envOverrideName(command, prefix = DEFAULT_ENV_PREFIX) {
+function envOverrideName(command, prefix) {
+    if (!prefix) {
+        throw new Error("envPrefix is required: it names the override variable, e.g. AUTOPILOT_PASEO_BIN.");
+    }
+
     return `${prefix}_${command.replace(/[^a-z0-9]+/gi, "_").toUpperCase()}_BIN`;
 }
 
-function isExecutableFile(candidate) {
+function isRegularFile(candidate) {
     return fs.existsSync(candidate) && fs.statSync(candidate).isFile();
 }
 
@@ -79,11 +85,11 @@ export function resolveExecutable(command, options = {}) {
     const override = env[envOverrideName(command, options.envPrefix)];
 
     if (override) {
-        return isExecutableFile(override) ? path.resolve(override) : null;
+        return isRegularFile(override) ? path.resolve(override) : null;
     }
 
     if (command.includes("/") || command.includes("\\")) {
-        return isExecutableFile(command) ? path.resolve(command) : null;
+        return isRegularFile(command) ? path.resolve(command) : null;
     }
 
     const names = candidateNames(command, env, platform);
@@ -92,7 +98,7 @@ export function resolveExecutable(command, options = {}) {
         for (const name of names) {
             const candidate = path.join(directory, name);
 
-            if (isExecutableFile(candidate)) {
+            if (isRegularFile(candidate)) {
                 return path.resolve(candidate);
             }
         }

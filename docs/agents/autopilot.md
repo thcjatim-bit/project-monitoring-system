@@ -2,7 +2,10 @@
 
 This document is the durable contract for the scheduled issue dispatcher and its
 single-ticket implementation workers. The dispatcher is implemented by
-`scripts/issue-autopilot.mjs`.
+`scripts/issue-autopilot.mjs`, which owns queue selection and dispatch and
+leans on `scripts/dispatch-failure.mjs` for the failure channel below,
+`scripts/gh.mjs` for `gh` calls, and `scripts/portable-spawn.mjs` for reaching
+`paseo`.
 
 ## Queue contract
 
@@ -57,8 +60,10 @@ surface a human already watches.
   dispatcher says so on stderr and reports nothing, rather than opening a fresh
   issue on every tick a transient `gh` failure coincides with a broken one.
 
-The channel lives in `scripts/dispatch-failure.mjs`; `scripts/issue-autopilot.mjs`
-owns queue selection and dispatch only.
+The channel covers a broken `paseo`, not a broken `gh`. If the tracker is
+unreachable too, all that is left is the dispatcher's own stderr and its
+non-zero exit; there is no signal a monitor could watch. Closing that gap needs
+a second channel and is not built.
 
 ## Health check
 

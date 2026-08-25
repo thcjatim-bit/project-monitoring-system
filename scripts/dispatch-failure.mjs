@@ -74,6 +74,24 @@ export function shouldReportFailure(lastComment, signature, now = Date.now()) {
     return !Number.isFinite(age) || age >= FAILURE_REPEAT_MS;
 }
 
+/**
+ * Says on stderr that the tracker could not be reached, so the one case this
+ * channel cannot cover — `gh` broken as well — is at least stated rather than
+ * looking like a quiet success.
+ */
+function trackerUnreachable(attempt) {
+    console.error(
+        `Could not ${attempt}: the issue tracker is unreachable. `
+        + "The dispatch failure is on stderr and the exit code is non-zero.",
+    );
+}
+
+function announce(result, attempt) {
+    if (result.status !== 0) {
+        trackerUnreachable(attempt);
+    }
+}
+
 function ensureFailureLabel(gh) {
     // No `--force`: the label may already exist with a description this repo
     // owns, and re-creating it would silently rewrite that.
@@ -108,6 +126,13 @@ function findFailureIssue(gh) {
     return { known: true, number: jsonFrom(result, [])[0]?.number ?? null };
 }
 
+/**
+ * The most recent report on the sticky issue, if it can be read.
+ *
+ * Same rule as `findFailureIssue`: a query that failed is not "there is no
+ * earlier report". Reading it that way would post a duplicate comment on every
+ * tick, because an absent report always warrants one.
+ */
 function lastFailureComment(gh, issueNumber) {
     const result = gh.call([
         "issue", "view", String(issueNumber),
@@ -115,7 +140,11 @@ function lastFailureComment(gh, issueNumber) {
         "--jq", `[.comments[] | select(.body | contains("${FAILURE_MARKER}"))] | last | {createdAt, body}`,
     ]);
 
-    return result.status === 0 ? jsonFrom(result, null) : null;
+    if (result.status !== 0) {
+        return { known: false, comment: null };
+    }
+
+    return { known: true, comment: jsonFrom(result, null) };
 }
 
 /**
@@ -131,28 +160,36 @@ export function reportDispatchFailure(gh, error, options = {}) {
         const existing = findFailureIssue(gh);
 
         if (!existing.known) {
-            console.error(
-                "Could not reach the issue tracker to report the dispatch failure; "
-                + "the failure is on stderr and the exit code is non-zero.",
-            );
+            trackerUnreachable("check for an open dispatch failure issue");
 
             return;
         }
 
         if (existing.number === null) {
             ensureFailureLabel(gh);
-            gh.call([
+            announce(gh.call([
                 "issue", "create",
                 "--title", DISPATCH_FAILURE_TITLE,
                 "--label", DISPATCH_FAILURE_LABEL,
                 "--body", body,
-            ]);
+            ]), "open the dispatch failure issue");
 
             return;
         }
 
-        if (shouldReportFailure(lastFailureComment(gh, existing.number), signature, now.getTime())) {
-            gh.call(["issue", "comment", String(existing.number), "--body", body]);
+        const last = lastFailureComment(gh, existing.number);
+
+        if (!last.known) {
+            trackerUnreachable("read the open dispatch failure issue");
+
+            return;
+        }
+
+        if (shouldReportFailure(last.comment, signature, now.getTime())) {
+            announce(
+                gh.call(["issue", "comment", String(existing.number), "--body", body]),
+                "comment on the dispatch failure issue",
+            );
         }
     } catch (reportingError) {
         console.error(`Could not report the dispatch failure: ${reportingError.message}`);
@@ -164,14 +201,20 @@ export function resolveDispatchFailure(gh) {
     try {
         const existing = findFailureIssue(gh);
 
-        if (!existing.known || existing.number === null) {
+        if (!existing.known) {
+            trackerUnreachable("check whether a dispatch failure issue is still open");
+
             return;
         }
 
-        gh.call([
+        if (existing.number === null) {
+            return;
+        }
+
+        announce(gh.call([
             "issue", "close", String(existing.number),
             "--comment", "Autopilot dispatch completed a tick again. Closing this incident.",
-        ]);
+        ]), "close the dispatch failure issue");
     } catch (reportingError) {
         console.error(`Could not close the dispatch failure issue: ${reportingError.message}`);
     }
