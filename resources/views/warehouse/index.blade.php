@@ -57,7 +57,7 @@
                     $initialRequests = $transferFormData['requests'][(string) $initialDestinationId] ?? [];
                     // Hanya Request terminal milik Mitra yang sedang dilayani yang boleh di-reset.
                     // Request ditolak, belum diputuskan, tidak ditemukan, atau milik Mitra lain tetap
-                    // membawa asal-usul old() agar tidak diam-diam berubah menjadi kiriman langsung.
+                    // membawa sumber baris old() agar tidak diam-diam berubah menjadi kiriman langsung.
                     $resetOldRequest = $oldRequestId !== null && $oldRequestId !== ''
                         && (string) ($transferFormData['terminal_request_id'] ?? '') === (string) $oldRequestId;
                     // Request ber-Project mengunci Projectnya di klien; render ulang harus memulihkan

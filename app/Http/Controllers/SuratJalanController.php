@@ -90,10 +90,12 @@ class SuratJalanController extends Controller
             'items.*.serial_number' => ['nullable', 'string', 'max:255'],
             'items.*.drum_id' => ['nullable', 'string', 'max:255'],
             'items.*.catatan' => ['nullable', 'string', 'max:1000'],
-            // `items.*.asal` sengaja tidak punya aturan. Asal-usul baris adalah kenyamanan UI,
-            // bukan sumber kebenaran: server menghitung ulang klasifikasi dan tidak pernah
-            // membaca nilai ini. Memvalidasinya berarti sebuah submit yang isinya sah bisa
-            // ditolak hanya karena string yang tidak dibaca siapa pun tidak cocok.
+            // `items.*.sumber` sengaja tidak punya aturan. Sumber baris adalah kenyamanan UI,
+            // bukan sumber kebenaran: penerbitan menghitung ulang klasifikasi dan tidak
+            // membacanya. Yang membacanya hanya render ulang form, untuk memulihkan kunci
+            // material -- dan di sana nilai asing dinormalisasi ke `operator`, bukan ditolak.
+            // Memvalidasinya di sini berarti sebuah submit yang isinya sah bisa ditolak hanya
+            // karena string yang tidak menyentuh keputusan apa pun tidak cocok.
         ]);
 
         $origin = Warehouse::query()->findOrFail($data['warehouse_asal_id']);
