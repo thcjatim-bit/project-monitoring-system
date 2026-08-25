@@ -154,6 +154,10 @@ test("the worker prompt survives the Windows shim even with a hostile issue titl
     });
 
     assert.doesNotMatch(prompt, /["\r\n]/);
+
+    // cmd.exe expands %VAR% before the shim ever sees the argument, and a
+    // caret cannot suppress that, so the prompt carries no percent sign.
+    assert.doesNotMatch(prompt, /%/);
     assert.match(prompt, /issue #144/);
     assert.doesNotThrow(() => windowsShimCommandLine("paseo.cmd", ["run", "--title", "PMS autopilot worker #144", prompt]));
 });
@@ -161,7 +165,7 @@ test("the worker prompt survives the Windows shim even with a hostile issue titl
 // --- Regression: a failing dispatch must be visible without reading paseo logs (issue #144) ---
 
 test("collapses volatile detail so repeated ticks of one breakage share a signature", () => {
-    const windows = failureSignature(new Error("spawnSync paseo ENOENT\n    at C:\repo\scripts\issue-autopilot.mjs:13:20"));
+    const windows = failureSignature(new Error(`spawnSync paseo ENOENT\n` + String.raw`    at C:\repo\scripts\issue-autopilot.mjs:13:20`));
     const posix = failureSignature(new Error("spawnSync paseo ENOENT\n    at /home/pms/scripts/issue-autopilot.mjs:13:20"));
 
     assert.equal(windows, "spawnSync paseo ENOENT");
@@ -169,6 +173,18 @@ test("collapses volatile detail so repeated ticks of one breakage share a signat
     assert.equal(
         failureSignature(new Error("worker 12345 died")),
         failureSignature(new Error("worker 98765 died")),
+    );
+
+    // A signature keeps only the first line, so a path *there* is what would
+    // otherwise split one breakage into one incident per tick. Windows paths
+    // count: that is the platform the dispatcher fails on.
+    assert.equal(
+        failureSignature(new Error(String.raw`gh failed: C:\Users\a\repo\x.mjs is missing`)),
+        "gh failed: <path> is missing",
+    );
+    assert.equal(
+        failureSignature(new Error("gh failed: /home/a/repo/x.mjs is missing")),
+        "gh failed: <path> is missing",
     );
 });
 

@@ -42,11 +42,11 @@ function candidateNames(command, env, platform) {
     return [command, ...extensions.map((extension) => command + extension)];
 }
 
-function searchDirectories(env, platform, extraDirs) {
+function searchDirectories(env, platform) {
     const fromPath = (env.PATH ?? env.Path ?? "").split(path.delimiter).filter(Boolean);
 
     if (platform !== "win32") {
-        return [...fromPath, ...extraDirs];
+        return fromPath;
     }
 
     const home = env.USERPROFILE ?? os.homedir();
@@ -54,7 +54,6 @@ function searchDirectories(env, platform, extraDirs) {
 
     return [
         ...fromPath,
-        ...extraDirs,
         path.join(home, ".local", "bin"),
         path.join(localAppData, "Programs", "Paseo", "resources", "bin"),
     ];
@@ -79,7 +78,7 @@ export function resolveExecutable(command, options = {}) {
 
     const names = candidateNames(command, env, platform);
 
-    for (const directory of searchDirectories(env, platform, options.extraDirs ?? [])) {
+    for (const directory of searchDirectories(env, platform)) {
         for (const name of names) {
             const candidate = path.join(directory, name);
 
@@ -132,7 +131,7 @@ export function windowsShimCommandLine(file, args) {
 export function spawnPortable(command, args = [], options = {}) {
     const env = options.env ?? process.env;
     const platform = options.platform ?? process.platform;
-    const file = resolveExecutable(command, { env, platform, extraDirs: options.extraDirs });
+    const file = resolveExecutable(command, { env, platform });
 
     if (!file) {
         throw new Error(
