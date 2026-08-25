@@ -269,4 +269,25 @@ class MaterialOperationalUiTest extends TestCase
             app(TenantDatabaseContext::class)->set(null, false);
         }
     }
+
+    /**
+     * Kait yang dipakai `warehouse-material-form.js` untuk menemukan kedua select gudang. Sebelum
+     * #165 tidak ada satu pun test PHP yang menyebut atribut ini: penjaga glosarium hanya bisa
+     * membuktikan ejaan Inggrisnya hilang, bukan bahwa atributnya masih ada, jadi rename yang
+     * keliru menghapusnya akan lolos. Literal yang sama dipakai fixture DOM di
+     * tests/JavaScript/warehouse-material-form.test.js -- keduanya harus bergerak bersama.
+     */
+    public function test_form_terbitkan_surat_jalan_menandai_select_gudang_dengan_asal_dan_tujuan(): void
+    {
+        $mitra = Mitra::factory()->create();
+        $user = $this->userWithPermissions(null, 'operate_warehouse', 'read_master_data');
+        $asal = $this->asThc(fn (): Warehouse => Warehouse::factory()->create(['mitra_id' => $mitra->id]));
+        $asal->users()->attach($user);
+
+        $this->actingAs($user)
+            ->get(route('warehouse.index'))
+            ->assertOk()
+            ->assertSee('data-asal-select', false)
+            ->assertSee('data-tujuan-select', false);
+    }
 }
