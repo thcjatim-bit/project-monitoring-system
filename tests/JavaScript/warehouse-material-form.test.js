@@ -77,7 +77,7 @@ const barisSuratJalan = ({
  * satu konteks V8 baru. Konteks itu ditahan Node di `CppgcWrapperList` milik Environment-nya dan
  * tidak pernah dilepas — `window.close()` tidak menyentuhnya. Akibatnya seluruh DOM setiap
  * fixture ikut tertahan sampai proses mati: berkas ini membangun 82 Window dan berakhir memakai
- * ~1,9 GB heap, di atas plafon heap `pms-dev`. Lihat #176 untuk angka pengukurannya.
+ * 2414 MB heap, di atas plafon heap `pms-dev` yang 2096 MB. Lihat #176 untuk angka pengukurannya.
  *
  * Karena itu Window dipakai ulang, bukan dibuat ulang. Setiap peminjaman mendapat Window yang
  * body-nya kosong; test yang berjalan berbarengan tetap memegang Window masing-masing karena
@@ -100,10 +100,15 @@ const leaseWindow = (t, url) => {
     window.happyDOM.setURL(url);
 
     t.after(async () => {
-        // Timer yang masih menggantung milik test ini, supaya tidak menyentuh penyewa berikutnya.
-        await window.happyDOM.abort();
-        window.document.body.innerHTML = '';
-        windowPool.push(window);
+        try {
+            // Timer yang masih menggantung milik test ini, supaya tidak menyentuh penyewa berikutnya.
+            await window.happyDOM.abort();
+        } finally {
+            // Dikembalikan apa pun yang terjadi: Window yang bocor dari kolam menaikkan jumlah
+            // konteks V8 diam-diam, lalu muncul jauh kemudian sebagai penjaga yang gagal.
+            window.document.body.innerHTML = '';
+            windowPool.push(window);
+        }
     });
 
     return window;
