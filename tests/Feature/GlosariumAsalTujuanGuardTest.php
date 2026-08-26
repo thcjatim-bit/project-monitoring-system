@@ -36,6 +36,10 @@ class GlosariumAsalTujuanGuardTest extends TestCase
         'app/Queries/PortfolioDecisionQueueQuery.php',
         'app/Queries/SuratJalanFormQuery.php',
         'app/Services/SuratJalanService.php',
+        // Kodenya historis dan tidak akan berubah lagi, tapi komentarnya menyebut relasi yang
+        // di-rename #165 -- dan #165 memang sudah menyuntingnya. Berkas yang ikut disunting
+        // rename-nya masuk daftar; itu ongkos nol dan menutup satu lapse senyap.
+        'database/migrations/2026_08_21_000002_add_warehouse_shared_read_policy.php',
         'resources/js/warehouse-material-form.js',
         'resources/views/dashboard.blade.php',
         'resources/views/mitra/dashboard.blade.php',
@@ -74,12 +78,27 @@ class GlosariumAsalTujuanGuardTest extends TestCase
 
     private const CONTOH_DILAPORKAN = 20;
 
+    /**
+     * Berkas terdaftar yang benar-benar ada di disk.
+     *
+     * Test ejaan memakainya, bukan daftar mentahnya: berkas yang hilang adalah temuan test
+     * pertama, dan `file()` atas berkas yang tidak ada mengembalikan `false` sehingga
+     * `foreach`-nya melempar `TypeError` alih-alih pesan penjaga. PHPUnit tidak menghentikan
+     * test kedua saat yang pertama merah, jadi keduanya harus tahan sendiri.
+     *
+     * @return list<string>
+     */
+    private function berkasYangAda(): array
+    {
+        return array_values(array_filter(
+            self::BERKAS_JALUR_SURAT_JALAN,
+            fn (string $berkas): bool => is_file(base_path($berkas)),
+        ));
+    }
+
     public function test_daftar_berkas_penjaga_menunjuk_berkas_yang_masih_ada(): void
     {
-        $hilang = array_values(array_filter(
-            self::BERKAS_JALUR_SURAT_JALAN,
-            fn (string $berkas): bool => ! is_file(base_path($berkas)),
-        ));
+        $hilang = array_values(array_diff(self::BERKAS_JALUR_SURAT_JALAN, $this->berkasYangAda()));
 
         $this->assertSame([], $hilang, implode("\n", [
             'Berkas berikut terdaftar di penjaga glosarium tapi tidak ada lagi.',
@@ -92,7 +111,7 @@ class GlosariumAsalTujuanGuardTest extends TestCase
     {
         $temuan = [];
 
-        foreach (self::BERKAS_JALUR_SURAT_JALAN as $berkas) {
+        foreach ($this->berkasYangAda() as $berkas) {
             foreach (file(base_path($berkas), FILE_IGNORE_NEW_LINES) as $index => $baris) {
                 if (preg_match(self::EJAAN_INGGRIS, $baris) === 1) {
                     $temuan[] = sprintf('%s:%d: %s', $berkas, $index + 1, trim($baris));
