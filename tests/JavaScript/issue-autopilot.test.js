@@ -124,6 +124,38 @@ test("resolves a .cmd shim through PATHEXT, which a bare spawn does not", (t) =>
     assert.equal(resolveExecutable("pms-fake-paseo", { env, platform: "linux", envPrefix: "AUTOPILOT" }), null);
 });
 
+// Paseo's installer can land per-machine in Program Files instead of per-user
+// under LOCALAPPDATA. Only the per-user path was searched, so a per-machine
+// install was reported as "is Paseo installed?" while Paseo was installed.
+test("finds a per-machine Paseo install under Program Files", (t) => {
+    const programFiles = tempDir(t, "pms-autopilot-programfiles-");
+    const home = emptyHome(t);
+    const bin = path.join(programFiles, "Paseo", "resources", "bin");
+
+    fs.mkdirSync(bin, { recursive: true });
+
+    const shim = path.join(bin, "paseo.cmd");
+
+    fs.writeFileSync(shim, "@echo off\r\n");
+
+    const env = {
+        PATH: "",
+        Path: "",
+        PATHEXT: ".COM;.EXE;.BAT;.CMD",
+        USERPROFILE: home,
+        LOCALAPPDATA: home,
+        PROGRAMFILES: programFiles,
+    };
+
+    // PATHEXT is upper-case, so the resolved candidate carries the extension in
+    // that case while the installed file is lower-case. On Windows the two are
+    // the same file; the comparison, not the resolution, is what must be loose.
+    assert.equal(
+        resolveExecutable("paseo", { env, platform: "win32", envPrefix: "AUTOPILOT" }).toLowerCase(),
+        path.resolve(shim).toLowerCase(),
+    );
+});
+
 test("an override pointing at a directory is not mistaken for an executable", (t) => {
     const directory = tempDir(t, "pms-autopilot-override-");
     const env = { PATH: "", Path: "", AUTOPILOT_PMS_FAKE_PASEO_BIN: directory };
@@ -162,7 +194,17 @@ test("finds the CLI through AUTOPILOT_<CMD>_BIN when it is absent from PATH", (t
 
 test("fails with a diagnosable message, not ENOENT, when paseo is not executable", (t) => {
     const home = emptyHome(t);
-    const env = { ...process.env, PATH: "", Path: "", USERPROFILE: home, LOCALAPPDATA: home };
+    // PROGRAMFILES is neutralised alongside the per-user paths: this host may
+    // genuinely have Paseo installed per-machine, and the point here is the
+    // message when it is installed nowhere the search looks.
+    const env = {
+        ...process.env,
+        PATH: "",
+        Path: "",
+        USERPROFILE: home,
+        LOCALAPPDATA: home,
+        PROGRAMFILES: home,
+    };
 
     assert.throws(
         () => commandResult("paseo", ["ls", "--json"], { env }),
