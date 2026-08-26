@@ -71,19 +71,58 @@ const barisSuratJalan = ({
 `;
 
 /**
- * Fixture happy-dom ditutup lewat `t.after`, seperti tests/JavaScript/searchable-select.test.js.
+ * Kolam Window happy-dom, dipinjam per test dan dikembalikan lewat `t.after`.
  *
+ * `new Window()` memanggil `VM.createContext()` di dalam happy-dom, jadi setiap Window membuat
+ * satu konteks V8 baru. Konteks itu ditahan Node di `CppgcWrapperList` milik Environment-nya dan
+ * tidak pernah dilepas — `window.close()` tidak menyentuhnya. Akibatnya seluruh DOM setiap
+ * fixture ikut tertahan sampai proses mati: berkas ini membangun 82 Window dan berakhir memakai
+ * 2414 MB heap, di atas plafon heap `pms-dev` yang 2096 MB. Lihat #176 untuk angka pengukurannya.
+ *
+ * Karena itu Window dipakai ulang, bukan dibuat ulang. Setiap peminjaman mendapat Window yang
+ * body-nya kosong; test yang berjalan berbarengan tetap memegang Window masing-masing karena
+ * yang dikembalikan ke kolam hanya Window yang testnya sudah selesai.
+ */
+const windowPool = [];
+
+/** Dihitung supaya penjaga di akhir berkas bisa membuktikan kolamnya memang dipakai ulang. */
+const windowStats = { dibangun: 0, dipinjam: 0 };
+
+const leaseWindow = (t, url) => {
+    windowStats.dipinjam += 1;
+
+    if (windowPool.length === 0) {
+        windowStats.dibangun += 1;
+        windowPool.push(new Window({ url }));
+    }
+
+    const window = windowPool.pop();
+    window.happyDOM.setURL(url);
+
+    t.after(async () => {
+        try {
+            // Timer yang masih menggantung milik test ini, supaya tidak menyentuh penyewa berikutnya.
+            await window.happyDOM.abort();
+        } finally {
+            // Dikembalikan apa pun yang terjadi: Window yang bocor dari kolam menaikkan jumlah
+            // konteks V8 diam-diam, lalu muncul jauh kemudian sebagai penjaga yang gagal.
+            window.document.body.innerHTML = '';
+            windowPool.push(window);
+        }
+    });
+
+    return window;
+};
+
+/**
  * Halaman dibuka lewat seam yang sama dengan produksi: markup dipasang, lalu modulnya dipanggil.
  * Penanda `data-warehouse-page` ikut dipasang karena Blade memasangnya juga — tanpa penanda itu
  * modulnya memang tidak bekerja, persis seperti di halaman lain.
  */
 const openPage = (t, body) => {
-    const window = new Window({ url: 'https://example.test/warehouse' });
+    const window = leaseWindow(t, 'https://example.test/warehouse');
     window.document.body.innerHTML = `<main class="ui-page" data-warehouse-page>${body}</main>`;
     initializeWarehouseMaterialForm(window.document);
-    t.after(async () => {
-        await window.close();
-    });
 
     return window;
 };
@@ -325,11 +364,8 @@ test('Blade menandai halaman Warehouse supaya modulnya ikut bekerja di produksi'
 });
 
 test('tanpa penanda halaman Warehouse modulnya tidak menyentuh apa pun', async (t) => {
-    const window = new Window({ url: 'https://example.test/proyek' });
+    const window = leaseWindow(t, 'https://example.test/proyek');
     window.document.body.innerHTML = `<main class="ui-page">${formSuratJalan()}</main>`;
-    t.after(async () => {
-        await window.close();
-    });
 
     initializeWarehouseMaterialForm(window.document);
     window.document.querySelector('[data-add-item]').click();
@@ -1640,4 +1676,31 @@ describe('kontrak klasifikasi penyimpangan', { concurrency: true }, () => {
 
         assert.equal(penyimpangan(rows(window)[0]), 'qty_melebihi');
     });
+});
+
+/**
+ * Penjaga kolam Window, sengaja dideklarasikan paling akhir supaya ia berjalan sesudah seluruh
+ * test lain selesai meminjam.
+ *
+ * Yang dijaga bukan angka memori — itu bergantung host dan akan flaky — melainkan sebabnya:
+ * berapa banyak konteks V8 yang dibangun berkas ini. Setiap `new Window()` menyisakan satu
+ * konteks yang tidak pernah dilepas Node, jadi jumlah Window yang dibangun harus tetap sekecil
+ * jumlah test yang benar-benar berjalan berbarengan, bukan tumbuh mengikuti jumlah test.
+ * Kembali membangun satu Window per test akan membuat `dibangun` menyamai `dipinjam` di sini.
+ */
+test('fixture memakai ulang Window happy-dom, bukan membangun satu per test', () => {
+    assert.ok(
+        windowStats.dipinjam >= 50,
+        `prasyarat: penjaga ini hanya bermakna kalau banyak test sudah meminjam (dipinjam=${windowStats.dipinjam})`,
+    );
+
+    // Ambangnya nisbi, bukan angka mati: berapa Window yang dibangun sama dengan berapa test yang
+    // sempat berjalan berbarengan, dan itu ditentukan penjadwalan host. Yang harus mustahil adalah
+    // pertumbuhan yang mengikuti jumlah test — kembali ke satu Window per test membuat kedua angka
+    // ini sama besar.
+    assert.ok(
+        windowStats.dibangun * 3 < windowStats.dipinjam,
+        `berkas ini membangun ${windowStats.dibangun} Window untuk ${windowStats.dipinjam} peminjaman; `
+        + 'setiap Window menyisakan satu konteks V8 yang tidak pernah dilepas Node, jadi kolamnya harus dipakai ulang (#176)',
+    );
 });
