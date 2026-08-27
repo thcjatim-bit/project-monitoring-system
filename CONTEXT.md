@@ -93,6 +93,7 @@ Glosarium istilah domain. **Setiap nama yang menunjuk konsep di glosarium ini me
 - **Build Artifact Git** — Aset statis (*frontend build*) dihasilkan di mesin lokal *developer* lalu di-*commit* ke repositori agar instalasi *server* tetap ringkas tanpa dependensi Node.js.
 - **Foto pekerjaan** — dokumentasi lapangan (hanya JPEG, maks 10/unggahan, maks 5 MB mentah). Dikompres client-side ke 1920×1080 sebelum upload. Disimpan di disk server, lalu disalin ke Google Drive via `rclone` tiap jam. Retensi server 90 hari; setelahnya Google Drive = sumber kebenaran. Lihat `docs/adr/0012-alur-foto-pekerjaan-dan-sinkronisasi-google-drive.md`.
 - **Folder Master** — satu folder Google Drive publik View-Only yang berisi semua foto project dalam struktur `ProjectID / Step / Tanggal`. Mitra mengaksesnya lewat tombol di aplikasi web.
+- **Selesai (issue)** — satu issue selesai ketika perubahannya **tergabung ke `main`** dengan seluruh acceptance criteria terpenuhi dan gate repo hijau. Rilis ke produksi **bukan** syarat penutupan; ia dilacak sebagai tiket rilis tersendiri. Batas ini sejalan dengan `docs/agents/context-budget.md`: fase 4 berakhir pada commit terverifikasi, dan deploy hidup di fase 5 yang punya sesinya sendiri. Ditetapkan saat menutup #165 dan #170, ketika produksi tertinggal 39 commit (#175) — menahan penutupan sampai rilis berarti menahan setiap tiket di belakangnya, termasuk yang blocking edge-nya menunggu.
 
 ## Review kualitas
 
