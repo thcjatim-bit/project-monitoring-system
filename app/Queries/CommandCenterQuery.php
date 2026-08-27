@@ -348,8 +348,8 @@ class CommandCenterQuery
             'diterima' => $suratJalan->received_at ?? $suratJalan->updated_at,
             default => $suratJalan->updated_at,
         } ?? $suratJalan->issued_at ?? CarbonImmutable::now();
-        $asal = $suratJalan->asal?->nama ?? 'Warehouse asal tidak tersedia';
-        $tujuan = $suratJalan->tujuan?->nama ?? 'Warehouse tujuan tidak tersedia';
+        $asal = $suratJalan->namaAsal();
+        $tujuan = $suratJalan->namaTujuan();
 
         return $this->activity(
             source: 'Surat Jalan',

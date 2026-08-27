@@ -54,6 +54,16 @@ class SuratJalan extends Model
         return $this->belongsTo(Warehouse::class, 'warehouse_tujuan_id');
     }
 
+    public function namaAsal(): string
+    {
+        return $this->asal?->nama ?? 'Warehouse asal tidak tersedia';
+    }
+
+    public function namaTujuan(): string
+    {
+        return $this->tujuan?->nama ?? 'Warehouse tujuan tidak tersedia';
+    }
+
     public function mitra(): BelongsTo
     {
         return $this->belongsTo(Mitra::class);
