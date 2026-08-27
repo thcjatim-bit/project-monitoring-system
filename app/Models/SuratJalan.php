@@ -79,7 +79,7 @@ class SuratJalan extends Model
         return $this->belongsTo(Project::class);
     }
 
-    public function returnedFrom(): BelongsTo
+    public function returDari(): BelongsTo
     {
         return $this->belongsTo(self::class, 'retur_dari_id');
     }

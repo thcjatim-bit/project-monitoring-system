@@ -52,7 +52,7 @@ class SuratJalanController extends Controller
     {
         $suratJalan->load([
             'asal', 'tujuan', 'mitra', 'issuer', 'receiver',
-            'returnedFrom', 'materialRequest', 'project',
+            'returDari', 'materialRequest', 'project',
             'items.material.unit', 'items.serialNumber', 'items.drum',
         ]);
         $canOperateAsal = $request->user()->canOperateWarehouse($suratJalan->asal, 'operate_warehouse');
