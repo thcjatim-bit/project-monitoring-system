@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Material;
 use App\Models\Mitra;
+use App\Models\Project;
+use App\Models\ProjectTimeline;
 use App\Models\SuratJalan;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -67,10 +69,34 @@ class SuratJalanReturDariTest extends TestCase
         $this->assertSame($asalId, $suratJalan->returDari?->id);
     }
 
-    /** @return array{int, User, User} */
+    /**
+     * Seam ketiga: kunci payload event linimasa.
+     *
+     * Kunci `metadata` tidak dibaca siapa pun -- linimasa merender labelnya dari `event_key` --
+     * jadi ejaannya tidak akan pernah membuat test lain merah. Justru karena itu ia perlu
+     * penjaga sendiri: ADR-0027 menyebut kunci payload secara eksplisit, dan tanpa assertion
+     * ini ejaan Inggrisnya bisa kembali tanpa terasa.
+     */
+    public function test_event_linimasa_retur_mengeja_kunci_retur_dari_id(): void
+    {
+        [$asalId, , $thc, $project] = $this->terbitkanDanTerimaSuratJalan();
+        $returId = $this->returkan($asalId, $thc);
+
+        $event = ProjectTimeline::query()
+            ->where('project_id', $project->id)
+            ->where('event_key', 'surat_jalan_returned')
+            ->sole();
+
+        $this->assertSame($asalId, $event->metadata['retur_dari_id'] ?? null);
+        $this->assertArrayNotHasKey('returned_from_id', $event->metadata);
+        $this->assertSame($returId, $event->metadata['surat_jalan_id'] ?? null);
+    }
+
+    /** @return array{int, User, User, Project} */
     private function terbitkanDanTerimaSuratJalan(): array
     {
         $mitra = Mitra::factory()->create();
+        $project = $this->project($mitra, 'PRJ-2608-0167');
         $asal = $this->warehouse($mitra, 'WH-RETUR-ASAL');
         $tujuan = $this->warehouse($mitra, 'WH-RETUR-TUJUAN');
         $material = Material::factory()->create(['jenis' => 'biasa']);
@@ -91,13 +117,14 @@ class SuratJalanReturDariTest extends TestCase
             'warehouse_tujuan_id' => $tujuan->id,
             'tanggal' => '2026-08-15',
             'pengirim' => 'Petugas Gudang',
+            'project_id' => $project->id,
             'items' => [['material_id' => $material->id, 'qty' => '4']],
         ])->assertRedirect();
 
         $suratJalanId = (int) SuratJalan::query()->value('id');
         $this->actingAs($petugas)->post(route('warehouse.transfers.receive', $suratJalanId))->assertRedirect();
 
-        return [$suratJalanId, $petugas, $thc];
+        return [$suratJalanId, $petugas, $thc, $project];
     }
 
     private function returkan(int $asalId, User $thc): int
