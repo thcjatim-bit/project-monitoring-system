@@ -388,7 +388,6 @@
                                 <div>
                                     <a href="{{ route('warehouse.transfers.print', $suratJalan) }}">{{ $suratJalan->nomor }}</a>
                                     <p>{{ $suratJalan->namaAsal() }} → {{ $suratJalan->namaTujuan() }}</p>
-                                    <p>Warehouse: {{ $suratJalan->namaAsal() }} → {{ $suratJalan->namaTujuan() }}</p>
                                     <p>Material:
                                         @foreach ($suratJalan->items as $item)
                                             {{ $item->material->nama }} ({{ $item->qty }} {{ $item->material->unit->nama }})@if (!$loop->last), @endif
