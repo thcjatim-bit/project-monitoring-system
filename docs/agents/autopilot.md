@@ -73,9 +73,24 @@ call that dispatch depends on, so an environment that cannot execute `paseo`
 fails the dry run instead of passing it (issue #144).
 
 `paseo` is resolved by `scripts/portable-spawn.mjs`, not by a bare spawn: it
-searches PATH, then `~/.local/bin` and the bundled Paseo CLI directory, and it
-runs a `.cmd`/`.bat` shim through `cmd.exe`. Set `AUTOPILOT_PASEO_BIN` to an
-absolute path to override the search. Because a `.cmd` shim silently drops
+searches PATH, then `~/.local/bin` and both bundled Paseo CLI directories, and
+it runs a `.cmd`/`.bat` shim through `cmd.exe`. Set `AUTOPILOT_PASEO_BIN` to an
+absolute path to override the search.
+
+Paseo ships a per-user and a per-machine installer, so there are two bundled
+directories and an install lands in exactly one of them:
+
+| Installer | Directory searched |
+| --- | --- |
+| per-user | `%LOCALAPPDATA%ProgramsPaseoesourcesin` |
+| per-machine | `%ProgramFiles%Paseoesourcesin` |
+
+A `paseo` shim earlier on PATH wins over both, because PATH is searched first.
+That ordering is what a stale shim exploits: a shim left behind by a per-user
+install keeps resolving, then fails at execution against the directory its own
+installer removed. When the dry run reports `Paseo CLI not found at <path>`,
+read the path in the message — it names the location the failing shim believed
+in, not the location this module searched. Because a `.cmd` shim silently drops
 double quotes and truncates at a newline, every argument handed to `paseo` must
 be single-line and quote-free; the worker prompt is normalised by `cliSafeText`
 and the shim layer throws rather than shipping a mangled argument.

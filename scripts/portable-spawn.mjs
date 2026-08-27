@@ -67,11 +67,16 @@ function searchDirectories(env, platform) {
 
     const home = env.USERPROFILE ?? os.homedir();
     const localAppData = env.LOCALAPPDATA ?? path.join(home, "AppData", "Local");
+    // Paseo ships both a per-user and a per-machine installer, and they land in
+    // different places. Searching only the per-user path made a per-machine
+    // install indistinguishable from no install at all.
+    const programFiles = env.PROGRAMFILES ?? "C:\\Program Files";
 
     return [
         ...fromPath,
         path.join(home, ".local", "bin"),
         path.join(localAppData, "Programs", "Paseo", "resources", "bin"),
+        path.join(programFiles, "Paseo", "resources", "bin"),
     ];
 }
 
