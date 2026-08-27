@@ -15,7 +15,11 @@ An issue is eligible only when all of these are true:
 - it has no assignee;
 - it is not labelled `autopilot:in-progress` or `autopilot:blocked`;
 - every issue in its native or written `Blocked by` edges is closed;
-- it carries a durable TDD handoff — a comment or body containing `<!-- tdd-handoff -->`.
+- it carries a durable TDD handoff — a comment or body that **opens with** `<!-- tdd-handoff -->`.
+
+The marker has to open the text, not merely appear in it. Matching anywhere lets a comment that
+only *mentions* the marker — including one explaining this very rule — read as a handoff, and an
+issue with no test contract slips into the queue.
 
 The last condition exists because the worker contract below demands the same handoff at its
 second gate. While selection did not know about it, the queue kept choosing issues that gate
