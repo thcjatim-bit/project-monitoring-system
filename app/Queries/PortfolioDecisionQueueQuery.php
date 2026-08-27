@@ -117,8 +117,8 @@ class PortfolioDecisionQueueQuery
 
                 $issuedAt = CarbonImmutable::instance($suratJalan->issued_at);
                 $age = $issuedAt->startOfDay()->diffInDays($asOf->startOfDay());
-                $asal = $suratJalan->asal?->nama ?? 'Warehouse asal tidak tersedia';
-                $tujuan = $suratJalan->tujuan?->nama ?? 'Warehouse tujuan tidak tersedia';
+                $asal = $suratJalan->namaAsal();
+                $tujuan = $suratJalan->namaTujuan();
 
                 $items->push($this->item(
                     category: 'transit',

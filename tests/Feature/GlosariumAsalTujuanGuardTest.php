@@ -58,6 +58,7 @@ class GlosariumAsalTujuanGuardTest extends TestCase
         'tests/Feature/SuratJalanDeviationContractTest.php',
         'tests/Feature/SuratJalanDeviationTest.php',
         'tests/Feature/SuratJalanFormDataTest.php',
+        'tests/Feature/SuratJalanNamaAsalTujuanTest.php',
         'tests/Feature/SuratJalanPrintTest.php',
         'tests/Feature/SuratJalanRequestDrivenFormTest.php',
         'tests/Feature/SuratJalanTransferTest.php',
