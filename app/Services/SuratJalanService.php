@@ -196,8 +196,14 @@ class SuratJalanService
                     $item->update(['qty_diretur' => $this->formatQuantity((float) $item->qty_diretur + (float) $qty)]);
                 }
             }
+            // Kunci payload ikut ejaan glosarium (ADR-0027) dan sekarang sejajar dengan kolomnya,
+            // `retur_dari_id`. Baris lama di `project_events` sengaja tidak dimigrasi: tidak ada
+            // pembaca yang mengindeks kunci ini -- linimasa merender label dari `event_key`, bukan
+            // dari isi `metadata` -- jadi baris historis hanya menyimpan ejaan lama, tidak memutus
+            // apa pun. `event_key`-nya sendiri (`surat_jalan_returned`) tetap: ia *dicocokkan*
+            // pembaca, dan mengubahnya akan membuat baris historis berhenti dikenali.
             $this->recordProjectEvent($return, $actor, 'surat_jalan_returned', [
-                'returned_from_id' => $diretur->id,
+                'retur_dari_id' => $diretur->id,
             ]);
 
             return $return->fresh(['asal', 'tujuan', 'returDari', 'items.material', 'items.serialNumber', 'items.drum']);
