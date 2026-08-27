@@ -8,6 +8,21 @@ import { spawnPortable } from "./portable-spawn.mjs";
 export const READY_LABEL = "ready-for-agent";
 export const IN_PROGRESS_LABEL = "autopilot:in-progress";
 export const BLOCKED_LABEL = "autopilot:blocked";
+
+/**
+ * Keadaan "belum ada sesi `/tdd`" dipisahkan dari `autopilot:blocked`. Label itu berarti
+ * manusia harus memutuskan sesuatu -- keputusan bisnis, kredensial, migrasi destruktif.
+ * Menunggu handoff TDD bukan keputusan siapa pun, hanya pekerjaan yang belum dijalankan,
+ * dan mencampur keduanya membuat penyisiran label salah baca (#182).
+ */
+export const NEEDS_TDD_LABEL = "needs-tdd";
+
+/**
+ * Penanda yang ditinggalkan sesi `/tdd` pada komentar handoff-nya. Kontrak worker butir 2
+ * mewajibkan handoff itu ada; tanpa penanda ini seleksi tidak punya cara memeriksanya, dan
+ * antrean memilih issue yang gerbang worker-nya tidak mungkin diloloskan.
+ */
+export const HANDOFF_MARKER = "<!-- tdd-handoff -->";
 export const WORKER_TITLE_PREFIX = "PMS autopilot worker";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,6 +68,17 @@ export function parseBlockedBy(body = "") {
         .filter((number, index, numbers) => Number.isInteger(number) && numbers.indexOf(number) === index);
 }
 
+/**
+ * Handoff boleh ditulis di komentar mana pun atau di body issue -- yang mengikat penandanya,
+ * bukan tempatnya. Sesi `/tdd` biasanya menaruhnya di komentar; tiket yang lahir sudah
+ * bersama kontrak test-nya boleh menaruhnya di body.
+ */
+export function hasTddHandoff(issue) {
+    const bodies = [issue.body ?? "", ...(issue.comments ?? []).map((comment) => comment?.body ?? "")];
+
+    return bodies.some((body) => String(body).includes(HANDOFF_MARKER));
+}
+
 export function isEligibleIssue(issue) {
     const labels = labelNames(issue);
     const state = String(issue.state ?? "").toUpperCase();
@@ -61,7 +87,20 @@ export function isEligibleIssue(issue) {
         && labels.has(READY_LABEL)
         && !labels.has(IN_PROGRESS_LABEL)
         && !labels.has(BLOCKED_LABEL)
-        && (issue.assignees ?? []).length === 0;
+        && (issue.assignees ?? []).length === 0
+        && hasTddHandoff(issue);
+}
+
+/**
+ * Issue yang lolos semua syarat antrean kecuali handoff TDD. Dilaporkan, bukan dilabeli
+ * otomatis: dispatcher tidak menulis ke tracker pada mode dry-run, dan jarak antara
+ * "sudah ditriase" dan "bisa didispatch" perlu terlihat di tempat manusia sudah melihat.
+ */
+export function needsTddIssues(issues) {
+    return [...issues]
+        .filter((issue) => !hasTddHandoff(issue) && isEligibleIssue({ ...issue, comments: [{ body: HANDOFF_MARKER }] }))
+        .map((issue) => Number(issue.number))
+        .sort((left, right) => left - right);
 }
 
 export function selectCandidate(issues) {
@@ -119,7 +158,7 @@ function loadOpenIssues(repo, cwd) {
             "--limit",
             "100",
             "--json",
-            "number,title,body,labels,assignees,state,url",
+            "number,title,body,labels,assignees,state,url,comments",
         ],
         { cwd },
     ), []);
@@ -308,6 +347,7 @@ function report(repo, cwd, issues, candidate, active, mode) {
         repository: repo,
         activeWorkers: active,
         readyIssues: issues.length,
+        needsTdd: needsTddIssues(issues),
         candidate: candidate
             ? {
                 number: candidate.number,
