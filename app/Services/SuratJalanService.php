@@ -149,19 +149,19 @@ class SuratJalanService
     }
 
     /** @param array{tanggal:string,pengirim:string,sopir?:string|null,plat_nomor?:string|null,items?:array<int,array{surat_jalan_item_id:int,qty:string|int|float}>} $data */
-    public function createReturn(User $actor, SuratJalan $original, array $data): SuratJalan
+    public function createReturn(User $actor, SuratJalan $diretur, array $data): SuratJalan
     {
-        return DB::transaction(function () use ($actor, $original, $data): SuratJalan {
-            $original = SuratJalan::query()->with('items.material')->lockForUpdate()->findOrFail($original->id);
-            if ($original->status !== 'diterima') {
+        return DB::transaction(function () use ($actor, $diretur, $data): SuratJalan {
+            $diretur = SuratJalan::query()->with('items.material')->lockForUpdate()->findOrFail($diretur->id);
+            if ($diretur->status !== 'diterima') {
                 throw ValidationException::withMessages(['status' => 'Retur hanya dapat dibuat dari Surat Jalan yang sudah diterima.']);
             }
 
-            $asal = Warehouse::query()->findOrFail($original->warehouse_tujuan_id);
-            $tujuan = Warehouse::query()->findOrFail($original->warehouse_asal_id);
-            $returnQuantities = $this->requestedReturnQuantities($original, $data['items'] ?? []);
+            $asal = Warehouse::query()->findOrFail($diretur->warehouse_tujuan_id);
+            $tujuan = Warehouse::query()->findOrFail($diretur->warehouse_asal_id);
+            $returnQuantities = $this->requestedReturnQuantities($diretur, $data['items'] ?? []);
             $items = [];
-            foreach ($original->items as $item) {
+            foreach ($diretur->items as $item) {
                 $qty = $returnQuantities[$item->id] ?? '0';
                 if ((float) $qty <= 0) {
                     continue;
@@ -183,24 +183,30 @@ class SuratJalanService
                 'warehouse_tujuan_id' => $tujuan->id,
                 'tanggal' => $data['tanggal'],
                 'pengirim' => $data['pengirim'],
-                'project_id' => $original->project_id,
+                'project_id' => $diretur->project_id,
                 'material_request_id' => null,
                 'sopir' => $data['sopir'] ?? null,
                 'plat_nomor' => $data['plat_nomor'] ?? null,
                 'items' => $items,
-            ], $original->id);
+            ], $diretur->id);
 
-            foreach ($original->items as $item) {
+            foreach ($diretur->items as $item) {
                 $qty = $returnQuantities[$item->id] ?? '0';
                 if ((float) $qty > 0) {
                     $item->update(['qty_diretur' => $this->formatQuantity((float) $item->qty_diretur + (float) $qty)]);
                 }
             }
+            // Kunci payload ikut ejaan glosarium (ADR-0027) dan sekarang sejajar dengan kolomnya,
+            // `retur_dari_id`. Baris lama di `project_events` sengaja tidak dimigrasi: tidak ada
+            // pembaca yang mengindeks kunci ini -- linimasa merender label dari `event_key`, bukan
+            // dari isi `metadata` -- jadi baris historis hanya menyimpan ejaan lama, tidak memutus
+            // apa pun. `event_key`-nya sendiri (`surat_jalan_returned`) tetap: ia *dicocokkan*
+            // pembaca, dan mengubahnya akan membuat baris historis berhenti dikenali.
             $this->recordProjectEvent($return, $actor, 'surat_jalan_returned', [
-                'returned_from_id' => $original->id,
+                'retur_dari_id' => $diretur->id,
             ]);
 
-            return $return->fresh(['asal', 'tujuan', 'returnedFrom', 'items.material', 'items.serialNumber', 'items.drum']);
+            return $return->fresh(['asal', 'tujuan', 'returDari', 'items.material', 'items.serialNumber', 'items.drum']);
         });
     }
 
@@ -254,7 +260,7 @@ class SuratJalanService
     }
 
     /** @param array{warehouse_asal_id:int,warehouse_tujuan_id:int,tanggal:string,pengirim:string,project_id?:int|null,material_request_id?:int|null,sopir?:string|null,plat_nomor?:string|null,items:array<int,array{material_id:int,qty:string|int|float,serial_number?:string|null,drum_id?:string|null,catatan?:string|null}>} $data */
-    private function issueTransfer(User $actor, array $data, ?int $returnedFromId = null): SuratJalan
+    private function issueTransfer(User $actor, array $data, ?int $returDariId = null): SuratJalan
     {
         $asal = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_asal_id']);
         $tujuan = Warehouse::query()->lockForUpdate()->findOrFail($data['warehouse_tujuan_id']);
@@ -285,7 +291,7 @@ class SuratJalanService
             'mitra_id' => $mitraId,
             'material_request_id' => $materialRequest?->id,
             'project_id' => $projectId,
-            'retur_dari_id' => $returnedFromId,
+            'retur_dari_id' => $returDariId,
             'issued_by' => $actor->id,
             'issued_at' => now(),
             'status' => 'terbit',

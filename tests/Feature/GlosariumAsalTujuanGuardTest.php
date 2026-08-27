@@ -61,6 +61,7 @@ class GlosariumAsalTujuanGuardTest extends TestCase
         'tests/Feature/SuratJalanNamaAsalTujuanTest.php',
         'tests/Feature/SuratJalanPrintTest.php',
         'tests/Feature/SuratJalanRequestDrivenFormTest.php',
+        'tests/Feature/SuratJalanReturDariTest.php',
         'tests/Feature/SuratJalanTransferTest.php',
         'tests/JavaScript/warehouse-material-form.test.js',
     ];

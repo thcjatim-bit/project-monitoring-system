@@ -118,7 +118,7 @@ class ProjectControlRoomTest extends TestCase
         $this->recordTimelineEvent($project, 'step_changed', ['from' => 'design', 'to' => 'survey']);
         $this->recordTimelineEvent($project, 'toc_changed', ['from' => '2026-08-01', 'to' => '2026-08-15']);
         $this->recordTimelineEvent($project, 'surat_jalan_resolved', ['resolution' => 'kembali_ke_asal']);
-        $this->recordTimelineEvent($project, 'surat_jalan_returned', ['returned_from_id' => 42]);
+        $this->recordTimelineEvent($project, 'surat_jalan_returned', ['retur_dari_id' => 42]);
         $this->recordTimelineEvent($project, 'event_tidak_dikenal');
 
         $this->actingAs($thc)
