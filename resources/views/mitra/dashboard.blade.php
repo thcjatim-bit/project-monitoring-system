@@ -86,7 +86,7 @@
             <x-ui.panel>
                 <h2 id="transit-summary-title">Transit</h2>
                 @forelse ($transits as $transit)
-                    <p class="ui-list__item"><a href="{{ route('warehouse.transfers.print', $transit) }}">{{ $transit->nomor }}</a> · {{ $transit->asal?->nama }} → {{ $transit->tujuan?->nama }} · <x-ui.badge tone="warning" label="Terbit" /></p>
+                    <p class="ui-list__item"><a href="{{ route('warehouse.transfers.print', $transit) }}">{{ $transit->nomor }}</a> · {{ $transit->namaAsal() }} → {{ $transit->namaTujuan() }} · <x-ui.badge tone="warning" label="Terbit" /></p>
                 @empty
                     <x-ui.empty-state title="Tidak ada Transit aktif." />
                 @endforelse
