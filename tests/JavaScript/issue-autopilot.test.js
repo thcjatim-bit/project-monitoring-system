@@ -103,6 +103,21 @@ test("selection skips an otherwise-lowest issue that has no handoff", () => {
     assert.equal(selected.number, 12);
 });
 
+// Penanda yang dicocokkan di mana saja membuat komentar yang sekadar *menyebut* penandanya --
+// termasuk komentar yang menjelaskan aturan ini -- terbaca sebagai handoff. Ditemukan saat
+// komentar koreksi label di #167 membuat tiket itu tampak sudah punya handoff.
+test("merely mentioning the marker in prose is not a handoff", () => {
+    const mention = "Seleksi kini menagih penanda `<!-- tdd-handoff -->` sebagai syarat kelima.";
+
+    assert.equal(hasTddHandoff(issue({ comments: [{ body: mention }] })), false);
+    assert.equal(isEligibleIssue(issue({ comments: [{ body: mention }] })), false);
+});
+
+test("a handoff is a comment that opens with the marker", () => {
+    assert.equal(hasTddHandoff(issue({ comments: [{ body: `${HANDOFF_MARKER}\n## Handoff TDD` }] })), true);
+    assert.equal(hasTddHandoff(issue({ comments: [{ body: `\n  ${HANDOFF_MARKER}\nSeam: ...` }] })), true);
+});
+
 // --- Regression: the dispatcher must be able to execute `paseo` (issue #144) ---
 // The scheduled agent died on `spawnSync paseo ENOENT` every tick: on Windows a
 // CLI installed as a `.cmd` shim is unreachable through a bare spawn, and the

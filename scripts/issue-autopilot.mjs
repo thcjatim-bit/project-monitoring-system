@@ -72,11 +72,15 @@ export function parseBlockedBy(body = "") {
  * Handoff boleh ditulis di komentar mana pun atau di body issue -- yang mengikat penandanya,
  * bukan tempatnya. Sesi `/tdd` biasanya menaruhnya di komentar; tiket yang lahir sudah
  * bersama kontrak test-nya boleh menaruhnya di body.
+ *
+ * Penanda harus **membuka** tulisannya, bukan sekadar muncul di dalamnya. Pencocokan di mana
+ * saja membuat komentar yang cuma *menyebut* penandanya -- termasuk komentar yang menjelaskan
+ * aturan ini -- terbaca sebagai handoff, dan tiket tanpa kontrak test lolos ke antrean.
  */
 export function hasTddHandoff(issue) {
     const bodies = [issue.body ?? "", ...(issue.comments ?? []).map((comment) => comment?.body ?? "")];
 
-    return bodies.some((body) => String(body).includes(HANDOFF_MARKER));
+    return bodies.some((body) => String(body).trimStart().startsWith(HANDOFF_MARKER));
 }
 
 export function isEligibleIssue(issue) {
