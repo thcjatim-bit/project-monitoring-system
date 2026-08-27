@@ -14,7 +14,19 @@ An issue is eligible only when all of these are true:
 - it is open and has the `ready-for-agent` label;
 - it has no assignee;
 - it is not labelled `autopilot:in-progress` or `autopilot:blocked`;
-- every issue in its native or written `Blocked by` edges is closed.
+- every issue in its native or written `Blocked by` edges is closed;
+- it carries a durable TDD handoff — a comment or body containing `<!-- tdd-handoff -->`.
+
+The last condition exists because the worker contract below demands the same handoff at its
+second gate. While selection did not know about it, the queue kept choosing issues that gate
+could never pass: every tick burned one worker and one worktree to stop at the same line
+(#167, #170, issue #182).
+
+An issue that meets every other condition but has no handoff is reported as `needsTdd` in the
+dispatcher's output and should carry the `needs-tdd` label. That label is deliberately *not*
+`autopilot:blocked`: blocked means a human must decide something, while a missing handoff is
+ordinary work nobody has run yet. Mixing the two makes a sweep of `autopilot:blocked` read as
+decisions that do not exist.
 
 The dispatcher claims one issue before starting a worker. It processes the lowest
 issue number first and uses one fresh Paseo worktree per issue.

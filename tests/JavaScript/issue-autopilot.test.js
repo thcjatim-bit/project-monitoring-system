@@ -9,6 +9,8 @@ import {
     IN_PROGRESS_LABEL,
     READY_LABEL,
     commandResult,
+    HANDOFF_MARKER,
+    hasTddHandoff,
     isEligibleIssue,
     parseBlockedBy,
     selectCandidate,
@@ -34,6 +36,7 @@ const issue = (overrides = {}) => ({
     labels: [{ name: READY_LABEL }],
     assignees: [],
     body: "",
+    comments: [{ body: "<!-- tdd-handoff --> Handoff." }],
     ...overrides,
 });
 
@@ -69,6 +72,35 @@ test("selects the lowest unblocked issue and fails closed for unknown blocker st
     ]);
 
     assert.equal(selected.number, 13);
+});
+
+// --- #182: seleksi antrean menagih handoff TDD yang kontrak worker wajibkan ---
+// Kontrak antrean dan kontrak worker sempat tidak sinkron: seleksi memilih issue
+// yang gerbang worker butir 2 tidak mungkin diloloskan, jadi tiap tick membakar
+// satu worker dan satu worktree untuk berhenti di baris yang sama (#167, #170).
+test("a ready issue without a TDD handoff is not eligible, however clean its labels are", () => {
+    assert.equal(isEligibleIssue(issue({ comments: [] })), false);
+    assert.equal(isEligibleIssue(issue({ comments: undefined })), false);
+    assert.equal(
+        isEligibleIssue(issue({ comments: [{ body: "Sudah saya triase, silakan dikerjakan." }] })),
+        false,
+    );
+});
+
+test("the handoff marker counts wherever it is written, comment or body", () => {
+    assert.equal(hasTddHandoff(issue({ comments: [{ body: `${HANDOFF_MARKER}\nSeam: ...` }] })), true);
+    assert.equal(hasTddHandoff(issue({ comments: [], body: `${HANDOFF_MARKER}\nSeam: ...` })), true);
+    assert.equal(hasTddHandoff(issue({ comments: [{ body: "Handoff TDD menyusul." }] })), false);
+});
+
+test("selection skips an otherwise-lowest issue that has no handoff", () => {
+    const withHandoff = { comments: [{ body: HANDOFF_MARKER }] };
+    const selected = selectCandidate([
+        issue({ number: 11, comments: [] }),
+        issue({ number: 12, ...withHandoff }),
+    ]);
+
+    assert.equal(selected.number, 12);
 });
 
 // --- Regression: the dispatcher must be able to execute `paseo` (issue #144) ---
