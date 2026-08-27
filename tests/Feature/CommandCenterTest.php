@@ -286,6 +286,37 @@ class CommandCenterTest extends TestCase
         }
     }
 
+    /**
+     * #172: panel Transit mencetak rute gudang dua kali, dan tidak ada test yang menangkapnya --
+     * `assertSee` di test tetangga tetap hijau pada dua kemunculan.
+     *
+     * Assertion di sini **menghitung**, bukan memeriksa keberadaan. Itu satu-satunya bentuk yang
+     * bisa gagal saat baris ketiga ditambahkan.
+     */
+    public function test_delayed_transit_panel_prints_the_warehouse_route_once_per_surat_jalan(): void
+    {
+        $now = CarbonImmutable::parse('2026-08-20 12:00:00');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $mitra = Mitra::factory()->create(['nama' => 'Mitra Rute Ganda']);
+            [$asal, $tujuan] = $this->warehousesFor($mitra);
+            $material = Material::factory()->create(['nama' => 'Kabel FO']);
+            $thc = $this->userWithPermissions(null, 'read_dashboard', 'operate_warehouse');
+            $this->createIssuedTransfer($asal, $tujuan, $material, '2026-08-16 23:59:59', 'SJ-RUTE-GANDA');
+
+            $html = (string) $this->actingAs($thc)->get('/dashboard')->assertOk()->getContent();
+
+            $this->assertSame(
+                1,
+                substr_count($this->panelHtml($html, 'delayed-transit-panel'), $asal->nama.' → '.$tujuan->nama),
+                'Rute gudang satu Surat Jalan harus tercetak sekali saja di panel Transit.',
+            );
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
     public function test_thc_can_set_and_change_a_material_minimum_threshold_through_master_data(): void
     {
         $material = Material::factory()->create();
@@ -684,6 +715,22 @@ class CommandCenterTest extends TestCase
         } finally {
             app(TenantDatabaseContext::class)->set(null, false);
         }
+    }
+
+    /**
+     * Isi satu panel Command Center, dipotong dari HTML halaman. Dipisah dari
+     * assertPanelDoesNotContain() karena yang dibutuhkan #172 bukan "tidak memuat" melainkan
+     * "memuat berapa kali".
+     */
+    private function panelHtml(string $html, string $panelId): string
+    {
+        $panelStart = strpos($html, 'id="'.$panelId.'"');
+        $this->assertNotFalse($panelStart, "Panel {$panelId} tidak ditemukan.");
+
+        $panelEnd = strpos($html, '</section>', $panelStart);
+        $this->assertNotFalse($panelEnd, "Penutup panel {$panelId} tidak ditemukan.");
+
+        return substr($html, $panelStart, $panelEnd - $panelStart);
     }
 
     private function assertPanelDoesNotContain(string $html, string $panelId, string $needle): void
